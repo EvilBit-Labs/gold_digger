@@ -13,6 +13,9 @@ use gold_digger::rows_to_strings;
 #[cfg(feature = "ssl")]
 use gold_digger::tls::{TlsConfig, create_tls_connection};
 
+#[cfg(not(feature = "ssl"))]
+use gold_digger::tls::TlsConfig;
+
 /// Redacts sensitive information from SQL error messages
 #[cfg(feature = "verbose")]
 fn redact_sql_error(message: &str) -> String {
@@ -251,11 +254,12 @@ fn create_database_connection(database_url: &str, cli: &Cli) -> Result<Pool> {
 
     #[cfg(not(feature = "ssl"))]
     {
-        // Check if user tried to use TLS options without SSL feature
-        if cli.tls_options.tls_ca_file.is_some()
-            || cli.tls_options.insecure_skip_hostname_verify
-            || cli.tls_options.allow_invalid_certificate
-        {
+        // When SSL feature is disabled, we use TlsConfig::from_tls_options which handles the feature check
+        let tls_config = TlsConfig::from_tls_options(&cli.tls_options)
+            .map_err(|e| anyhow::anyhow!("TLS configuration error: {}", e))?;
+
+        // If any TLS configuration is enabled when SSL is disabled, return error
+        if tls_config.is_enabled() {
             return Err(anyhow::anyhow!(
                 "TLS options provided but SSL feature not enabled. Recompile with --features ssl to enable TLS support"
             ));

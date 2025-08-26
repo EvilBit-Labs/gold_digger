@@ -1,0 +1,25 @@
+---
+source: tests/tls_cli_integration.rs
+expression: stdout
+---
+A MySQL/MariaDB query tool that exports results to structured data files
+
+Usage: gold_digger [OPTIONS] [COMMAND]
+
+Commands:
+  completion  Generate shell completion scripts
+  help        Print this message or the help of the given subcommand(s)
+
+Options:
+      --db-url <DB_URL>          Database connection URL [env: DATABASE_URL=]
+  -q, --query <QUERY>            SQL query string
+      --query-file <QUERY_FILE>  File containing SQL query
+  -o, --output <OUTPUT>          Output file path [env: OUTPUT_FILE=]
+      --format <FORMAT>          Output format override [possible values: csv, json, tsv]
+  -v, --verbose...               Enable verbose logging
+      --quiet                    Suppress all output except errors
+      --pretty                   Pretty-print JSON output
+      --allow-empty              Exit successfully on empty result sets
+      --dump-config              Print current configuration as JSON
+  -h, --help                     Print help
+  -V, --version                  Print version

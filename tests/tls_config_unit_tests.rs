@@ -10,7 +10,7 @@
 
 use anyhow::Result;
 use clap::Parser;
-use gold_digger::cli::{Cli, TlsOptions};
+use gold_digger::cli::Cli;
 use gold_digger::tls::{TlsConfig, TlsError, TlsValidationMode};
 use std::fs;
 use std::path::PathBuf;
@@ -43,6 +43,7 @@ XqSR4fNMW7M0PJjdXNzGxhMvKs9vEehxiaUHLjUx7bZT2+WBxNki4NfeCEHeQpZs
 -----END CERTIFICATE-----
 "#;
 
+#[cfg(feature = "ssl")]
 mod cli_flag_parsing_tests {
     use super::*;
 
@@ -226,8 +227,10 @@ mod cli_flag_parsing_tests {
     }
 }
 
+#[cfg(feature = "ssl")]
 mod tls_config_creation_tests {
     use super::*;
+    use gold_digger::cli::TlsOptions;
 
     /// Test TLS configuration creation from CLI args - platform mode
     /// Requirement: 6.1 - Default platform certificate validation
@@ -497,6 +500,29 @@ mod ssl_feature_disabled_tests {
         let ssl_opts_result = config.to_ssl_opts();
         assert!(ssl_opts_result.is_err());
         assert!(matches!(ssl_opts_result.unwrap_err(), TlsError::FeatureNotEnabled));
+
+        Ok(())
+    }
+
+    /// Test TLS configuration creation when SSL feature is disabled
+    /// Requirement: 6.1 - Default behavior without SSL feature
+    #[test]
+    fn test_tls_config_from_cli_no_ssl_feature() -> Result<()> {
+        let cli = Cli::try_parse_from([
+            "gold_digger",
+            "--db-url",
+            "mysql://test",
+            "--query",
+            "SELECT 1",
+            "--output",
+            "test.json",
+        ])?;
+
+        let tls_config = TlsConfig::from_tls_options(&cli.tls_options)?;
+
+        // When SSL feature is disabled, TLS should be disabled by default
+        assert!(!tls_config.is_enabled());
+        assert!(matches!(tls_config.validation_mode(), TlsValidationMode::Platform));
 
         Ok(())
     }

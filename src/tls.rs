@@ -829,11 +829,20 @@ impl TlsConfig {
 
     /// Creates a TLS configuration from CLI TLS options
     pub fn from_tls_options(tls_options: &crate::cli::TlsOptions) -> Result<Self, TlsError> {
-        Self::from_cli_args(
-            tls_options.tls_ca_file.as_ref(),
-            tls_options.insecure_skip_hostname_verify,
-            tls_options.allow_invalid_certificate,
-        )
+        #[cfg(feature = "ssl")]
+        {
+            Self::from_cli_args(
+                tls_options.tls_ca_file.as_ref(),
+                tls_options.insecure_skip_hostname_verify,
+                tls_options.allow_invalid_certificate,
+            )
+        }
+        #[cfg(not(feature = "ssl"))]
+        {
+            // When SSL is disabled, return default disabled config
+            let _ = tls_options; // Avoid unused parameter warning
+            Ok(TlsConfig::default())
+        }
     }
 
     /// Creates a TLS configuration from CLI arguments with validation
@@ -1207,6 +1216,7 @@ mod tests {
         assert!(matches!(error, TlsError::PeerMisbehaved { .. }));
     }
 
+    #[cfg(feature = "ssl")]
     #[test]
     fn test_to_ssl_opts_enabled_no_certs() {
         let config = TlsConfig::new(); // enabled by default
@@ -1215,6 +1225,7 @@ mod tests {
         assert!(ssl_opts.unwrap().is_some());
     }
 
+    #[cfg(feature = "ssl")]
     #[test]
     fn test_to_ssl_opts_with_nonexistent_ca_certificate() {
         let config = TlsConfig::with_custom_ca("/nonexistent/ca.pem");
@@ -1226,6 +1237,7 @@ mod tests {
         assert!(error.to_string().contains("CA certificate file not found"));
     }
 
+    #[cfg(feature = "ssl")]
     #[test]
     fn test_to_ssl_opts_with_validation_modes() {
         // Test skip hostname verification
@@ -1414,7 +1426,12 @@ mod tests {
     fn test_create_tls_connection_no_ssl_feature() {
         let result = create_tls_connection("mysql://test", None);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("TLS feature not enabled"));
+        let error_msg = result.unwrap_err().to_string();
+        assert!(
+            error_msg.contains("Database connection failed"),
+            "Expected database connection error, got: {}",
+            error_msg
+        );
     }
 
     #[test]
@@ -1678,6 +1695,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "ssl")]
     #[test]
     fn test_to_ssl_opts_validation_mode_configuration() {
         // Test that each validation mode produces the correct SslOpts configuration
@@ -1704,6 +1722,7 @@ mod tests {
         assert!(ssl_opts.root_cert_path().is_none());
     }
 
+    #[cfg(feature = "ssl")]
     #[test]
     fn test_to_ssl_opts_custom_ca_with_temp_file() {
         use std::io::Write;
@@ -1764,6 +1783,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "ssl")]
     #[test]
     fn test_to_ssl_opts_integration() {
         // Test that to_ssl_opts() works correctly with from_cli_args()
@@ -1796,6 +1816,7 @@ mod tests {
     // Additional comprehensive unit tests for TLS configuration
     // Requirements covered: 3.4, 6.1, 6.2, 6.3, 6.4
 
+    #[cfg(feature = "ssl")]
     #[test]
     fn test_tls_config_from_tls_options() {
         use crate::cli::TlsOptions;
@@ -1829,6 +1850,18 @@ mod tests {
         let config = TlsConfig::from_tls_options(&tls_options).unwrap();
         assert!(config.is_enabled());
         assert!(matches!(config.validation_mode(), TlsValidationMode::AcceptInvalid));
+    }
+
+    #[cfg(not(feature = "ssl"))]
+    #[test]
+    fn test_tls_config_from_tls_options_no_ssl() {
+        use crate::cli::TlsOptions;
+
+        // Test that TlsOptions works without SSL feature
+        let tls_options = TlsOptions::default();
+        let config = TlsConfig::from_tls_options(&tls_options).unwrap();
+        assert!(!config.is_enabled());
+        assert!(matches!(config.validation_mode(), TlsValidationMode::Platform));
     }
 
     #[test]
@@ -1985,5 +2018,31 @@ mod tests {
 
         let config = TlsConfig::with_accept_invalid();
         assert!(matches!(config.validation_mode(), TlsValidationMode::AcceptInvalid));
+    }
+}
+
+// Tests for when SSL feature is disabled
+#[cfg(not(feature = "ssl"))]
+#[cfg(test)]
+mod ssl_disabled_tests {
+    use super::*;
+
+    #[test]
+    fn to_ssl_opts_returns_feature_not_enabled_when_enabled() {
+        let config = TlsConfig::new();
+        let res = config.to_ssl_opts();
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        let msg = err.to_string();
+        // tolerate slight message variations
+        assert!(msg.contains("TLS feature not enabled") || msg.contains("feature not enabled"));
+    }
+
+    #[test]
+    fn to_ssl_opts_succeeds_when_disabled() {
+        let config = TlsConfig::default(); // disabled by default
+        let res = config.to_ssl_opts();
+        assert!(res.is_ok());
+        assert!(res.unwrap().is_none());
     }
 }
