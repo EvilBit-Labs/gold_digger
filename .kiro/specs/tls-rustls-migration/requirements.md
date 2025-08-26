@@ -95,14 +95,14 @@ This feature simplifies Gold Digger's TLS implementation by eliminating the nati
 
 ### Requirement 9
 
-**User Story:** As a developer, I want the TLS implementation to be feature-gated, so that I can build minimal versions of Gold Digger without TLS support if needed.
+**User Story:** As a developer, I want TLS support to be always available in Gold Digger, so that I have consistent functionality across all builds without needing to manage feature flags.
 
 #### Acceptance Criteria
 
-1. WHEN Gold Digger is built without TLS features THEN it SHALL compile successfully without rustls dependencies
-2. WHEN Gold Digger without TLS support encounters a TLS-required connection THEN it SHALL exit with a clear error message
-3. WHEN Gold Digger is built with TLS features THEN it SHALL include rustls-tls and rustls-native-certs by default
-4. WHEN Gold Digger is built THEN the TLS feature SHALL be enabled by default in the default feature set
+1. WHEN Gold Digger is built THEN it SHALL always include rustls-tls and rustls-native-certs dependencies
+2. WHEN Gold Digger is built THEN TLS support SHALL be available without requiring feature flags
+3. WHEN Gold Digger is built THEN it SHALL have consistent TLS capabilities across all build configurations
+4. WHEN Gold Digger is built THEN there SHALL be no option to disable TLS support
 
 ### Requirement 10
 
@@ -127,5 +127,5 @@ This feature simplifies Gold Digger's TLS implementation by eliminating the nati
 1. WHEN the TLS migration is complete THEN all README.md documentation SHALL reflect the rustls-only implementation
 2. WHEN the TLS migration is complete THEN the TLS.md documentation SHALL be updated with new CLI flag usage examples
 3. WHEN the TLS migration is complete THEN CI workflows SHALL test the new TLS flags and configurations
-4. WHEN the TLS migration is complete THEN Cargo.toml feature documentation SHALL reflect the simplified TLS feature set
+4. WHEN the TLS migration is complete THEN Cargo.toml SHALL include rustls dependencies as standard dependencies (not feature-gated)
 5. WHEN the TLS migration is complete THEN build instructions SHALL remove references to native-tls alternatives

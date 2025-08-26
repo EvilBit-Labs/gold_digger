@@ -2,9 +2,9 @@
 
 ## Overview
 
-This design outlines the migration from Gold Digger's current dual TLS implementation (native-tls and rustls-tls as mutually exclusive features) to a simplified rustls-only approach with enhanced certificate validation controls. The migration eliminates platform-specific TLS dependencies while adding granular security options for different deployment scenarios.
+This design outlines the migration from Gold Digger's current feature-gated rustls TLS implementation to an always-available rustls-only approach. The current implementation already uses rustls exclusively with enhanced certificate validation controls and three CLI flags for different security modes.
 
-The key architectural change is replacing the current `ssl` and `ssl-rustls` feature flags with a single `ssl` feature that uses rustls with native certificate store integration, plus three new CLI flags for certificate validation overrides.
+The key architectural change is removing the `ssl` feature flag and making rustls TLS support always available, eliminating the need for conditional compilation while maintaining all existing TLS functionality.
 
 ## Architecture
 
@@ -13,17 +13,14 @@ The key architectural change is replacing the current `ssl` and `ssl-rustls` fea
 ```mermaid
 graph TD
     A[CLI Input] --> B{Feature Check}
-    B -->|ssl feature| C[native-tls]
-    B -->|ssl-rustls feature| D[rustls-tls]
-    B -->|no ssl features| E[No TLS Support]
-    C --> F[Platform TLS Libraries]
-    D --> G[Pure Rust TLS]
-    F --> H[MySQL Connection]
-    G --> H
-    E --> I[Plain Connection Only]
+    B -->|ssl feature enabled| C[rustls-tls]
+    B -->|ssl feature disabled| D[No TLS Support]
+    C --> E[Pure Rust TLS]
+    E --> F[MySQL Connection]
+    D --> G[Plain Connection Only]
 ```
 
-### New TLS Architecture
+### New TLS Architecture (Always Available)
 
 ```mermaid
 graph TD
@@ -78,186 +75,112 @@ sequenceDiagram
 
 ### CLI Interface Changes
 
-#### New TLS Flags (Mutually Exclusive using clap groups)
+#### Current TLS Flags Implementation (Already Implemented)
+
+The TLS flags are already implemented and working correctly. The current implementation uses feature-gated compilation:
 
 ```rust
-#[derive(Parser)]
-pub struct Cli {
-    // ... existing fields ...
-    #[command(flatten)]
-    pub tls_options: TlsOptions,
-}
-
-#[derive(Args)]
-#[group(required = false, multiple = false)]
+/// TLS configuration options (mutually exclusive)
+#[cfg_attr(not(feature = "ssl"), derive(Args, Debug, Clone, Default))]
+#[cfg_attr(feature = "ssl", derive(Args, Debug, Clone))]
+#[group(id = "tls_mode", multiple = false)]
 pub struct TlsOptions {
     /// Path to CA certificate file for trust anchor pinning
-    #[arg(long)]
+    #[cfg(feature = "ssl")]
+    #[arg(long, group = "tls_mode")]
     pub tls_ca_file: Option<PathBuf>,
 
     /// Skip hostname verification (keeps chain and time validation)
-    #[arg(long)]
+    #[cfg(feature = "ssl")]
+    #[arg(long, group = "tls_mode")]
     pub insecure_skip_hostname_verify: bool,
 
     /// Disable certificate validation entirely (DANGEROUS)
-    #[arg(long)]
+    #[cfg(feature = "ssl")]
+    #[arg(long, group = "tls_mode")]
     pub allow_invalid_certificate: bool,
 }
 ```
 
-#### Alternative Approach using ValueEnum
+#### Required Changes for Always-Available TLS
+
+Remove the `#[cfg(feature = "ssl")]` attributes to make TLS flags always available:
 
 ```rust
-#[derive(Parser)]
-pub struct Cli {
-    // ... existing fields ...
-    /// TLS security mode
-    #[arg(long, value_enum)]
-    pub tls_mode: Option<TlsSecurityMode>,
-
-    /// Path to CA certificate file (only used with --tls-mode=custom-ca)
-    #[arg(long, requires = "tls_mode")]
+/// TLS configuration options (mutually exclusive)
+#[derive(Args, Debug, Clone)]
+#[group(id = "tls_mode", multiple = false)]
+pub struct TlsOptions {
+    /// Path to CA certificate file for trust anchor pinning
+    #[arg(long, group = "tls_mode")]
     pub tls_ca_file: Option<PathBuf>,
-}
 
-#[derive(ValueEnum, Clone, Debug)]
-pub enum TlsSecurityMode {
-    /// Use platform certificate store (default)
-    Platform,
-    /// Use custom CA certificate file
-    CustomCa,
-    /// Skip hostname verification only
-    SkipHostname,
-    /// Accept invalid certificates (DANGEROUS)
-    AcceptInvalid,
+    /// Skip hostname verification (keeps chain and time validation)
+    #[arg(long, group = "tls_mode")]
+    pub insecure_skip_hostname_verify: bool,
+
+    /// Disable certificate validation entirely (DANGEROUS)
+    #[arg(long, group = "tls_mode")]
+    pub allow_invalid_certificate: bool,
 }
 ```
 
 ### TLS Configuration Module
 
-#### Enhanced TlsConfig Structure
+#### Current TlsConfig Implementation (Already Implemented)
+
+The TLS configuration is already well-implemented in `src/tls.rs`. The current structure includes:
 
 ```rust
+/// TLS validation modes for different security requirements
 #[derive(Debug, Clone, PartialEq)]
 pub enum TlsValidationMode {
-    /// Use platform certificate store with full validation
+    /// Use platform certificate store with full validation (default)
     Platform,
     /// Use custom CA file with full validation
     CustomCa { ca_file_path: PathBuf },
     /// Use platform store but skip hostname verification
     SkipHostnameVerification,
-    /// Accept any certificate (no validation)
+    /// Accept any certificate (no validation) - DANGEROUS
     AcceptInvalid,
 }
 
+/// TLS configuration for MySQL connections
 #[derive(Debug, Clone, PartialEq)]
 pub struct TlsConfig {
+    /// Whether TLS is enabled
     pub enabled: bool,
+    /// TLS validation mode
     pub validation_mode: TlsValidationMode,
 }
-
-impl TlsConfig {
-    pub fn from_cli(cli: &Cli) -> Result<Self, TlsError> {
-        // Using the Args group approach
-        let validation_mode = if let Some(ca_file) = &cli.tls_options.tls_ca_file {
-            TlsValidationMode::CustomCa {
-                ca_file_path: ca_file.clone(),
-            }
-        } else if cli.tls_options.insecure_skip_hostname_verify {
-            TlsValidationMode::SkipHostnameVerification
-        } else if cli.tls_options.allow_invalid_certificate {
-            TlsValidationMode::AcceptInvalid
-        } else {
-            TlsValidationMode::Platform
-        };
-
-        Ok(Self {
-            enabled: true,
-            validation_mode,
-        })
-    }
-
-    // Alternative implementation for ValueEnum approach
-    pub fn from_cli_enum(cli: &Cli) -> Result<Self, TlsError> {
-        let validation_mode = match cli.tls_mode {
-            Some(TlsSecurityMode::CustomCa) => {
-                let ca_file = cli.tls_ca_file.as_ref().ok_or_else(|| TlsError::CaFileNotFound {
-                    path: "CA file path required for custom-ca mode".to_string(),
-                })?;
-                TlsValidationMode::CustomCa {
-                    ca_file_path: ca_file.clone(),
-                }
-            },
-            Some(TlsSecurityMode::SkipHostname) => TlsValidationMode::SkipHostnameVerification,
-            Some(TlsSecurityMode::AcceptInvalid) => TlsValidationMode::AcceptInvalid,
-            Some(TlsSecurityMode::Platform) | None => TlsValidationMode::Platform,
-        };
-
-        Ok(Self {
-            enabled: true,
-            validation_mode,
-        })
-    }
-}
 ```
 
-#### Rustls Integration
+#### Required Changes for Always-Available TLS
+
+Remove the `enabled` field since TLS will always be available:
 
 ```rust
-use mysql::SslOpts;
-use rustls::{ClientConfig, RootCertStore};
-use rustls_native_certs;
-
-impl TlsConfig {
-    pub fn to_ssl_opts(&self) -> Result<Option<SslOpts>, TlsError> {
-        if !self.enabled {
-            return Ok(None);
-        }
-
-        let mut root_store = RootCertStore::empty();
-        let mut client_config_builder = ClientConfig::builder();
-
-        match &self.validation_mode {
-            TlsValidationMode::Platform => {
-                // Load platform certificate store
-                for cert in rustls_native_certs::load_native_certs()? {
-                    root_store.add(&cert)?;
-                }
-                client_config_builder = client_config_builder.with_root_certificates(root_store);
-            },
-            TlsValidationMode::CustomCa { ca_file_path } => {
-                // Load custom CA file
-                let ca_certs = self.load_ca_certificates(ca_file_path)?;
-                for cert in ca_certs {
-                    root_store.add(&cert)?;
-                }
-                client_config_builder = client_config_builder.with_root_certificates(root_store);
-            },
-            TlsValidationMode::SkipHostnameVerification => {
-                // Use platform store but create custom verifier that skips hostname
-                for cert in rustls_native_certs::load_native_certs()? {
-                    root_store.add(&cert)?;
-                }
-                client_config_builder = client_config_builder
-                    .with_root_certificates(root_store)
-                    .with_custom_certificate_verifier(Arc::new(SkipHostnameVerifier::new()));
-            },
-            TlsValidationMode::AcceptInvalid => {
-                // Create verifier that accepts any certificate
-                client_config_builder =
-                    client_config_builder.with_custom_certificate_verifier(Arc::new(AcceptAllVerifier::new()));
-            },
-        }
-
-        let client_config = client_config_builder.with_no_client_auth();
-
-        // Convert rustls ClientConfig to mysql::SslOpts
-        let ssl_opts = SslOpts::default().with_rustls_client_config(client_config);
-
-        Ok(Some(ssl_opts))
-    }
+/// TLS configuration for MySQL connections
+#[derive(Debug, Clone, PartialEq)]
+pub struct TlsConfig {
+    /// TLS validation mode
+    pub validation_mode: TlsValidationMode,
 }
 ```
+
+The `from_tls_options` method already exists and works correctly, but needs to be updated to remove feature gating.
+
+#### Current Rustls Integration (Already Implemented)
+
+The rustls integration is already fully implemented in `src/tls.rs` with custom certificate verifiers and comprehensive error handling. The current implementation includes:
+
+- Platform certificate store integration via `rustls-native-certs`
+- Custom CA file loading with PEM parsing
+- Custom certificate verifiers for hostname skipping and accepting invalid certificates
+- Comprehensive error classification and user guidance
+- Security warning system
+
+The `to_ssl_opts()` method is already implemented and working correctly. The main change needed is removing the feature gating from the function calls.
 
 ### Custom Certificate Verifiers
 
@@ -369,10 +292,9 @@ impl ServerCertVerifier for AcceptAllVerifier {
 
 ```toml
 [features]
-default = ["json", "csv", "ssl", "additional_mysql_types", "verbose"]
+default = ["json", "csv", "additional_mysql_types"]
 json = []
 csv = []
-ssl = ["mysql/rustls-tls", "rustls-native-certs"] # Simplified to rustls-only
 additional_mysql_types = [
   "mysql_common",
   "mysql_common?/bigdecimal",
@@ -380,18 +302,20 @@ additional_mysql_types = [
   "mysql_common?/time",
   "mysql_common?/frunk",
 ]
-verbose = []
 
-# Remove ssl-rustls feature (no longer needed)
+# Remove ssl and ssl-rustls features (TLS always available)
 ```
 
 #### Dependency Updates
 
 ```toml
 [dependencies]
-mysql = { version = "26.0.1", features = ["minimal"], default-features = false }
-rustls-native-certs = { version = "0.7", optional = true }
+mysql = { version = "26.0.1", features = [
+  "rustls-tls",
+], default-features = false }
+rustls-native-certs = "0.7"
 # Remove native-tls related dependencies
+# TLS dependencies are now always included
 ```
 
 ### Error Handling Updates
@@ -480,17 +404,13 @@ pub fn display_security_warnings(tls_config: &TlsConfig) {
             eprintln!("WARNING: Certificate validation disabled. Connection is NOT secure.");
             eprintln!("This should ONLY be used for testing. Never use in production.");
         },
-        TlsValidationMode::CustomCa { ca_file_path } =>
-        {
-            #[cfg(feature = "verbose")]
-            if verbose_enabled() {
+        TlsValidationMode::CustomCa { ca_file_path } => {
+            if cli.verbose {
                 eprintln!("Using custom CA file: {}", ca_file_path.display());
             }
         },
-        TlsValidationMode::Platform =>
-        {
-            #[cfg(feature = "verbose")]
-            if verbose_enabled() {
+        TlsValidationMode::Platform => {
+            if cli.verbose {
                 eprintln!("Using platform certificate store for TLS validation");
             }
         },
@@ -618,35 +538,35 @@ fn test_backward_compatibility() {
 
 ## Migration Strategy
 
-### Phase 1: Feature Flag Simplification
+### Phase 1: Feature Flag Removal
 
-1. Update `Cargo.toml` to remove `ssl-rustls` feature
-2. Change `ssl` feature to use `mysql/rustls-tls` + `rustls-native-certs`
-3. Update conditional compilation directives
+1. Update `Cargo.toml` to remove the `ssl` feature and make TLS dependencies standard
+2. Remove all `#[cfg(feature = "ssl")]` conditional compilation directives
+3. Update CLI structure to always include TLS options
 
-### Phase 2: CLI Interface Addition
+### Phase 2: CLI Interface Updates
 
-1. Add new TLS flags to `Cli` struct
-2. Implement mutual exclusion validation
-3. Add flag parsing and validation logic
+1. Remove `#[cfg(feature = "ssl")]` attributes from TLS flags
+2. Update TLS option derivation to always include the fields
+3. Ensure mutual exclusion validation works without feature gating
 
-### Phase 3: TLS Configuration Refactor
+### Phase 3: TLS Configuration Updates
 
-1. Update `TlsConfig` to use new validation modes
-2. Implement rustls-specific configuration logic
-3. Add custom certificate verifiers
+1. Remove the `enabled` field from `TlsConfig` (TLS always available)
+2. Update `from_tls_options` method to remove feature gating
+3. Update connection creation logic to always use TLS configuration
 
-### Phase 4: Error Handling Enhancement
+### Phase 4: Conditional Compilation Cleanup
 
-1. Update error types for better user guidance
-2. Add specific error detection for common certificate issues
-3. Implement security warning system
+1. Remove `#[cfg(feature = "ssl")]` from all TLS-related code
+2. Remove the non-SSL fallback implementation of `create_tls_connection`
+3. Update verbose logging to remove feature gating
 
-### Phase 5: Documentation and Testing
+### Phase 5: Testing and Documentation Updates
 
-1. Update all documentation files
-2. Add comprehensive test coverage
-3. Update CI workflows to test new flags
+1. Update tests to remove feature-gated TLS testing
+2. Update documentation to reflect always-available TLS
+3. Update CI workflows to remove SSL feature variations
 
 ## Backward Compatibility
 
@@ -654,12 +574,12 @@ fn test_backward_compatibility() {
 
 - All existing `DATABASE_URL` formats continue to work
 - Default TLS behavior (when no flags specified) uses platform certificate store
-- Feature-gated compilation still works (ssl feature can be disabled)
+- TLS support is always available in all builds
 - Exit codes and error handling patterns remain consistent
 
 ### Breaking Changes
 
-- Remove `ssl-rustls` feature flag (users should use `ssl` instead)
+- Remove both `ssl` and `ssl-rustls` feature flags (TLS always available)
 - TLS implementation changes from native-tls to rustls (may affect certificate validation behavior)
 - Some certificate validation errors may have different messages
 
@@ -669,8 +589,8 @@ fn test_backward_compatibility() {
 ## Migrating from native-tls to rustls
 
 ### Feature Flags
-- Replace `--features ssl-rustls` with `--features ssl`
-- Remove `--no-default-features --features ssl-rustls` (use default features)
+- Remove any `--features ssl` or `--features ssl-rustls` from build commands
+- TLS support is now always available in all builds
 
 ### Certificate Issues
 - If you encounter hostname verification errors, use `--insecure-skip-hostname-verify`
@@ -678,6 +598,6 @@ fn test_backward_compatibility() {
 - For internal CAs, use `--tls-ca-file /path/to/ca.pem`
 
 ### Build Changes
-- No changes needed for most users (ssl feature enabled by default)
+- No changes needed for most users (TLS always available)
 - Minimal builds: use `--no-default-features --features "csv json"`
 ```
