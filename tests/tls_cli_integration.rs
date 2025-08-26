@@ -17,7 +17,6 @@ fn create_temp_cert_file(content: &str) -> Result<(TempDir, std::path::PathBuf),
 }
 
 /// Helper function to create a cross-platform temporary output path for testing
-#[cfg(feature = "ssl")]
 fn create_temp_output_path() -> Result<(TempDir, String), Box<dyn std::error::Error>> {
     let temp_dir = tempfile::tempdir()?;
     let output_path = temp_dir.path().join("test_output.json");
@@ -44,7 +43,6 @@ XqSR4fNMW7M0PJjdXNzGxhMvKs9vEehxiaUHLjUx7bZT2+WBxNki4NfeCEHeQpZs
 -----END CERTIFICATE-----
 "#;
 
-#[cfg(feature = "ssl")]
 mod tls_cli_flag_tests {
     use super::*;
 
@@ -142,7 +140,6 @@ mod tls_cli_flag_tests {
     }
 }
 
-#[cfg(feature = "ssl")]
 mod tls_mutual_exclusion_tests {
     use super::*;
 
@@ -247,27 +244,5 @@ mod tls_mutual_exclusion_tests {
         assert!(stderr.contains("cannot be used with"), "Error should mention mutually exclusive flags");
 
         assert_snapshot!("skip_hostname_and_allow_invalid_mutual_exclusion", stderr);
-    }
-}
-
-#[cfg(not(feature = "ssl"))]
-mod ssl_disabled_cli_tests {
-    use super::*;
-
-    /// Test TLS flags are not available when SSL feature is disabled
-    /// Requirement: 11.3 - Feature-gated TLS functionality
-    #[test]
-    fn test_tls_flags_not_available_without_ssl() {
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
-        let output = cmd.arg("--help").output().unwrap();
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-
-        // Verify TLS flags are not present in help
-        assert!(!stdout.contains("tls-ca-file"));
-        assert!(!stdout.contains("insecure-skip-hostname-verify"));
-        assert!(!stdout.contains("allow-invalid-certificate"));
-
-        assert_snapshot!("help_without_ssl_feature", stdout);
     }
 }

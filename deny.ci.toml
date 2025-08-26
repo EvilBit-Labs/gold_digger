@@ -6,7 +6,7 @@
 targets = []
 all-features = false
 no-default-features = true
-features = ["json", "csv", "ssl", "additional_mysql_types", "verbose"]
+features = ["json", "csv", "additional_mysql_types", "verbose"]
 
 [output]
 feature-depth = 1

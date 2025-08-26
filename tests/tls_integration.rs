@@ -53,7 +53,6 @@ fn is_ci() -> bool {
     std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok()
 }
 
-#[cfg(feature = "ssl")]
 mod platform_certificate_tests {
     use super::*;
     use gold_digger::tls::TlsValidationMode;
@@ -69,7 +68,6 @@ mod platform_certificate_tests {
 
         let config = TlsConfig::new(); // Uses platform certificate store
 
-        assert!(config.is_enabled());
         assert!(matches!(config.validation_mode(), TlsValidationMode::Platform));
 
         // Test SSL opts generation
@@ -104,7 +102,6 @@ mod platform_certificate_tests {
     }
 }
 
-#[cfg(feature = "ssl")]
 mod custom_ca_tests {
     use super::*;
     use gold_digger::tls::TlsValidationMode;
@@ -117,7 +114,6 @@ mod custom_ca_tests {
 
         let config = TlsConfig::with_custom_ca(&cert_path);
 
-        assert!(config.is_enabled());
         if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
             assert_eq!(ca_file_path, &cert_path);
         } else {
@@ -151,7 +147,6 @@ mod custom_ca_tests {
         let config = TlsConfig::with_custom_ca(&cert_path);
 
         // Config creation should succeed
-        assert!(config.is_enabled());
 
         // But SSL opts generation should fail with invalid certificate
         let result = config.to_ssl_opts();
@@ -170,7 +165,6 @@ mod custom_ca_tests {
         let config = TlsConfig::with_custom_ca(&nonexistent_path);
 
         // Config creation succeeds (file existence checked during SSL opts generation)
-        assert!(config.is_enabled());
 
         // SSL opts generation should fail
         let result = config.to_ssl_opts();
@@ -180,7 +174,6 @@ mod custom_ca_tests {
     }
 }
 
-#[cfg(feature = "ssl")]
 mod hostname_verification_tests {
     use super::*;
     use gold_digger::tls::TlsValidationMode;
@@ -191,7 +184,6 @@ mod hostname_verification_tests {
     fn test_hostname_verification_bypass() -> Result<()> {
         let config = TlsConfig::with_skip_hostname_verification();
 
-        assert!(config.is_enabled());
         assert!(matches!(config.validation_mode(), TlsValidationMode::SkipHostnameVerification));
 
         // Test SSL opts generation
@@ -221,7 +213,6 @@ mod hostname_verification_tests {
     }
 }
 
-#[cfg(feature = "ssl")]
 mod invalid_certificate_tests {
     use super::*;
     use gold_digger::tls::TlsValidationMode;
@@ -232,7 +223,6 @@ mod invalid_certificate_tests {
     fn test_invalid_certificate_acceptance() -> Result<()> {
         let config = TlsConfig::with_accept_invalid();
 
-        assert!(config.is_enabled());
         assert!(matches!(config.validation_mode(), TlsValidationMode::AcceptInvalid));
 
         // Test SSL opts generation
@@ -262,7 +252,6 @@ mod invalid_certificate_tests {
     }
 }
 
-#[cfg(feature = "ssl")]
 mod tls_error_handling_tests {
     use super::*;
 
@@ -313,7 +302,6 @@ mod tls_error_handling_tests {
     }
 }
 
-#[cfg(feature = "ssl")]
 mod security_warning_tests {
     use super::*;
 
@@ -340,26 +328,7 @@ mod security_warning_tests {
     }
 }
 
-#[cfg(not(feature = "ssl"))]
-mod ssl_disabled_tests {
-    use super::*;
-
-    /// Test behavior when SSL feature is disabled
-    /// Requirement: 10.6 - Graceful handling when SSL is disabled
-    #[test]
-    fn test_ssl_disabled_behavior() -> Result<()> {
-        let config = TlsConfig::new();
-
-        // SSL opts generation should fail gracefully
-        let result = config.to_ssl_opts();
-        assert!(result.is_err());
-
-        let error = result.unwrap_err();
-        assert!(matches!(error, gold_digger::tls::TlsError::FeatureNotEnabled));
-
-        Ok(())
-    }
-}
+// SSL is now always available - no need for disabled tests
 
 // Note: Real database integration tests would require:
 // 1. Test MySQL/MariaDB containers with different TLS configurations
@@ -375,7 +344,6 @@ mod ssl_disabled_tests {
 // - Setting up test certificates and CA chains
 // - Testing against real TLS-enabled database servers
 
-#[cfg(all(test, feature = "integration_tests"))]
 mod integration_tests {
     use super::*;
     use testcontainers_modules::testcontainers::runners::SyncRunner;
@@ -467,7 +435,6 @@ mod integration_tests {
         assert!(ssl_opts.is_some());
 
         // Test that the configuration is properly set for custom CA
-        assert!(config.is_enabled());
         if let gold_digger::tls::TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
             assert_eq!(ca_file_path, &ca_cert_path);
         } else {
@@ -523,7 +490,6 @@ mod integration_tests {
         assert!(ssl_opts.is_some());
 
         // Test that the configuration is properly set for skip hostname verification
-        assert!(config.is_enabled());
         assert!(matches!(config.validation_mode(), gold_digger::tls::TlsValidationMode::SkipHostnameVerification));
 
         // Test that security warnings are displayed for skip hostname mode
@@ -591,7 +557,6 @@ mod integration_tests {
         assert!(ssl_opts.is_some());
 
         // Test that the configuration is properly set for accept invalid mode
-        assert!(config.is_enabled());
         assert!(matches!(config.validation_mode(), gold_digger::tls::TlsValidationMode::AcceptInvalid));
 
         // Test that security warnings are displayed for accept invalid mode
@@ -633,7 +598,6 @@ mod integration_tests {
         assert!(ssl_opts.is_some());
 
         // Test that the configuration is properly set for pooling
-        assert!(config.is_enabled());
         assert!(matches!(config.validation_mode(), gold_digger::tls::TlsValidationMode::Platform));
 
         eprintln!("Configuration test for TLS connection pooling:");

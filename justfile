@@ -53,7 +53,7 @@ fmt-check:
 # Run clippy linting
 lint:
     cd {{justfile_dir()}}
-    cargo clippy --all-targets --no-default-features --features "json csv ssl additional_mysql_types verbose" -- -D warnings
+    cargo clippy --all-targets --release -- -D warnings
     cargo clippy --all-targets --no-default-features --features "json csv additional_mysql_types verbose" -- -D warnings
 
 # Run clippy with fixes
@@ -101,9 +101,9 @@ build:
 build-release:
     cargo build --release
 
-# Build with rustls TLS (consolidated implementation)
-build-rustls:
-    cargo build --release --no-default-features --features "json,csv,ssl,additional_mysql_types,verbose"
+# Build with TLS support (always included)
+build-tls:
+    cargo build --release
 
 
 
@@ -112,7 +112,7 @@ build-minimal:
     cargo build --release --no-default-features --features "csv,json"
 
 # Build all feature combinations
-build-all: build build-release build-rustls build-minimal
+build-all: build build-release build-tls build-minimal
 
 # Install locally from workspace
 install:
@@ -199,23 +199,22 @@ security:
 # DEPENDENCIES & VALIDATION
 # =============================================================================
 
-# Validate TLS dependency tree (rustls-only implementation)
+# Validate TLS dependency tree (always-available rustls implementation)
 validate-deps:
-    @if cargo tree --no-default-features --features ssl -e=no-dev -f "{p} {f}" | grep -q "native-tls"; then \
-    echo "ERROR: native-tls found with ssl feature (should be rustls-only)"; \
-    cargo tree --no-default-features --features ssl -e=no-dev -f "{p} {f}"; \
+    @echo "Validating TLS dependencies..."
+    @if ! cargo tree -e=no-dev -f "{p} {f}" | grep -q "rustls"; then \
+    echo "ERROR: rustls not found in standard build (TLS should always be available)"; \
+    cargo tree -e=no-dev -f "{p} {f}"; \
     exit 1; \
     fi
-    @if ! cargo tree --no-default-features --features ssl -e=no-dev -f "{p} {f}" | grep -q "rustls"; then \
-    echo "ERROR: rustls not found with ssl feature"; \
-    cargo tree --no-default-features --features ssl -e=no-dev -f "{p} {f}"; \
+    @if cargo tree -e=no-dev -f "{p} {f}" | grep -q "native-tls"; then \
+    echo "ERROR: native-tls found in build (should be rustls-only)"; \
+    cargo tree -e=no-dev -f "{p} {f}"; \
     exit 1; \
     fi
-    @if cargo tree --no-default-features --features json,csv -e=no-dev -f "{p} {f}" | grep -q "native-tls\|rustls"; then \
-    echo "ERROR: TLS dependencies found without TLS features"; \
-    cargo tree --no-default-features --features json,csv -e=no-dev -f "{p} {f}"; \
-    exit 1; \
-    fi
+    @echo "✓ Standard build includes rustls TLS support"
+    @echo "✓ No native-tls dependencies found"
+    @echo "✓ TLS validation passed - rustls is always available"
 
 # Check for outdated dependencies
 outdated:
@@ -291,8 +290,8 @@ features:
     @echo "Default features:"
     @echo "  cargo build --release"
     @echo ""
-    @echo "Rustls TLS build:"
-    @echo "  cargo build --release --no-default-features --features \"json,csv,ssl,additional_mysql_types,verbose\""
+    @echo "Standard build with TLS support (always included):"
+    @echo "  cargo build --release"
     @echo ""
     @echo "Minimal build (no TLS, no extra types):"
     @echo "  cargo build --no-default-features --features \"csv json\""
@@ -527,7 +526,7 @@ release-dry:
     if ! git diff-index --quiet HEAD --; then
     echo "Warning: Working directory has uncommitted changes"
     fi
-    just build-rustls
+    just build-tls
     BINARY_PATH="target/release/gold_digger"
     if [[ ! -f "$BINARY_PATH" ]]; then
     echo "Binary not found at $BINARY_PATH"

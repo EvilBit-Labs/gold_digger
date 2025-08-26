@@ -43,7 +43,6 @@ XqSR4fNMW7M0PJjdXNzGxhMvKs9vEehxiaUHLjUx7bZT2+WBxNki4NfeCEHeQpZs
 -----END CERTIFICATE-----
 "#;
 
-#[cfg(feature = "ssl")]
 mod cli_flag_parsing_tests {
     use super::*;
 
@@ -63,7 +62,6 @@ mod cli_flag_parsing_tests {
 
         let tls_config = TlsConfig::from_tls_options(&cli.tls_options)?;
 
-        assert!(tls_config.is_enabled());
         assert!(matches!(tls_config.validation_mode(), TlsValidationMode::Platform));
 
         Ok(())
@@ -89,7 +87,6 @@ mod cli_flag_parsing_tests {
 
         let tls_config = TlsConfig::from_tls_options(&cli.tls_options)?;
 
-        assert!(tls_config.is_enabled());
         if let TlsValidationMode::CustomCa { ca_file_path } = tls_config.validation_mode() {
             assert_eq!(ca_file_path, &cert_path);
         } else {
@@ -116,7 +113,6 @@ mod cli_flag_parsing_tests {
 
         let tls_config = TlsConfig::from_tls_options(&cli.tls_options)?;
 
-        assert!(tls_config.is_enabled());
         assert!(matches!(tls_config.validation_mode(), TlsValidationMode::SkipHostnameVerification));
 
         Ok(())
@@ -139,7 +135,6 @@ mod cli_flag_parsing_tests {
 
         let tls_config = TlsConfig::from_tls_options(&cli.tls_options)?;
 
-        assert!(tls_config.is_enabled());
         assert!(matches!(tls_config.validation_mode(), TlsValidationMode::AcceptInvalid));
 
         Ok(())
@@ -227,7 +222,6 @@ mod cli_flag_parsing_tests {
     }
 }
 
-#[cfg(feature = "ssl")]
 mod tls_config_creation_tests {
     use super::*;
     use gold_digger::cli::TlsOptions;
@@ -244,7 +238,6 @@ mod tls_config_creation_tests {
 
         let config = TlsConfig::from_tls_options(&tls_options)?;
 
-        assert!(config.is_enabled());
         assert!(matches!(config.validation_mode(), TlsValidationMode::Platform));
 
         Ok(())
@@ -264,7 +257,6 @@ mod tls_config_creation_tests {
 
         let config = TlsConfig::from_tls_options(&tls_options)?;
 
-        assert!(config.is_enabled());
         if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
             assert_eq!(ca_file_path, &cert_path);
         } else {
@@ -286,7 +278,6 @@ mod tls_config_creation_tests {
 
         let config = TlsConfig::from_tls_options(&tls_options)?;
 
-        assert!(config.is_enabled());
         assert!(matches!(config.validation_mode(), TlsValidationMode::SkipHostnameVerification));
 
         Ok(())
@@ -304,7 +295,6 @@ mod tls_config_creation_tests {
 
         let config = TlsConfig::from_tls_options(&tls_options)?;
 
-        assert!(config.is_enabled());
         assert!(matches!(config.validation_mode(), TlsValidationMode::AcceptInvalid));
 
         Ok(())
@@ -346,7 +336,6 @@ mod certificate_validation_tests {
 
         let config = TlsConfig::with_custom_ca(&cert_path);
 
-        assert!(config.is_enabled());
         if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
             assert_eq!(ca_file_path, &cert_path);
         } else {
@@ -379,13 +368,9 @@ mod certificate_validation_tests {
 
         // The config creation should succeed, but SSL opts generation should fail
         let config = TlsConfig::with_custom_ca(&cert_path);
-        assert!(config.is_enabled());
 
-        #[cfg(feature = "ssl")]
-        {
-            let result = config.to_ssl_opts();
-            assert!(result.is_err());
-        }
+        let result = config.to_ssl_opts();
+        assert!(result.is_err());
 
         Ok(())
     }
@@ -398,19 +383,14 @@ mod certificate_validation_tests {
 
         // The config creation should succeed, but SSL opts generation should fail
         let config = TlsConfig::with_custom_ca(&cert_path);
-        assert!(config.is_enabled());
 
-        #[cfg(feature = "ssl")]
-        {
-            let result = config.to_ssl_opts();
-            assert!(result.is_err());
-        }
+        let result = config.to_ssl_opts();
+        assert!(result.is_err());
 
         Ok(())
     }
 }
 
-#[cfg(feature = "ssl")]
 mod ssl_opts_generation_tests {
     use super::*;
 
@@ -474,55 +454,14 @@ mod ssl_opts_generation_tests {
         Ok(())
     }
 
-    /// Test SSL opts generation for disabled TLS
-    /// Requirement: 6.1 - TLS can be disabled
+    /// Test SSL opts generation for default TLS (always enabled)
+    /// Requirement: 9.1 - TLS is always available
     #[test]
-    fn test_ssl_opts_disabled_tls() -> Result<()> {
-        let config = TlsConfig::default(); // Disabled by default
+    fn test_ssl_opts_default_tls() -> Result<()> {
+        let config = TlsConfig::default(); // TLS always available with platform certificates
 
         let ssl_opts = config.to_ssl_opts()?;
-        assert!(ssl_opts.is_none());
-
-        Ok(())
-    }
-}
-
-#[cfg(not(feature = "ssl"))]
-mod ssl_feature_disabled_tests {
-    use super::*;
-
-    /// Test SSL opts generation when SSL feature is disabled
-    /// Requirement: 6.1 - Graceful handling when SSL feature is disabled
-    #[test]
-    fn test_ssl_opts_feature_disabled() -> Result<()> {
-        let config = TlsConfig::new();
-
-        let ssl_opts_result = config.to_ssl_opts();
-        assert!(ssl_opts_result.is_err());
-        assert!(matches!(ssl_opts_result.unwrap_err(), TlsError::FeatureNotEnabled));
-
-        Ok(())
-    }
-
-    /// Test TLS configuration creation when SSL feature is disabled
-    /// Requirement: 6.1 - Default behavior without SSL feature
-    #[test]
-    fn test_tls_config_from_cli_no_ssl_feature() -> Result<()> {
-        let cli = Cli::try_parse_from([
-            "gold_digger",
-            "--db-url",
-            "mysql://test",
-            "--query",
-            "SELECT 1",
-            "--output",
-            "test.json",
-        ])?;
-
-        let tls_config = TlsConfig::from_tls_options(&cli.tls_options)?;
-
-        // When SSL feature is disabled, TLS should be disabled by default
-        assert!(!tls_config.is_enabled());
-        assert!(matches!(tls_config.validation_mode(), TlsValidationMode::Platform));
+        assert!(ssl_opts.is_some()); // TLS is always available
 
         Ok(())
     }
@@ -537,18 +476,15 @@ mod tls_config_builder_tests {
     fn test_tls_config_builders() -> Result<()> {
         // Test default config
         let config = TlsConfig::default();
-        assert!(!config.is_enabled());
         assert!(matches!(config.validation_mode(), TlsValidationMode::Platform));
 
         // Test new config
         let config = TlsConfig::new();
-        assert!(config.is_enabled());
         assert!(matches!(config.validation_mode(), TlsValidationMode::Platform));
 
         // Test custom CA builder
         let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
         let config = TlsConfig::with_custom_ca(&cert_path);
-        assert!(config.is_enabled());
         if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
             assert_eq!(ca_file_path, &cert_path);
         } else {
@@ -557,12 +493,10 @@ mod tls_config_builder_tests {
 
         // Test skip hostname builder
         let config = TlsConfig::with_skip_hostname_verification();
-        assert!(config.is_enabled());
         assert!(matches!(config.validation_mode(), TlsValidationMode::SkipHostnameVerification));
 
         // Test accept invalid builder
         let config = TlsConfig::with_accept_invalid();
-        assert!(config.is_enabled());
         assert!(matches!(config.validation_mode(), TlsValidationMode::AcceptInvalid));
 
         Ok(())
@@ -576,7 +510,6 @@ mod tls_config_builder_tests {
         let config2 = config1.clone();
 
         assert_eq!(config1, config2);
-        assert_eq!(config1.is_enabled(), config2.is_enabled());
         assert_eq!(config1.validation_mode(), config2.validation_mode());
 
         // Test inequality

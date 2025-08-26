@@ -20,13 +20,13 @@ Contains testcontainers-based TLS integration tests that validate:
 ### All Tests (excluding Docker-dependent tests)
 
 ```bash
-# With native-tls (ssl feature)
-cargo test --test tls_integration --features ssl
+# Standard tests with TLS support (always available)
+cargo test --test tls_integration
 
-# With rustls TLS (default)
+# Release build tests
 cargo test --test tls_integration --release
 
-# Without TLS features (tests error handling)
+# Minimal build tests (without TLS)
 cargo test --test tls_integration --no-default-features --features json,csv
 ```
 
@@ -36,10 +36,10 @@ Some tests require Docker and MySQL containers. These are marked with `#[ignore]
 
 ```bash
 # Run all tests including Docker-dependent ones (requires Docker)
-cargo test --test tls_integration --features ssl -- --ignored
+cargo test --test tls_integration -- --ignored
 
 # Run specific Docker test
-cargo test --test tls_integration --features ssl test_basic_tls_connection_establishment -- --ignored
+cargo test --test tls_integration test_basic_tls_connection_establishment -- --ignored
 ```
 
 ### Heavy Integration Tests
@@ -48,10 +48,10 @@ For comprehensive testing with real database connections, enable the `integratio
 
 ```bash
 # Run integration tests (requires Docker and integration_tests feature)
-cargo test --test tls_integration --features "ssl,integration_tests" -- --ignored
+cargo test --test tls_integration --features "integration_tests" -- --ignored
 
 # Run all tests including integration tests
-cargo test --test tls_integration --features "ssl,integration_tests" -- --include-ignored
+cargo test --test tls_integration --features "integration_tests" -- --include-ignored
 
 # Using justfile commands
 just test-integration  # Run only integration tests
@@ -112,8 +112,8 @@ The tests are designed to work in CI environments:
 
 - Docker-dependent tests are ignored by default
 - Unit tests run without external dependencies
-- Tests work with rustls-based `ssl` feature
-- Tests validate that TLS features are properly disabled when not compiled
+- Tests work with always-available rustls TLS implementation
+- Tests validate that TLS is always available in standard builds and properly excluded in minimal builds
 
 ## Troubleshooting
 
@@ -137,6 +137,6 @@ If certificate tests fail:
 
 If feature-related tests fail:
 
-1. Verify correct feature flags are enabled
-2. Check that rustls-based `ssl` feature works correctly
-3. Ensure conditional compilation is working correctly
+1. Verify TLS is available in standard builds
+2. Check that rustls TLS implementation works correctly
+3. Ensure TLS is properly excluded in minimal builds

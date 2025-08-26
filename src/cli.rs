@@ -73,22 +73,18 @@ pub enum Shell {
 }
 
 /// TLS configuration options (mutually exclusive)
-#[cfg_attr(not(feature = "ssl"), derive(Args, Debug, Clone, Default))]
-#[cfg_attr(feature = "ssl", derive(Args, Debug, Clone))]
+#[derive(Args, Debug, Clone)]
 #[group(id = "tls_mode", multiple = false)]
 pub struct TlsOptions {
     /// Path to CA certificate file for trust anchor pinning
-    #[cfg(feature = "ssl")]
     #[arg(long, group = "tls_mode")]
     pub tls_ca_file: Option<PathBuf>,
 
     /// Skip hostname verification (keeps chain and time validation)
-    #[cfg(feature = "ssl")]
     #[arg(long, group = "tls_mode")]
     pub insecure_skip_hostname_verify: bool,
 
     /// Disable certificate validation entirely (DANGEROUS)
-    #[cfg(feature = "ssl")]
     #[arg(long, group = "tls_mode")]
     pub allow_invalid_certificate: bool,
 }

@@ -68,7 +68,7 @@ simulate_error_report "format" \
 echo -e "${GREEN}5. Testing Dependency Failure Reporting${NC}"
 echo "----------------------------------------"
 simulate_error_report "dependency" \
-    "TLS feature not enabled. Recompile with --features ssl to enable TLS support" \
+    "TLS connection failed: certificate validation error" \
     "https://github.com/UncleSp1d3r/gold_digger/blob/main/docs/src/troubleshooting/ci-failures.md#dependency-failures"
 
 # Test debug artifact collection

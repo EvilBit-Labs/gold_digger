@@ -74,7 +74,7 @@ cargo install --path .
 ### Build Options
 
 ```bash
-# Standard build (recommended)
+# Standard build with TLS support (recommended)
 cargo build --release
 
 # Minimal build (no TLS support)
@@ -83,9 +83,10 @@ cargo build --release --no-default-features --features "json csv"
 
 ### TLS Support
 
-Gold Digger supports secure database connections with a unified rustls-based TLS implementation:
+Gold Digger includes built-in secure database connections with a unified rustls-based TLS implementation:
 
-- **Pure Rust TLS**: Consistent cross-platform behavior using rustls with AWS-LC crypto
+- **Always Available**: TLS support is included in all builds without requiring feature flags
+- **Pure Rust TLS**: Consistent cross-platform behavior using rustls with platform certificate store integration
 - **Platform Certificate Store**: Automatic integration with system certificate stores (Windows/macOS/Linux)
 - **Flexible Security Controls**: Four distinct TLS validation modes via mutually exclusive CLI flags
 - **Enhanced Error Messages**: Intelligent error classification with specific CLI flag suggestions

@@ -2,14 +2,14 @@
 ## [Unreleased]
 
 ### BREAKING CHANGES
-- **TLS Migration**: Simplified to rustls-only implementation with platform certificate store integration
+- **TLS Migration**: Simplified to always-available rustls implementation with platform certificate store integration
   - **Before**: Dual TLS implementations (`ssl` with native-tls, `ssl-rustls` with rustls-tls)
-  - **After**: Single rustls-based implementation via `ssl` feature
-  - **Migration**: Update build scripts to use simplified `ssl` feature
+  - **After**: Single rustls-based implementation always available without feature flags
+  - **Migration**: Remove all SSL feature flag references from build scripts
 
 ### Features
-- **TLS Implementation**: Migrated to rustls-only implementation with enhanced security controls
-  - Single `ssl` feature now uses `mysql/rustls-tls` with platform certificate store integration
+- **TLS Implementation**: Migrated to always-available rustls implementation with enhanced security controls
+  - TLS support is now built into all Gold Digger binaries without requiring feature flags
   - Automatic system certificate store usage on Windows, macOS, and Linux
   - Enhanced TLS validation modes: Platform, CustomCa, SkipHostnameVerification, AcceptInvalid
   - Intelligent error messages with specific CLI flag suggestions for TLS issues
