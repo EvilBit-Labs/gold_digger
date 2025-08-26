@@ -6,7 +6,7 @@ inclusion: always
 
 ## Language & Runtime
 
-- **Rust 2021 Edition** - Memory safety and performance
+- **Rust 2024 Edition** - Memory safety and performance
 - **Cargo** - Package management and build system
 - **Target platforms**: x86_64/aarch64 for Linux, macOS, Windows
 

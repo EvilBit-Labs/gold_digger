@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Gold Digger is a Rust-based MySQL/MariaDB query tool that outputs structured data (CSV/JSON/TSV) via environment variables. It's designed for headless database automation workflows with CLI-first architecture.
+Gold Digger is a Rust-based MySQL/MariaDB query tool that outputs structured data (CSV/JSON/TSV) via environment variables. It defines essential architecture patterns, safety requirements, and development constraints for headless database automation workflows with CLI-first architecture.
 
 ## Project File Organization
 
@@ -49,44 +49,27 @@ pub fn rows_to_strings(rows: Vec<mysql::Row>) -> anyhow::Result<Vec<Vec<String>>
 - Implement credential redaction in all log output
 - Use `?` operator for error propagation
 
-## 🚨 Critical Safety Rules
+## 🚨 Critical Safety Requirements
 
-### Database Value Conversion (PANIC RISK)
+### Database Type Safety (PANIC RISK)
 
 ```rust
-// ❌ NEVER - causes panics on NULL/non-string types
-// from_value::<String>(row[column.name_str().as_ref()])
-// Use mysql_value_to_string() for CSV/TSV or mysql_value_to_json() for JSON instead
+// DANGEROUS - causes runtime panics on NULL/non-string values
+from_value::<String>(row[column.name_str().as_ref()])
 
-// ✅ ALWAYS - safe NULL handling with dedicated helpers
-
-/// Converts MySQL value to String for CSV/TSV output
-fn mysql_value_to_string(mysql_value: &mysql::Value) -> String {
-    match mysql_value {
-        mysql::Value::NULL => "".to_string(),
-        val => from_value_opt::<String>(val.clone()).unwrap_or_else(|_| format!("{:?}", val)),
-    }
+// SAFE - explicit NULL handling required
+match mysql_value {
+    mysql::Value::NULL => "".to_string(),
+    val => from_value_opt::<String>(val.clone())
+        .unwrap_or_else(|_| format!("{:?}", val))
 }
-
-/// Converts MySQL value to serde_json::Value for JSON output
-fn mysql_value_to_json(mysql_value: &mysql::Value) -> serde_json::Value {
-    match mysql_value {
-        mysql::Value::NULL => serde_json::Value::Null,
-        val => from_value_opt::<serde_json::Value>(val.clone())
-            .unwrap_or_else(|_| serde_json::Value::String(format!("{:?}", val))),
-    }
-}
-
-// Usage per output format:
-// - CSV/TSV: mysql_value_to_string(&mysql_value)
-// - JSON: mysql_value_to_json(&mysql_value)
 ```
 
-### Security (NEVER VIOLATE)
+### Security (NON-NEGOTIABLE)
 
-- **NEVER** log `DATABASE_URL` or credentials - always redact
-- **NEVER** make external service calls at runtime (offline-first)
-- Always recommend SQL `CAST(column AS CHAR)` for type safety
+- **NEVER** log `DATABASE_URL` or credentials - implement automatic redaction
+- **NEVER** make external network calls at runtime (offline-first design)
+- **ALWAYS** validate and sanitize all user inputs
 
 ### Configuration Architecture
 
@@ -106,18 +89,29 @@ Gold Digger uses CLI-first configuration with environment variable fallbacks:
 - `DATABASE_QUERY`: SQL query to execute
 - `OUTPUT_FILE`: Determines format by extension (.csv/.json/fallback to TSV)
 
-**Resolution Pattern:**
+## Architecture Patterns
+
+### Configuration Resolution (CLI-First)
 
 ```rust
+// Priority: CLI flags > Environment variables > Error
 fn resolve_config_value(cli: &Cli) -> anyhow::Result<String> {
     if let Some(value) = &cli.field {
         Ok(value.clone()) // CLI flag (highest priority)
     } else if let Ok(value) = env::var("ENV_VAR") {
         Ok(value) // Environment variable (fallback)
     } else {
-        anyhow::bail!("Missing required configuration") // Error if neither
+        anyhow::bail!("Missing required configuration")
     }
 }
+```
+
+### Format Module Contract
+
+All format modules must implement:
+
+```rust
+pub fn write<W: Write>(rows: Vec<Vec<String>>, output: W) -> anyhow::Result<()>
 ```
 
 **Note:** No dotenv support - use exported environment variables only.
@@ -153,11 +147,12 @@ println!("Connecting to database...");
 ### Feature Flags
 
 ```toml
-default = ["json", "csv", "ssl", "additional_mysql_types", "verbose"]
-ssl = ["mysql/rustls-tls", "rustls", "rustls-native-certs", "rustls-pemfile"] # Pure Rust TLS with platform certificate store integration
+default = ["json", "csv", "additional_mysql_types", "verbose"]
 additional_mysql_types = [...]             # BigDecimal, Decimal, etc.
 verbose = []                               # Conditional logging
 ```
+
+Note: TLS is now always available and is no longer a feature flag.
 
 **TLS Implementation Notes:**
 
@@ -167,26 +162,28 @@ verbose = []                               # Conditional logging
 
 ## Development Commands
 
-### Essential Quality Checks
+## Code Quality Standards
+
+### Required Before Commits
 
 ```bash
-# Required before any commit
-cargo fmt --check           # Formatting validation
-cargo clippy -- -D warnings # Zero-tolerance linting
-cargo nextest run           # Parallel test execution
+just fmt-check    # cargo fmt --check (100-char line limit)
+just lint         # cargo clippy -- -D warnings (zero tolerance)
+just test         # cargo nextest run (preferred)
+just security     # cargo audit
 ```
 
 ### Build Variations
 
 ```bash
-# Standard build with rustls TLS (default)
+# Standard build (TLS always available)
 cargo build --release
 
-# No TLS support (insecure connections only)
-cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
-
-# Minimal build
+# Minimal build (TLS still available)
 cargo build --no-default-features --features "csv json"
+
+# Build without extra types
+cargo build --release --no-default-features --features "json csv verbose"
 ```
 
 ### Safe Testing Pattern
@@ -201,10 +198,9 @@ cargo run --release
 
 ## Known Issues to Address
 
-1. **Pattern Bug:** `Some(&_)` should be `Some(_)` in main.rs
-2. **Exit Codes:** Uses `exit(-1)` instead of proper error codes
-3. **JSON Output:** Uses BTreeMap for deterministic key ordering (implemented)
-4. **Version Sync:** CHANGELOG.md vs Cargo.toml version mismatch
+1. **Memory:** No streaming support - O(row_count × row_width) memory usage
+2. **JSON Output:** Uses BTreeMap for deterministic key ordering (implemented)
+3. **Version Sync:** CHANGELOG.md vs Cargo.toml version mismatch
 
 ## AI Assistant Guidelines
 

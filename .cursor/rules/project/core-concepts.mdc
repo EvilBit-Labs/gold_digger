@@ -4,7 +4,7 @@ alwaysApply: true
 
 # Gold Digger Core Concepts
 
-This file defines the core concepts and constraints for the Gold Digger MySQL/MariaDB query tool.
+This document defines the essential architecture patterns, safety requirements, and development constraints for the Gold Digger MySQL/MariaDB query tool.
 
 ## Project Identity
 
@@ -75,18 +75,18 @@ src/
 
 ## Known Bugs & Issues
 
-1. **Pattern matching bug**: `Some(&_)` should be `Some(_)` in main.rs:59
-2. **Non-standard exit codes**: `exit(-1)` becomes 255, not documented error codes
-3. **Version mismatch**: CHANGELOG.md v0.2.6 vs Cargo.toml v0.2.5
+1. **Memory**: No streaming support - O(row_count × row_width) memory usage
+2. **Version mismatch**: CHANGELOG.md v0.2.6 vs Cargo.toml v0.2.5
 
 ## Feature Flags
 
 ```toml
-default = ["json", "csv", "ssl", "additional_mysql_types", "verbose"]
-ssl = ["mysql/rustls-tls", "rustls", "rustls-native-certs", "rustls-pemfile"] # Pure Rust TLS with platform certificate store integration
+default = ["json", "csv", "additional_mysql_types", "verbose"]
 additional_mysql_types = ["mysql_common?/bigdecimal", "mysql_common?/rust_decimal", ...]
 verbose = []                               # Conditional println!/eprintln!
 ```
+
+**Note**: TLS is now always available and is no longer a feature flag. The previous dual TLS approach (native-tls vs rustls) has been consolidated into a single, consistent rustls-only implementation.
 
 **Note**: Simplified to rustls-only TLS implementation. The previous dual TLS approach (native-tls vs rustls) has been consolidated into a single, consistent implementation.
 
@@ -136,7 +136,7 @@ cargo audit                 # Security vulnerability scanning (advisory)
 
 ## Requirements Gap (High Priority)
 
-Current v0.2.5 → Target v1.0:
+Current v0.2.6 → Target v1.0:
 
 - **CLI present; finalize precedence/UX**: Config precedence, flags, user experience (F001-F003)
 - **Exit code standards**: Need proper error taxonomy (F005)
@@ -211,9 +211,9 @@ fn write_output(rows: &[Row], output_file: &str, output: &mut impl Write) -> Res
 
 ```bash
 # Build variations
-cargo build --release                                    # Standard build (rustls TLS)
-cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"  # No TLS support
-cargo build --no-default-features --features "csv json" # Minimal build
+cargo build --release                                    # Standard build (TLS always available)
+cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"  # Build without extra features
+cargo build --no-default-features --features "csv json" # Minimal build (TLS still available)
 
 # Development (CLI-first approach)
 cargo install --path .  # Local install

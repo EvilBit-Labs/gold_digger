@@ -4,7 +4,7 @@ This file provides guidance for AI assistants working with the Gold Digger codeb
 
 ## Project Overview
 
-Gold Digger is a Rust-based MySQL/MariaDB query tool that outputs results in CSV, JSON, or TSV formats. It's designed for headless operation via environment variables, making it ideal for database automation workflows.
+Gold Digger is a Rust-based MySQL/MariaDB query tool that outputs results in CSV, JSON, or TSV formats. It defines essential architecture patterns, safety requirements, and development constraints for headless database automation workflows.
 
 **Key Characteristics:**
 
@@ -14,55 +14,35 @@ Gold Digger is a Rust-based MySQL/MariaDB query tool that outputs results in CSV
 - Single-maintainer project by UncleSp1d3r
 - Under active development toward v1.0
 
-## 🚨 Critical Safety Rules
+## 🚨 Critical Safety Requirements
 
-### Database Value Conversion (PANIC RISK)
+### Database Type Safety (PANIC RISK)
 
 ```rust
-// ❌ NEVER - causes panics on NULL/non-string types
-// from_value::<String>(row[column.name_str().as_ref()])
-// Use mysql_value_to_string() for CSV/TSV or mysql_value_to_json() for JSON instead
+// DANGEROUS - causes runtime panics on NULL/non-string values
+from_value::<String>(row[column.name_str().as_ref()])
 
-// ✅ ALWAYS - safe NULL handling with dedicated helpers
-
-/// Converts MySQL value to String for CSV/TSV output
-fn mysql_value_to_string(mysql_value: &mysql::Value) -> String {
-    match mysql_value {
-        mysql::Value::NULL => "".to_string(),
-        val => from_value_opt::<String>(val.clone()).unwrap_or_else(|_| format!("{:?}", val)),
-    }
+// SAFE - explicit NULL handling required
+match mysql_value {
+    mysql::Value::NULL => "".to_string(),
+    val => from_value_opt::<String>(val.clone())
+        .unwrap_or_else(|_| format!("{:?}", val))
 }
-
-/// Converts MySQL value to serde_json::Value for JSON output
-fn mysql_value_to_json(mysql_value: &mysql::Value) -> serde_json::Value {
-    match mysql_value {
-        mysql::Value::NULL => serde_json::Value::Null,
-        val => from_value_opt::<String>(val.clone())
-            .map(serde_json::Value::String)
-            .unwrap_or_else(|_| serde_json::Value::String(format!("{:?}", val))),
-    }
-}
-
-// Usage per output format:
-// - CSV/TSV: mysql_value_to_string(&mysql_value)
-// - JSON: mysql_value_to_json(&mysql_value)
 ```
 
-### Security (NEVER VIOLATE)
+### Security (NON-NEGOTIABLE)
 
-- **NEVER** log `DATABASE_URL` or credentials - always redact
-- **NEVER** make external service calls at runtime (offline-first)
-- Always recommend SQL `CAST(column AS CHAR)` for type safety
+- **NEVER** log `DATABASE_URL` or credentials - implement automatic redaction
+- **NEVER** make external network calls at runtime (offline-first design)
+- **ALWAYS** validate and sanitize all user inputs
 
 ### Other Critical Issues
 
 1. **No Dotenv Support:** Despite README implications, there is no `.env` file support in the code. Use exported environment variables only.
 
-2. **Non-Standard Exit Codes:** `exit(-1)` becomes exit code 255, not the standard codes specified in requirements.
+2. **Memory:** No streaming support - O(row_count × row_width) memory usage
 
 3. **JSON Output:** Uses BTreeMap for deterministic key ordering as required.
-
-4. **Pattern Matching Bug:** In `src/main.rs`, the `if let Some(url) = &cli.db_url` pattern (and similar patterns in the resolve functions) uses `Some(&_)` which should be `Some(_)` in the match arm.
 
 ### Configuration Architecture
 
@@ -82,18 +62,29 @@ Gold Digger uses CLI-first configuration with environment variable fallbacks:
 - `DATABASE_QUERY`: SQL query string to execute
 - `OUTPUT_FILE`: Path to output file (extension determines format: .csv, .json, or defaults to TSV)
 
-**Resolution Pattern:**
+## Architecture Patterns
+
+### Configuration Resolution (CLI-First)
 
 ```rust
+// Priority: CLI flags > Environment variables > Error
 fn resolve_config_value(cli: &Cli) -> anyhow::Result<String> {
     if let Some(value) = &cli.field {
         Ok(value.clone()) // CLI flag (highest priority)
     } else if let Ok(value) = env::var("ENV_VAR") {
         Ok(value) // Environment variable (fallback)
     } else {
-        anyhow::bail!("Missing required configuration") // Error if neither
+        anyhow::bail!("Missing required configuration")
     }
 }
+```
+
+### Format Module Contract
+
+All format modules must implement:
+
+```rust
+pub fn write<W: Write>(rows: Vec<Vec<String>>, output: W) -> anyhow::Result<()>
 ```
 
 ### Current Architecture
@@ -141,10 +132,11 @@ cargo run --release
 
 ### Feature Flags
 
-- `default`: `["json", "csv", "ssl", "additional_mysql_types", "verbose"]`
-- `ssl`: Rustls-based TLS support with platform certificate store integration
+- `default`: `["json", "csv", "additional_mysql_types", "verbose"]`
 - `additional_mysql_types`: Support for BigDecimal, Decimal, Time, Frunk
 - `verbose`: Conditional logging via println!/eprintln!
+
+Note: TLS is now always available and is no longer a feature flag.
 
 ## Requirements Gap Analysis
 
@@ -154,8 +146,8 @@ The project has detailed requirements in `project_spec/requirements.md` but sign
 
 - **F001-F003:** CLI interface exists (clap-based); finalize CLI flag precedence and documented flags
 - **F005:** Non-standard exit codes (should be 0=success, 1=no rows, 2=config error, etc.)
+- **F007:** Streaming output (currently loads all rows into memory)
 - **F014:** Type conversion panics on NULL/non-string values
-- **Extension dispatch bug fix**
 
 ### Medium Priority
 
@@ -210,7 +202,7 @@ pub fn rows_to_strings(rows: Vec<mysql::Row>) -> anyhow::Result<Vec<Vec<String>>
 - **Vulnerability policy:** Block releases with critical vulnerabilities
 - **Airgap compatibility:** No telemetry or external calls in production
 - **Configure TLS programmatically:** Use `mysql::OptsBuilder` and `SslOpts` instead of URL parameters
-- **TLS Implementation:** Uses simplified rustls-only implementation with platform certificate store integration via the `ssl` feature (migrated from previous dual TLS approach)
+- **TLS Implementation:** Uses rustls-only implementation with platform certificate store integration (TLS support is always available without requiring feature flags)
 
 #### Error Handling Patterns
 

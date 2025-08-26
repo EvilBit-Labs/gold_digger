@@ -4,7 +4,7 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 ## Purpose and Quick Start
 
-Gold Digger is a Rust-based MySQL/MariaDB query tool that outputs results in CSV, JSON, or TSV formats. It's designed for headless operation via environment variables, making it ideal for database automation workflows.
+Gold Digger is a Rust-based MySQL/MariaDB query tool that outputs results in CSV, JSON, or TSV formats. It defines essential architecture patterns, safety requirements, and development constraints for headless database automation workflows.
 
 **Basic usage:**
 
@@ -28,7 +28,7 @@ cargo build
 # Release build
 cargo build --release
 
-# Standard build with rustls TLS (default)
+# Standard build (TLS always available)
 cargo build --release
 
 # Minimal build (no default features)
@@ -97,18 +97,29 @@ cargo run --release
 - Exits with code 1 if result set is empty
 - Dispatches to writer based on output file extension
 
-**Configuration Resolution Pattern:**
+## Architecture Patterns
+
+### Configuration Resolution (CLI-First)
 
 ```rust
+// Priority: CLI flags > Environment variables > Error
 fn resolve_config_value(cli: &Cli) -> anyhow::Result<String> {
     if let Some(value) = &cli.field {
         Ok(value.clone()) // CLI flag (highest priority)
     } else if let Ok(value) = env::var("ENV_VAR") {
         Ok(value) // Environment variable (fallback)
     } else {
-        anyhow::bail!("Missing required configuration") // Error if neither
+        anyhow::bail!("Missing required configuration")
     }
 }
+```
+
+### Format Module Contract
+
+All format modules must implement:
+
+```rust
+pub fn write<W: Write>(rows: Vec<Vec<String>>, output: W) -> anyhow::Result<()>
 ```
 
 **Core Library (`src/lib.rs`):**
@@ -131,10 +142,11 @@ fn resolve_config_value(cli: &Cli) -> anyhow::Result<String> {
 
 ### Feature Flags (Cargo.toml)
 
-- `default`: `["json", "csv", "ssl", "additional_mysql_types", "verbose"]`
-- `ssl`: Enables rustls-based TLS support with platform certificate store integration
+- `default`: `["json", "csv", "additional_mysql_types", "verbose"]`
 - `additional_mysql_types`: Support for BigDecimal, Decimal, Time, Frunk
 - `verbose`: Conditional logging via println!/eprintln!
+
+Note: TLS is now always available and is no longer a feature flag.
 
 ## Output Format Dispatch and Edge Cases
 
@@ -149,11 +161,11 @@ match get_extension_from_filename(&output_file) {
 }
 ```
 
-**Note:** The original code used the incorrect pattern `Some(&_)` which was a historical bug. The correct pattern is `Some(_)` to match any string value that isn't "csv" or "json". The `&_` pattern incorrectly tried to destructure a reference, which doesn't work for string literals in this context.
+**Note:** The extension dispatch logic has been corrected to use proper pattern matching for fallback cases.
 
 ### Known Issues
 
-1. **Pattern Bug:** `Some(&_)` should be `Some(_)` in the fallback arm
+1. **Memory:** No streaming support - O(row_count × row_width) memory usage
 2. **Extension Confusion:** `.txt` mentioned in README but dispatches to TSV
 3. **Missing Features:** No `--pretty` JSON flag, no format override option
 
@@ -163,45 +175,27 @@ match get_extension_from_filename(&output_file) {
 - **JSON:** `{"data": [{"col1": "val1", "col2": "val2"}, ...]}` with BTreeMap for deterministic key ordering
 - **TSV:** Tab-delimited, `QuoteStyle::Necessary`
 
-## 🚨 Critical Safety Rules
+## 🚨 Critical Safety Requirements
 
-### Database Value Conversion (PANIC RISK)
+### Database Type Safety (PANIC RISK)
 
 ```rust
-// ❌ NEVER - causes panics on NULL/non-string types
-// from_value::<String>(row[column.name_str().as_ref()])
-// Use mysql_value_to_string() for CSV/TSV or mysql_value_to_json() for JSON instead
+// DANGEROUS - causes runtime panics on NULL/non-string values
+from_value::<String>(row[column.name_str().as_ref()])
 
-// ✅ ALWAYS - safe NULL handling with dedicated helpers
-
-/// Converts MySQL value to String for CSV/TSV output
-fn mysql_value_to_string(mysql_value: &mysql::Value) -> String {
-    match mysql_value {
-        mysql::Value::NULL => "".to_string(),
-        val => from_value_opt::<String>(val.clone()).unwrap_or_else(|_| format!("{:?}", val)),
-    }
+// SAFE - explicit NULL handling required
+match mysql_value {
+    mysql::Value::NULL => "".to_string(),
+    val => from_value_opt::<String>(val.clone())
+        .unwrap_or_else(|_| format!("{:?}", val))
 }
-
-/// Converts MySQL value to serde_json::Value for JSON output
-fn mysql_value_to_json(mysql_value: &mysql::Value) -> serde_json::Value {
-    match mysql_value {
-        mysql::Value::NULL => serde_json::Value::Null,
-        val => from_value_opt::<String>(val.clone())
-            .map(serde_json::Value::String)
-            .unwrap_or_else(|_| serde_json::Value::String(format!("{:?}", val))),
-    }
-}
-
-// Usage per output format:
-// - CSV/TSV: mysql_value_to_string(&mysql_value)
-// - JSON: mysql_value_to_json(&mysql_value)
 ```
 
-### Security (NEVER VIOLATE)
+### Security (NON-NEGOTIABLE)
 
-- **NEVER** log `DATABASE_URL` or credentials - always redact
-- **NEVER** make external service calls at runtime (offline-first)
-- Always recommend SQL `CAST(column AS CHAR)` for type safety
+- **NEVER** log `DATABASE_URL` or credentials - implement automatic redaction
+- **NEVER** make external network calls at runtime (offline-first design)
+- **ALWAYS** validate and sanitize all user inputs
 
 ## Critical Gotchas and Invariants
 
@@ -376,64 +370,23 @@ testcontainers = "0.15"                                      # For real MySQL/Ma
 - Implement credential redaction in all log output
 - Use `?` operator for error propagation
 
-### TLS Configuration
+## Technology Stack
 
-Gold Digger uses a simplified, rustls-only TLS implementation with platform certificate store integration:
+### Core Dependencies
 
-#### Single TLS Implementation
+- **CLI**: `clap` with `derive` and `env` features
+- **Database**: `mysql` crate with `rustls-tls` (pure Rust TLS)
+- **Output**: `serde_json` (BTreeMap), `csv` crate (RFC4180)
+- **Errors**: `anyhow` (applications), `thiserror` (libraries)
 
-- **Feature flag**: `ssl` (enabled by default)
-- **Implementation**: Pure Rust TLS via rustls with native certificate store support
-- **Platform Integration**: Automatically uses system certificate stores on Windows, macOS, and Linux
-- **Enhanced Security Controls**: Granular TLS validation options for different deployment scenarios
-- **Benefits**: Consistent behavior across platforms, no native dependencies, simplified configuration
+### Feature Flags
 
-#### Build Options
-
-```bash
-# Default build with rustls TLS (recommended)
-cargo build --release
-
-# No TLS support (insecure connections only)
-cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
+```toml
+default = ["json", "csv", "additional_mysql_types", "verbose"]
+additional_mysql_types = ["bigdecimal", "rust_decimal", "chrono", "uuid"]
 ```
 
-#### Programmatic TLS Configuration
-
-**TLS configuration is programmatic only** - URL-based SSL parameters are not supported by the mysql crate:
-
-```rust
-use mysql::{OptsBuilder, SslOpts};
-
-let ssl_opts = SslOpts::default()
-    .with_root_cert_path("/path/to/ca.pem")
-    .with_client_cert_path("/path/to/client-cert.pem")
-    .with_client_key_path("/path/to/client-key.pem");
-
-let opts = OptsBuilder::new()
-    .ip_or_hostname(Some("localhost"))
-    .tcp_port(3306)
-    .user(Some("username"))
-    .pass(Some("password"))
-    .db_name(Some("database"))
-    .ssl_opts(ssl_opts);
-```
-
-#### Migration to Rustls-Only (Breaking Change)
-
-**v0.2.7+**: Gold Digger has migrated to a simplified, rustls-only TLS implementation:
-
-- **Before**: Dual TLS implementations (`ssl` with native-tls, `ssl-rustls` with rustls-tls)
-- **After**: Single rustls-based implementation with platform certificate store integration
-- **Breaking Change**: Remove `ssl-rustls` feature references from build scripts and CI/CD
-- **Benefits**: Simplified configuration, consistent cross-platform behavior, enhanced security controls
-- **Platform Integration**: Automatic system certificate store usage on all platforms
-
-**Migration Steps**:
-
-1. Remove `ssl-rustls` feature references from build commands and CI/CD pipelines
-2. Use default `ssl` feature for rustls-based TLS (recommended)
-3. Update documentation to reflect simplified TLS model
+Note: TLS is now always available and is no longer a feature flag.
 
 ## GitHub Interactions
 
@@ -477,20 +430,20 @@ Before submitting any changes:
 ### Feature Combinations
 
 ```bash
-# Default build with rustls TLS (recommended)
+# Default build (TLS always available)
 cargo build --release
 
-# Minimal build (no TLS, no extra types)
+# Minimal build (no extra types, TLS still available)
 cargo build --no-default-features --features "csv json"
 
-# Database admin build (all MySQL types with rustls TLS)
+# Database admin build (all MySQL types)
 cargo build --release --features "default additional_mysql_types"
 ```
 
 ### Dependencies by Feature
 
 - **Base:** `mysql`, `anyhow`, `csv`, `serde_json`, `clap`
-- **Rustls TLS:** `mysql/rustls-tls`, `rustls`, `rustls-native-certs`, `rustls-pemfile` (pure Rust implementation with platform certificate store integration)
+- **TLS:** `mysql/rustls-tls`, `rustls`, `rustls-native-certs`, `rustls-pemfile` (always included - pure Rust implementation with platform certificate store integration)
 - **Types:** `mysql_common` with bigdecimal, rust_decimal, time, frunk
 - **No native TLS dependencies** in any configuration
 

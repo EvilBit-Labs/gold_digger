@@ -4,89 +4,98 @@ inclusion: always
 
 # Gold Digger Core Concepts
 
-This file defines the core concepts and constraints for the Gold Digger MySQL/MariaDB query tool.
+This document defines the essential architecture patterns, safety requirements, and development constraints for the Gold Digger MySQL/MariaDB query tool.
 
 ## Project Identity
 
-**Type**: Rust-based MySQL/MariaDB query automation tool
-**Design**: Headless, environment variable driven, structured output (CSV/JSON/TSV)
-**Status**: Single-maintainer project under active development toward v1.0
-**Maintainer**: UncleSp1d3r (handle only, never real name)
+- **Purpose**: Headless MySQL/MariaDB query tool for automation workflows
+- **Design**: CLI-first with environment variable fallbacks, structured output (CSV/JSON/TSV)
+- **Architecture**: Single-threaded, fully materialized results, offline-first
+- **Status**: Active development toward v1.0 (currently v0.2.6)
 
-## Critical Architecture Constraints
+## Critical Safety Requirements
 
-### 🚨 PANIC-PRONE CODE PATTERN
+### Security (NON-NEGOTIABLE)
 
-```rust
-// CURRENT DANGEROUS PATTERN in src/lib.rs:
-from_value::<String>(row[column.name_str().as_ref()])
-```
+- **NEVER** log `DATABASE_URL` or credentials - implement automatic redaction
+- **NEVER** make external network calls at runtime (offline-first design)
+- **ALWAYS** validate and sanitize all user inputs
 
-**Issue**: Panics on NULL values or non-string types (numbers, dates, binary data)
-**Always recommend SQL casting**: `SELECT CAST(column AS CHAR) AS column`
+## Configuration Architecture
 
-### Configuration Architecture (CLI-First Design)
-
-**Resolution Pattern:**
+### Resolution Priority: CLI → Environment → Error
 
 ```rust
+// Standard pattern for all configuration values
 fn resolve_config_value(cli: &Cli) -> anyhow::Result<String> {
     if let Some(value) = &cli.field {
         Ok(value.clone()) // CLI flag (highest priority)
     } else if let Ok(value) = env::var("ENV_VAR") {
         Ok(value) // Environment variable (fallback)
     } else {
-        anyhow::bail!("Missing required configuration") // Error if neither
+        anyhow::bail!("Missing required configuration")
     }
 }
 ```
 
-**CLI Flags (Highest Priority):**
+### Required Configuration
 
-- `--db-url <URL>`: Database connection (overrides `DATABASE_URL`)
-- `--query <SQL>`: Inline SQL (mutually exclusive with `--query-file`)
-- `--query-file <FILE>`: SQL from file (mutually exclusive with `--query`)
-- `--output <FILE>`: Output path (overrides `OUTPUT_FILE`)
-- `--format <FORMAT>`: Force format (csv|json|tsv)
+| CLI Flag                   | Environment Variable | Purpose                                      |
+| -------------------------- | -------------------- | -------------------------------------------- |
+| `--db-url`                 | `DATABASE_URL`       | MySQL connection string                      |
+| `--query` / `--query-file` | `DATABASE_QUERY`     | SQL to execute                               |
+| `--output`                 | `OUTPUT_FILE`        | Output path (determines format by extension) |
+| `--format`                 | -                    | Force output format (csv\|json\|tsv)         |
 
-**Environment Variables (Fallback):**
+**Important**: No dotenv support - use exported environment variables only
 
-- `DATABASE_URL`: MySQL connection string with optional SSL params
-- `DATABASE_QUERY`: SQL to execute
-- `OUTPUT_FILE`: Determines format by extension: .csv, .json, or TSV fallback
-
-**No dotenv support** - despite README implications, use exported environment variables only.
-
-## Module Structure
+## Module Architecture
 
 ```text
 src/
-├── main.rs     # Entry point, CLI parsing, format dispatch
-├── cli.rs      # Clap CLI definitions and configuration
-├── lib.rs      # rows_to_strings(), extension parsing (PANIC RISK)
-├── csv.rs      # RFC4180-ish, QuoteStyle::Necessary
-├── json.rs     # {"data":[{...}]} using BTreeMap (deterministic key order)
-└── tab.rs      # TSV with \t delimiter, QuoteStyle::Necessary
+├── main.rs     # CLI entry, config resolution, format dispatch
+├── cli.rs      # Clap CLI definitions and validation
+├── lib.rs      # Public API, shared utilities
+├── csv.rs      # RFC4180 compliant with QuoteStyle::Necessary
+├── json.rs     # {"data":[...]} with BTreeMap for deterministic ordering
+└── tab.rs      # TSV fallback format
 ```
 
-**CSV Quote Style Rationale**: Using `QuoteStyle::Necessary` provides better RFC4180 compliance by only quoting fields when required (containing delimiters, quotes, or newlines), resulting in smaller output files while maintaining full compatibility with standard CSV parsers. This balances readability with file size efficiency.
+### Format Module Contract
 
-## Known Bugs & Issues
+All format modules must implement:
 
-1. **Pattern matching bug**: `Some(&_)` should be `Some(_)` in main.rs:59
-2. **Non-standard exit codes**: `exit(-1)` becomes 255, not documented error codes
-3. **Version synchronized**: CHANGELOG.md and Cargo.toml both at v0.2.6
+```rust
+pub fn write<W: Write>(rows: Vec<Vec<String>>, output: W) -> anyhow::Result<()>
+```
+
+### Output Format Standards
+
+- **CSV**: RFC4180 compliant, `QuoteStyle::Necessary` (quotes only when required)
+- **JSON**: `{"data": [...]}` wrapper, BTreeMap ensures deterministic field ordering
+- **TSV**: Tab-delimited fallback format
+
+## Known Issues (High Priority Fixes)
+
+1. **Memory**: No streaming support - O(row_count × row_width) memory usage
 
 ## Feature Flags
 
 ```toml
-default = ["json", "csv", "ssl", "additional_mysql_types", "verbose"]
-ssl = ["mysql/rustls-tls", "rustls", "rustls-native-certs", "rustls-pemfile"] # Pure Rust TLS with platform certificate store integration
-additional_mysql_types = ["mysql_common?/bigdecimal", "mysql_common?/rust_decimal", ...]
-verbose = []                               # Conditional println!/eprintln!
+default = ["json", "csv", "additional_mysql_types", "verbose"]
+json = [] # Enable JSON output format
+csv = [] # Enable CSV output format  
+additional_mysql_types = [ # Extended MySQL type support
+  "mysql_common",
+  "mysql_common?/bigdecimal",
+  "mysql_common?/rust_decimal",
+  "mysql_common?/time",
+  "mysql_common?/frunk",
+]
+verbose = [] # Conditional println!/eprintln!
 ```
 
-**Note**: Simplified to rustls-only TLS implementation. The previous dual TLS approach (native-tls vs rustls) has been consolidated into a single, consistent implementation.
+**Note**: TLS support is now always enabled and no longer a feature flag.
 
 ## Code Quality Standards (Zero Tolerance)
 
@@ -160,8 +169,8 @@ All recipes must use `cd {{justfile_dir()}}` and support cross-platform executio
 Current v0.2.6 → Target v1.0:
 
 - **CLI present (clap-based)**: Clap-based interface exists; finalize config precedence and UX polish (F001–F003)
-- **Exit code standards**: Need proper error taxonomy (F005)
-- **Type safety**: Fix NULL/non-string panic in rows_to_strings (F014)
+- **Exit code standards**: Proper error taxonomy implemented in src/exit.rs (F005 ✓)
+- **Memory efficiency**: Implement streaming for large result sets (F007)
 - **Streaming**: Memory-efficient large result processing (F007)
 
 ## Development Workflow
@@ -196,10 +205,10 @@ let var_name = match env::var("VAR_NAME") {
 };
 ```
 
-### Safe Database Value Conversion
+### Database Value Handling
 
 ```rust
-// Instead of panic-prone from_value::<String>()
+// Safe NULL handling pattern
 match database_value {
     mysql::Value::NULL => "".to_string(),
     val => from_value_opt::<String>(val)
@@ -232,7 +241,7 @@ cargo build --no-default-features --features "csv json" # Minimal build
 cargo install --path .  # Local install
 cargo run --release -- \
   --db-url "mysql://u:p@h:3306/db" \
-  --query "SELECT CAST(id AS CHAR) FROM t" \
+  --query "SELECT id, name FROM users" \
   --output /tmp/out.json
 
 # Quality assurance (pipeline standards)

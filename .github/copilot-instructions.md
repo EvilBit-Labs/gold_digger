@@ -2,28 +2,29 @@
 
 ## Project Context
 
-Gold Digger is a Rust MySQL/MariaDB query tool that outputs structured data (CSV/JSON/TSV) via environment variables. It's designed for headless database automation workflows.
+Gold Digger is a Rust MySQL/MariaDB query tool that outputs structured data (CSV/JSON/TSV) via environment variables. It defines essential architecture patterns, safety requirements, and development constraints for headless database automation workflows.
 
-## 🚨 Critical Safety Rules
+## 🚨 Critical Safety Requirements
 
-### Database Value Conversion (PANIC RISK)
-
-The current `rows_to_strings()` function in `src/lib.rs` uses `mysql::from_value::<String>()` which **WILL PANIC** on NULL values or non-string types. When suggesting code or queries:
+### Database Type Safety (PANIC RISK)
 
 ```rust
-// ❌ NEVER - causes panics on NULL/non-string types
+// DANGEROUS - causes runtime panics on NULL/non-string values
 from_value::<String>(row[column.name_str().as_ref()])
 
-// ✅ ALWAYS - safe NULL handling
+// SAFE - explicit NULL handling required
 match mysql_value {
-    mysql::Value::NULL => match output_format {
-        OutputFormat::Json => serde_json::Value::Null,
-        _ => "".to_string()
-    },
-    val => from_value_opt::<String>(val)
+    mysql::Value::NULL => "".to_string(),
+    val => from_value_opt::<String>(val.clone())
         .unwrap_or_else(|_| format!("{:?}", val))
 }
 ```
+
+### Security (NON-NEGOTIABLE)
+
+- **NEVER** log `DATABASE_URL` or credentials - implement automatic redaction
+- **NEVER** make external network calls at runtime (offline-first design)
+- **ALWAYS** validate and sanitize all user inputs
 
 For SQL queries, always suggest casting:
 
@@ -32,29 +33,29 @@ For SQL queries, always suggest casting:
 SELECT CAST(id AS CHAR) as id, CAST(created_at AS CHAR) as created_at FROM users;
 ```
 
-### Configuration Resolution Pattern
+## Architecture Patterns
+
+### Configuration Resolution (CLI-First)
 
 ```rust
-// ✅ Recommended pattern for CLI-first configuration
+// Priority: CLI flags > Environment variables > Error
 fn resolve_config_value(cli: &Cli) -> anyhow::Result<String> {
     if let Some(value) = &cli.field {
-        Ok(value.clone())                    // CLI flag (highest priority)
+        Ok(value.clone()) // CLI flag (highest priority)
     } else if let Ok(value) = env::var("ENV_VAR") {
-        Ok(value)                           // Environment variable (fallback)
+        Ok(value) // Environment variable (fallback)
     } else {
-        anyhow::bail!("Missing required configuration")  // Error if neither
+        anyhow::bail!("Missing required configuration")
     }
 }
+```
 
-// ✅ Current legacy pattern (environment-only)
-let output_file = match env::var("OUTPUT_FILE") {
-    Ok(val) => val,
-    Err(_) => {
-        #[cfg(feature = "verbose")]
-        eprintln!("couldn't find OUTPUT_FILE in environment variable");
-        std::process::exit(-1); // Note: becomes exit code 255
-    }
-};
+### Format Module Contract
+
+All format modules must implement:
+
+```rust
+pub fn write<W: Write>(rows: Vec<Vec<String>>, output: W) -> anyhow::Result<()>
 ```
 
 ### Feature-Gated Code
@@ -80,9 +81,7 @@ Some("csv") => gold_digger::csv::write(rows, output)?,
 
 ### Known Issues to Fix
 
-1. **Pattern Bug:** In `src/main.rs`, `Some(&_)` should be `Some(_)`
-2. **JSON Output:** Uses BTreeMap for deterministic key ordering (implemented)
-3. **Exit Codes:** Uses `exit(-1)` instead of proper error codes
+1. **Memory:** No streaming support - O(row_count × row_width) memory usage
 
 ## Project File Organization
 
@@ -138,18 +137,23 @@ println!("Connecting to {}", database_url);
 println!("Connecting to database...");
 ```
 
-## 🚨 Critical Security Rules (NEVER VIOLATE)
+## Code Quality Standards
 
-1. **No hardcoded secrets:** Use environment variables or GitHub OIDC
-2. **Vulnerability policy:** Block releases with critical vulnerabilities
-3. **Airgap compatibility:** No telemetry or external calls in production
+### Required Before Commits
+
+```bash
+just fmt-check    # cargo fmt --check (100-char line limit)
+just lint         # cargo clippy -- -D warnings (zero tolerance)
+just test         # cargo nextest run (preferred)
+just security     # cargo audit
+```
 
 ### Error Handling Patterns
 
-- Use `anyhow::Result<T>` for all fallible functions
-- Never use `from_value::<String>()` - always handle `mysql::Value::NULL`
-- Implement credential redaction in all log output
-- Use `?` operator for error propagation
+- Use `anyhow::Result<T>` for applications
+- Use `thiserror` for library error types
+- Always use `?` for error propagation
+- Add context with `.map_err()` for better debugging
 
 ## Feature Development Guidelines
 
@@ -166,16 +170,23 @@ match get_extension_from_filename(&output_file) {
 }
 ```
 
-### TLS Configuration
+### Technology Stack
 
-Gold Digger uses a simplified, rustls-only TLS implementation:
+#### Core Dependencies
 
-- **Single Implementation**: `ssl` feature uses pure Rust TLS via rustls with platform certificate store integration
-- **Platform Integration**: Automatically uses system certificate stores on Windows, macOS, and Linux
-- **Enhanced Security**: Granular TLS validation options for different deployment scenarios
-- **Benefits**: Consistent behavior across platforms, no native dependencies, simplified configuration
+- **CLI**: `clap` with `derive` and `env` features
+- **Database**: `mysql` crate with `rustls-tls` (pure Rust TLS)
+- **Output**: `serde_json` (BTreeMap), `csv` crate (RFC4180)
+- **Errors**: `anyhow` (applications), `thiserror` (libraries)
 
-**Important**: The previous dual TLS implementation (native-tls vs rustls) has been simplified to rustls-only.
+#### Feature Flags
+
+```toml
+default = ["json", "csv", "additional_mysql_types", "verbose"]
+additional_mysql_types = ["bigdecimal", "rust_decimal", "chrono", "uuid"]
+```
+
+Note: TLS is now always available and is no longer a feature flag.
 
 ### Adding Dependencies
 
@@ -183,7 +194,7 @@ Check feature flags in `Cargo.toml`:
 
 ```toml
 [features]
-default = ["json", "csv", "ssl", "additional_mysql_types", "verbose"]
+default = ["json", "csv", "additional_mysql_types", "verbose"]
 new_feature = ["dep:new_crate"]
 
 [dependencies]

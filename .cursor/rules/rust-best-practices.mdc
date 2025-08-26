@@ -23,56 +23,72 @@ alwaysApply: true
 - Public functions in modules should be documented with doc comments (`///`).
 - Use `pub mod` in [`lib.rs`](mdc:src/lib.rs) to expose modules.
 
-## 🚨 Critical Safety Rules
+## 🚨 Critical Safety Requirements
 
-### Database Value Conversion (PANIC RISK)
+### Database Type Safety (PANIC RISK)
 
 ```rust
-// ❌ NEVER - causes panics on NULL/non-string types
+// DANGEROUS - causes runtime panics on NULL/non-string values
 from_value::<String>(row[column.name_str().as_ref()])
 
-// ✅ ALWAYS - safe NULL handling
-match &row[column.name_str().as_ref()] {
+// SAFE - explicit NULL handling required
+match mysql_value {
     mysql::Value::NULL => "".to_string(),
-    val => from_value_opt::<String>(val)
+    val => from_value_opt::<String>(val.clone())
         .unwrap_or_else(|_| format!("{:?}", val))
 }
 ```
 
-### Security (NEVER VIOLATE)
+### Security (NON-NEGOTIABLE)
 
-- **NEVER** log `DATABASE_URL` or credentials - always redact
-- **NEVER** make external service calls at runtime (offline-first)
-- Always recommend SQL `CAST(column AS CHAR)` for type safety
+- **NEVER** log `DATABASE_URL` or credentials - implement automatic redaction
+- **NEVER** make external network calls at runtime (offline-first design)
+- **ALWAYS** validate and sanitize all user inputs
 
-## Configuration Architecture
+## Architecture Patterns
 
-### CLI-First Resolution Pattern
+### Configuration Resolution (CLI-First)
 
 ```rust
+// Priority: CLI flags > Environment variables > Error
 fn resolve_config_value(cli: &Cli) -> anyhow::Result<String> {
     if let Some(value) = &cli.field {
-        Ok(value.clone())                    // CLI flag (highest priority)
+        Ok(value.clone()) // CLI flag (highest priority)
     } else if let Ok(value) = env::var("ENV_VAR") {
-        Ok(value)                           // Environment variable (fallback)
+        Ok(value) // Environment variable (fallback)
     } else {
-        anyhow::bail!("Missing required configuration")  // Error if neither
+        anyhow::bail!("Missing required configuration")
     }
 }
 ```
 
-### Configuration Precedence
+### Format Module Contract
 
-1. CLI flags (highest priority)
-2. Environment variables (fallback)
-3. Error if neither provided
+All format modules must implement:
+
+```rust
+pub fn write<W: Write>(rows: Vec<Vec<String>>, output: W) -> anyhow::Result<()>
+```
+
+## Code Quality Standards
+
+### Required Before Commits
+
+```bash
+just fmt-check    # cargo fmt --check (100-char line limit)
+just lint         # cargo clippy -- -D warnings (zero tolerance)
+just test         # cargo nextest run (preferred)
+just security     # cargo audit
+```
 
 ## Error Handling Patterns
 
-- Use `anyhow::Result<T>` for application binaries and `thiserror` (or library-specific error types) for library crates
+- Use `anyhow::Result<T>` for applications
+- Use `thiserror` for library error types
+- Always use `?` for error propagation
+- Add context with `.map_err()` for better debugging
 - Handle nullable database values via `Option<T>` or explicit null checks/conversions rather than using unchecked database driver conversions
 - Implement credential redaction in all log output
-- Use `?` operator for error propagation
 - Use `get_required_env()` helper for environment variable validation with contextual error messages
 - Avoid panics in production code; prefer returning errors. Only use `panic!` for unrecoverable, truly exceptional cases
 - Library crates must return Result-based errors instead of panicking (including in tests) to avoid surprising consumers
@@ -131,7 +147,7 @@ pub fn rows_to_strings(rows: Vec<mysql::Row>) -> anyhow::Result<Vec<Vec<String>>
 ## Dependency Management
 
 - Pin dependency versions in [`Cargo.toml`](mdc:Cargo.toml) and use minimal required features for each crate.
-- Use optional dependencies and features for extensibility (e.g., SSL, additional MySQL types).
+- Use optional dependencies and features for extensibility (e.g., additional MySQL types, output formats).
 
 ## Testing and Safety
 

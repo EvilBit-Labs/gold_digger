@@ -38,7 +38,7 @@ inclusion: always
 ## Dependency Management
 
 - Pin dependency versions in [`Cargo.toml`](mdc:Cargo.toml) and use minimal required features for each crate.
-- Use optional dependencies and features for extensibility (e.g., SSL, additional MySQL types).
+- Use optional dependencies and features for extensibility (e.g., additional MySQL types, output formats).
 
 ## Testing and Safety
 
