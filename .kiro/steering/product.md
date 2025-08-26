@@ -20,6 +20,12 @@ Gold Digger is a MySQL/MariaDB query tool that exports structured data to CSV/JS
 - **NEVER** make external network calls at runtime (offline-first design)
 - **ALWAYS** validate and sanitize all user inputs
 
+### Airgap Compatibility
+
+- **Allowed**: Configured database connections (MySQL/MariaDB only)
+- **Prohibited**: Telemetry, call-home, non-essential outbound connections
+- **Runtime**: No external dependencies during execution
+
 ## Product Architecture
 
 ### Configuration Model

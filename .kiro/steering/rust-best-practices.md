@@ -22,6 +22,20 @@ inclusion: always
 - Avoid panics in production code; prefer returning errors. Only use `panic!` for unrecoverable, truly exceptional cases (e.g., missing header row in [`json.rs`](mdc:src/json.rs)).
 - Use `?` for error propagation.
 
+### Database Type Safety (CRITICAL)
+
+```rust
+// DANGEROUS - causes runtime panics on NULL/non-string values
+from_value::<String>(row[column.name_str().as_ref()])
+
+// SAFE - explicit NULL handling required
+match mysql_value {
+    mysql::Value::NULL => "".to_string(),
+    val => from_value_opt::<String>(val)
+        .unwrap_or_else(|_| format!("{:?}", val))
+}
+```
+
 ## Code Style
 
 - Follow [Rustfmt](https://github.com/rust-lang/rustfmt) conventions for formatting. Run `cargo fmt` before committing.

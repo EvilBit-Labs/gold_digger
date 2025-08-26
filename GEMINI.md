@@ -116,14 +116,19 @@ pub fn write<W: Write>(rows: Vec<Vec<String>>, output: W) -> anyhow::Result<()>
 
 **Note:** No dotenv support - use exported environment variables only.
 
-## Security Requirements
+## Security Requirements (NON-NEGOTIABLE)
 
-### Critical Security Rules
+### Credential Protection
 
-- **Never log credentials:** Implement redaction for `DATABASE_URL` and secrets
-- **No hardcoded secrets:** Use environment variables or GitHub OIDC
-- **Vulnerability policy:** Block releases with critical vulnerabilities
-- **Airgap compatibility:** No telemetry or external calls in production
+- **NEVER** log `DATABASE_URL` or credentials - implement automatic redaction
+- **NEVER** hardcode secrets in code or configuration
+- **ALWAYS** validate user inputs before processing
+
+### Airgap Compatibility
+
+- **Allowed**: Configured database connections (MySQL/MariaDB only)
+- **Prohibited**: Telemetry, call-home, non-essential outbound connections
+- **Runtime**: No external dependencies during execution
 
 ### Safe Patterns
 
@@ -160,18 +165,58 @@ Note: TLS is now always available and is no longer a feature flag.
 - Simplified from previous dual TLS approach (native-tls vs rustls)
 - Consistent cross-platform behavior with enhanced security controls
 
-## Development Commands
+## Code Quality Standards (REQUIRED Before Commits)
 
-## Code Quality Standards
-
-### Required Before Commits
+Run these commands before any commit:
 
 ```bash
 just fmt-check    # cargo fmt --check (100-char line limit)
-just lint         # cargo clippy -- -D warnings (zero tolerance)
-just test         # cargo nextest run (preferred)
-just security     # cargo audit
+just lint         # cargo clippy -- -D warnings (ZERO tolerance)
+just test         # cargo nextest run (preferred) or cargo test
+just security     # cargo audit (advisory)
 ```
+
+### Formatting & Linting
+
+- **Line limit**: 100 characters (enforced by `rustfmt.toml`)
+- **Clippy warnings**: Zero tolerance (`-D warnings`)
+- **Error handling**: Use `anyhow` for applications, `thiserror` for libraries
+- **Documentation**: Doc comments (`///`) required for all public functions
+
+### Testing Requirements
+
+- **Runner**: `cargo nextest run` (preferred) or `cargo test`
+- **Coverage**: Target ≥80% with `cargo llvm-cov`
+- **Cross-platform**: Must pass on macOS, Windows, Linux
+
+## Testing Strategy
+
+### Test Organization
+
+- **Unit tests**: Core business logic and data processing
+- **Integration tests**: Database interactions (consider testcontainers-rs)
+- **CLI tests**: Command validation (assert_cmd crate)
+- **Snapshot tests**: Output format validation (insta crate)
+
+### Test Execution
+
+- Must pass on all platforms: macOS, Windows, Linux
+- No flaky tests - quarantine and fix immediately
+- Use `cargo nextest` for parallel execution
+
+## Essential Just Commands
+
+```bash
+just setup        # Install development dependencies
+just fmt          # Auto-format code
+just fmt-check    # Verify formatting (CI-compatible)
+just lint         # Run clippy with -D warnings
+just test         # Run tests
+just ci-check     # Full CI validation locally
+just build        # Build release artifacts
+```
+
+## Development Commands
 
 ### Build Variations
 
@@ -201,6 +246,27 @@ cargo run --release
 1. **Memory:** No streaming support - O(row_count × row_width) memory usage
 2. **JSON Output:** Uses BTreeMap for deterministic key ordering (implemented)
 3. **Version Sync:** CHANGELOG.md vs Cargo.toml version mismatch
+
+## Commit Standards
+
+- **Format**: Conventional commits (`feat:`, `fix:`, `docs:`, etc.)
+- **Scopes**: Use `(cli)`, `(db)`, `(output)`, `(tls)`, `(config)`
+- **Automation**: cargo-dist handles versioning; git-cliff handles changelog
+
+## CI/CD Pipeline
+
+### GitHub Actions
+
+- **ci.yml**: PR/push validation (format, lint, test, security)
+- **release.yml**: Cross-platform artifacts via cargo-dist (auto-generated, DO NOT EDIT)
+
+### Release Requirements
+
+1. All CI checks pass
+2. No critical vulnerabilities
+3. Cross-platform binaries (x86_64/aarch64 for Linux, macOS, Windows)
+4. SHA256 checksums and Cosign signatures
+5. SBOM generation (CycloneDX format)
 
 ## AI Assistant Guidelines
 

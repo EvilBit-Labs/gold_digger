@@ -23,46 +23,7 @@ alwaysApply: true
 - Public functions in modules should be documented with doc comments (`///`).
 - Use `pub mod` in [`lib.rs`](mdc:src/lib.rs) to expose modules.
 
-## 🚨 Critical Safety Requirements
-
-### Database Type Safety (PANIC RISK)
-
-```rust
-// DANGEROUS - causes runtime panics on NULL/non-string values
-from_value::<String>(row[column.name_str().as_ref()])
-
-// SAFE - explicit NULL handling required
-match mysql_value {
-    mysql::Value::NULL => "".to_string(),
-    val => from_value_opt::<String>(val.clone())
-        .unwrap_or_else(|_| format!("{:?}", val))
-}
-```
-
-### Security (NON-NEGOTIABLE)
-
-- **NEVER** log `DATABASE_URL` or credentials - implement automatic redaction
-- **NEVER** make external network calls at runtime (offline-first design)
-- **ALWAYS** validate and sanitize all user inputs
-
-## Architecture Patterns
-
-### Configuration Resolution (CLI-First)
-
-```rust
-// Priority: CLI flags > Environment variables > Error
-fn resolve_config_value(cli: &Cli) -> anyhow::Result<String> {
-    if let Some(value) = &cli.field {
-        Ok(value.clone()) // CLI flag (highest priority)
-    } else if let Ok(value) = env::var("ENV_VAR") {
-        Ok(value) // Environment variable (fallback)
-    } else {
-        anyhow::bail!("Missing required configuration")
-    }
-}
-```
-
-### Format Module Contract
+## Format Module Contract
 
 All format modules must implement:
 
@@ -72,43 +33,32 @@ pub fn write<W: Write>(rows: Vec<Vec<String>>, output: W) -> anyhow::Result<()>
 
 ## Code Quality Standards
 
-### Required Before Commits
+### Formatting & Linting
+
+- **Line limit**: 100 characters (enforced by `rustfmt.toml`)
+- **Clippy warnings**: Zero tolerance (`-D warnings`)
+- **Error handling**: Use `anyhow` for applications, `thiserror` for libraries
+- **Documentation**: Doc comments (`///`) required for all public functions
+
+### Essential Commands
 
 ```bash
 just fmt-check    # cargo fmt --check (100-char line limit)
-just lint         # cargo clippy -- -D warnings (zero tolerance)
-just test         # cargo nextest run (preferred)
-just security     # cargo audit
+just lint         # cargo clippy -- -D warnings (ZERO tolerance)
+just test         # cargo nextest run (preferred) or cargo test
+just security     # cargo audit (advisory)
 ```
 
-## Error Handling Patterns
+## Error Handling
 
 - Use `anyhow::Result<T>` for applications
 - Use `thiserror` for library error types
 - Always use `?` for error propagation
 - Add context with `.map_err()` for better debugging
-- Handle nullable database values via `Option<T>` or explicit null checks/conversions rather than using unchecked database driver conversions
-- Implement credential redaction in all log output
-- Use `get_required_env()` helper for environment variable validation with contextual error messages
-- Avoid panics in production code; prefer returning errors. Only use `panic!` for unrecoverable, truly exceptional cases
-- Library crates must return Result-based errors instead of panicking (including in tests) to avoid surprising consumers
+- Avoid panics in production code; prefer returning errors
+- Library crates must return Result-based errors instead of panicking
 
-## Project File Organization
-
-### Configuration Files
-
-- **Cargo.toml**: Dependencies, features, release profile
-- **rustfmt.toml**: Code formatting rules (100-char limit)
-- **deny.toml**: Security and license compliance
-- **rust-toolchain.toml**: Rust version specification
-
-### Development Automation
-
-- **justfile**: Cross-platform build automation and common tasks
-- **.pre-commit-config.yaml**: Git hook configuration for quality gates
-- **CHANGELOG.md**: Auto-generated version history (conventional commits)
-
-### Documentation Standards
+## Documentation Standards
 
 Required for all public functions using `///`:
 
@@ -131,45 +81,27 @@ pub fn rows_to_strings(rows: Vec<mysql::Row>) -> anyhow::Result<Vec<Vec<String>>
 }
 ```
 
-### Code Style
+## Code Style
 
 - Follow [Rustfmt](mdc:https://github.com/rust-lang/rustfmt) conventions for formatting
 - Use `snake_case` for function and variable names, `CamelCase` for types and structs
 - Prefer iterators and combinators over manual loops where possible
 - Use explicit types for function signatures, especially for public APIs
-- Prefer grouping imports by standard library, external crates, and local modules, separated by newlines (advisory rule to prevent format-only diffs during reviews)
+- Group imports by standard library, external crates, and local modules, separated by newlines
 
 ## Features and Conditional Compilation
 
-- Use Cargo features (see `[features]` in [`Cargo.toml`](mdc:Cargo.toml)) to enable/disable output formats and verbose logging.
-- Use `#[cfg(feature = "...")]` to conditionally compile code based on enabled features, as in [`main.rs`](mdc:src/main.rs).
+- Use Cargo features (see `[features]` in [`Cargo.toml`](mdc:Cargo.toml)) to enable/disable output formats and verbose logging
+- Use `#[cfg(feature = "...")]` to conditionally compile code based on enabled features
 
 ## Dependency Management
 
-- Pin dependency versions in [`Cargo.toml`](mdc:Cargo.toml) and use minimal required features for each crate.
-- Use optional dependencies and features for extensibility (e.g., additional MySQL types, output formats).
+- Pin dependency versions in [`Cargo.toml`](mdc:Cargo.toml) and use minimal required features for each crate
+- Use optional dependencies and features for extensibility (e.g., additional MySQL types, output formats)
 
-## Testing and Safety
+## Testing Guidelines
 
-- Add tests in a `tests/` directory or as `#[cfg(test)]` modules within each file.
-- Validate all external input (e.g., environment variables) and handle missing/invalid values gracefully.
-- Use the `get_required_env()` helper function for environment variable validation with contextual error messages.
-- Prefer returning early on error conditions.
-
-### Test Coverage Guidelines
-
-- **Default Target:** ≥80% coverage with `cargo tarpaulin`
-- **Recommended Exclusions:** `main.rs`, binary crates, auto-generated code, error enums, and integration test scaffolding
-- **Documentation Requirement:** Maintainers must document coverage overrides in `CONTRIBUTING.md` with justification
-- **Flexibility:** Coverage targets are guidelines, not absolute blockers. Lower coverage is acceptable with explanation and maintainer approval
-
-## Documentation
-
-- Keep [`README.md`](mdc:README.md) up to date with usage, features, and examples.
-- Document all public functions and modules with doc comments.
-
-## Miscellaneous
-
-- Use `.gitignore` to exclude build artifacts and sensitive files.
-- Use `.editorconfig` for consistent editor settings.
-- Follow the guidelines in [`CONTRIBUTING.md`](mdc:CONTRIBUTING.md) for code contributions.
+- Add tests in a `tests/` directory or as `#[cfg(test)]` modules within each file
+- Validate all external input (e.g., environment variables) and handle missing/invalid values gracefully
+- Prefer returning early on error conditions
+- Target ≥80% coverage with `cargo llvm-cov`

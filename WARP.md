@@ -41,25 +41,34 @@ cargo install --path .
 cargo install gold_digger
 ```
 
-### Lint and Format (Required for PRs)
+### Quality Gates (REQUIRED Before Commits)
+
+Run these commands before any commit:
 
 ```bash
-# Check formatting (enforced)
-cargo fmt --check
-
-# Run clippy with warnings as errors (enforced)
-cargo clippy -- -D warnings
-
-# Fix formatting
-cargo fmt
+just fmt-check    # cargo fmt --check (100-char line limit)
+just lint         # cargo clippy -- -D warnings (ZERO tolerance)
+just test         # cargo nextest run (preferred) or cargo test
+just security     # cargo audit (advisory)
 ```
 
-### Testing
+### Essential Just Commands
 
 ```bash
-# Run tests (currently minimal)
-cargo test
+just setup        # Install development dependencies
+just fmt          # Auto-format code
+just fmt-check    # Verify formatting (CI-compatible)
+just lint         # Run clippy with -D warnings
+just test         # Run tests
+just ci-check     # Full CI validation locally
+just build        # Build release artifacts
 ```
+
+### Testing Requirements
+
+- **Runner**: `cargo nextest run` (preferred) or `cargo test`
+- **Coverage**: Target ≥80% with `cargo llvm-cov`
+- **Cross-platform**: Must pass on macOS, Windows, Linux
 
 ### Running with Environment Variables
 
@@ -191,11 +200,19 @@ match mysql_value {
 }
 ```
 
-### Security (NON-NEGOTIABLE)
+## Security Requirements (NON-NEGOTIABLE)
+
+### Credential Protection
 
 - **NEVER** log `DATABASE_URL` or credentials - implement automatic redaction
-- **NEVER** make external network calls at runtime (offline-first design)
-- **ALWAYS** validate and sanitize all user inputs
+- **NEVER** hardcode secrets in code or configuration
+- **ALWAYS** validate user inputs before processing
+
+### Airgap Compatibility
+
+- **Allowed**: Configured database connections (MySQL/MariaDB only)
+- **Prohibited**: Telemetry, call-home, non-essential outbound connections
+- **Runtime**: No external dependencies during execution
 
 ## Critical Gotchas and Invariants
 
@@ -370,24 +387,6 @@ testcontainers = "0.15"                                      # For real MySQL/Ma
 - Implement credential redaction in all log output
 - Use `?` operator for error propagation
 
-## Technology Stack
-
-### Core Dependencies
-
-- **CLI**: `clap` with `derive` and `env` features
-- **Database**: `mysql` crate with `rustls-tls` (pure Rust TLS)
-- **Output**: `serde_json` (BTreeMap), `csv` crate (RFC4180)
-- **Errors**: `anyhow` (applications), `thiserror` (libraries)
-
-### Feature Flags
-
-```toml
-default = ["json", "csv", "additional_mysql_types", "verbose"]
-additional_mysql_types = ["bigdecimal", "rust_decimal", "chrono", "uuid"]
-```
-
-Note: TLS is now always available and is no longer a feature flag.
-
 ## GitHub Interactions
 
 **⚠️ Important:** When directed to interact with GitHub (issues, pull requests, repositories, etc.), prioritize using the `gh` CLI tool if available. The `gh` tool provides comprehensive GitHub functionality including:
@@ -412,6 +411,49 @@ gh workflow list
 ```
 
 Fall back to other GitHub integration methods only if `gh` is not available or doesn't support the required functionality.
+
+## Commit Standards
+
+- **Format**: Conventional commits (`feat:`, `fix:`, `docs:`, etc.)
+- **Scopes**: Use `(cli)`, `(db)`, `(output)`, `(tls)`, `(config)`
+- **Automation**: cargo-dist handles versioning; git-cliff handles changelog
+
+## CI/CD Pipeline
+
+### GitHub Actions
+
+- **ci.yml**: PR/push validation (format, lint, test, security)
+- **release.yml**: Cross-platform artifacts via cargo-dist (auto-generated, DO NOT EDIT)
+
+### Release Requirements
+
+1. All CI checks pass
+2. No critical vulnerabilities
+3. Cross-platform binaries (x86_64/aarch64 for Linux, macOS, Windows)
+4. SHA256 checksums and Cosign signatures
+5. SBOM generation (CycloneDX format)
+
+## Development Practices
+
+### Technology Stack Constraints
+
+- **CLI**: `clap` with environment variable fallbacks
+- **Database**: MySQL/MariaDB via `mysql` crate only
+- **Output**: CSV (RFC4180), JSON (deterministic ordering), TSV
+- **TLS**: rustls-based implementation only
+
+### Code Patterns
+
+- Use `just` commands for all development tasks
+- Local development must match CI environment
+- Handle MySQL NULL values safely with explicit type conversion
+- Feature-gate optional functionality (`#[cfg(feature = "...")]`)
+
+### File Operations
+
+- Respect system umask for output files
+- Use cross-platform path operations
+- Handle CRLF vs LF consistently across platforms
 
 ## First PR Checklist for AI Agents
 

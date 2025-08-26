@@ -137,16 +137,58 @@ println!("Connecting to {}", database_url);
 println!("Connecting to database...");
 ```
 
-## Code Quality Standards
+## Code Quality Standards (REQUIRED Before Commits)
 
-### Required Before Commits
+Run these commands before any commit:
 
 ```bash
 just fmt-check    # cargo fmt --check (100-char line limit)
-just lint         # cargo clippy -- -D warnings (zero tolerance)
-just test         # cargo nextest run (preferred)
-just security     # cargo audit
+just lint         # cargo clippy -- -D warnings (ZERO tolerance)
+just test         # cargo nextest run (preferred) or cargo test
+just security     # cargo audit (advisory)
 ```
+
+### Formatting & Linting
+
+- **Line limit**: 100 characters (enforced by `rustfmt.toml`)
+- **Clippy warnings**: Zero tolerance (`-D warnings`)
+- **Error handling**: Use `anyhow` for applications, `thiserror` for libraries
+- **Documentation**: Doc comments (`///`) required for all public functions
+
+### Testing Requirements
+
+- **Runner**: `cargo nextest run` (preferred) or `cargo test`
+- **Coverage**: Target ≥80% with `cargo llvm-cov`
+- **Cross-platform**: Must pass on macOS, Windows, Linux
+
+## Testing Strategy
+
+### Test Organization
+
+- **Unit tests**: Core business logic and data processing
+- **Integration tests**: Database interactions (consider testcontainers-rs)
+- **CLI tests**: Command validation (assert_cmd crate)
+- **Snapshot tests**: Output format validation (insta crate)
+
+### Test Execution
+
+- Must pass on all platforms: macOS, Windows, Linux
+- No flaky tests - quarantine and fix immediately
+- Use `cargo nextest` for parallel execution
+
+## Security Requirements (NON-NEGOTIABLE)
+
+### Credential Protection
+
+- **NEVER** log `DATABASE_URL` or credentials - implement automatic redaction
+- **NEVER** hardcode secrets in code or configuration
+- **ALWAYS** validate user inputs before processing
+
+### Airgap Compatibility
+
+- **Allowed**: Configured database connections (MySQL/MariaDB only)
+- **Prohibited**: Telemetry, call-home, non-essential outbound connections
+- **Runtime**: No external dependencies during execution
 
 ### Error Handling Patterns
 
@@ -169,24 +211,6 @@ match get_extension_from_filename(&output_file) {
     None => { /* exits 255 */ }
 }
 ```
-
-### Technology Stack
-
-#### Core Dependencies
-
-- **CLI**: `clap` with `derive` and `env` features
-- **Database**: `mysql` crate with `rustls-tls` (pure Rust TLS)
-- **Output**: `serde_json` (BTreeMap), `csv` crate (RFC4180)
-- **Errors**: `anyhow` (applications), `thiserror` (libraries)
-
-#### Feature Flags
-
-```toml
-default = ["json", "csv", "additional_mysql_types", "verbose"]
-additional_mysql_types = ["bigdecimal", "rust_decimal", "chrono", "uuid"]
-```
-
-Note: TLS is now always available and is no longer a feature flag.
 
 ### Adding Dependencies
 
@@ -221,6 +245,28 @@ testcontainers = "0.15"                                      # Database integrat
 4. **DON'T log sensitive information** - especially DATABASE_URL
 5. **DON'T break single-maintainer workflow** - suggest small, focused changes
 
+## Development Practices
+
+### Technology Stack Constraints
+
+- **CLI**: `clap` with environment variable fallbacks
+- **Database**: MySQL/MariaDB via `mysql` crate only
+- **Output**: CSV (RFC4180), JSON (deterministic ordering), TSV
+- **TLS**: rustls-based implementation only
+
+### Code Patterns
+
+- Use `just` commands for all development tasks
+- Local development must match CI environment
+- Handle MySQL NULL values safely with explicit type conversion
+- Feature-gate optional functionality (`#[cfg(feature = "...")]`)
+
+### File Operations
+
+- Respect system umask for output files
+- Use cross-platform path operations
+- Handle CRLF vs LF consistently across platforms
+
 ## Current vs Target State
 
 This project has implemented CLI-first design and is evolving toward v1.0 with these remaining features:
@@ -231,6 +277,18 @@ This project has implemented CLI-first design and is evolving toward v1.0 with t
 - Proper exit codes (F005) - currently uses `exit(-1)`
 
 When suggesting improvements, consider compatibility with these future features and use CLI-first patterns.
+
+## Essential Just Commands
+
+```bash
+just setup        # Install development dependencies
+just fmt          # Auto-format code
+just fmt-check    # Verify formatting (CI-compatible)
+just lint         # Run clippy with -D warnings
+just test         # Run tests
+just ci-check     # Full CI validation locally
+just build        # Build release artifacts
+```
 
 ## Quick Commands Reference
 

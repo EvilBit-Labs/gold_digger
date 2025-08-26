@@ -39,7 +39,7 @@ inclusion: always
 ### Default Feature Set
 
 ```toml
-default = ["json", "csv", "ssl", "additional_mysql_types", "verbose"]
+default = ["json", "csv", "additional_mysql_types", "verbose"]
 ```
 
 ### TLS/SSL Implementation
@@ -82,13 +82,13 @@ OutputFormat::Csv => anyhow::bail!("CSV support not compiled in"),
 ### Build Variations
 
 ```bash
-# Standard build (rustls TLS with platform certificate store integration)
+# Standard build (TLS always available)
 cargo build --release
 
-# No TLS support (insecure connections only)
+# Build without extra features (TLS still available)
 cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
 
-# Minimal feature build
+# Minimal feature build (TLS still available)
 cargo build --no-default-features --features "csv json"
 ```
 
@@ -99,20 +99,6 @@ cargo build --no-default-features --features "csv json"
 - **Current model**: Fully materialized results - O(row_count × row_width)
 - **Connection model**: Single database connection per execution
 - **No streaming**: All query results loaded into memory before processing
-
-### Database Type Safety
-
-```rust
-// DANGEROUS - causes runtime panics
-from_value::<String>(row[column.name_str().as_ref()])
-
-// SAFE - explicit NULL handling
-match mysql_value {
-    mysql::Value::NULL => "".to_string(),
-    val => from_value_opt::<String>(val)
-        .unwrap_or_else(|_| format!("{:?}", val))
-}
-```
 
 ### Security Implementation
 

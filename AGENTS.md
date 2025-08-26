@@ -107,6 +107,57 @@ pub fn write<W: Write>(rows: Vec<Vec<String>>, output: W) -> anyhow::Result<()>
 - `json.rs`: `{"data": [{...}]}` using BTreeMap (deterministic ordering)
 - `tab.rs`: TSV with `\t` delimiter and `QuoteStyle::Necessary`
 
+## Code Quality Standards (REQUIRED Before Commits)
+
+Run these commands before any commit:
+
+```bash
+just fmt-check    # cargo fmt --check (100-char line limit)
+just lint         # cargo clippy -- -D warnings (ZERO tolerance)
+just test         # cargo nextest run (preferred) or cargo test
+just security     # cargo audit (advisory)
+```
+
+### Formatting & Linting
+
+- **Line limit**: 100 characters (enforced by `rustfmt.toml`)
+- **Clippy warnings**: Zero tolerance (`-D warnings`)
+- **Error handling**: Use `anyhow` for applications, `thiserror` for libraries
+- **Documentation**: Doc comments (`///`) required for all public functions
+
+### Testing Requirements
+
+- **Runner**: `cargo nextest run` (preferred) or `cargo test`
+- **Coverage**: Target ≥80% with `cargo llvm-cov`
+- **Cross-platform**: Must pass on macOS, Windows, Linux
+
+## Testing Strategy
+
+### Test Organization
+
+- **Unit tests**: Core business logic and data processing
+- **Integration tests**: Database interactions (consider testcontainers-rs)
+- **CLI tests**: Command validation (assert_cmd crate)
+- **Snapshot tests**: Output format validation (insta crate)
+
+### Test Execution
+
+- Must pass on all platforms: macOS, Windows, Linux
+- No flaky tests - quarantine and fix immediately
+- Use `cargo nextest` for parallel execution
+
+## Essential Just Commands
+
+```bash
+just setup        # Install development dependencies
+just fmt          # Auto-format code
+just fmt-check    # Verify formatting (CI-compatible)
+just lint         # Run clippy with -D warnings
+just test         # Run tests
+just ci-check     # Full CI validation locally
+just build        # Build release artifacts
+```
+
 ## Development Commands
 
 ### Essential Commands
@@ -114,8 +165,6 @@ pub fn write<W: Write>(rows: Vec<Vec<String>>, output: W) -> anyhow::Result<()>
 ```bash
 # Build (release recommended for testing)
 cargo build --release
-
-# Quality gates (see "Code Quality Standards" section below for commands)
 
 # Run with CLI flags (preferred)
 cargo run --release -- \
@@ -193,16 +242,25 @@ pub fn rows_to_strings(rows: Vec<mysql::Row>) -> anyhow::Result<Vec<Vec<String>>
 }
 ````
 
-### Security Requirements
+## Security Requirements (NON-NEGOTIABLE)
 
-#### Critical Security Rules
+### Credential Protection
 
-- **Never log credentials:** Implement redaction for `DATABASE_URL` and secrets
-- **No hardcoded secrets:** Use environment variables or GitHub OIDC
-- **Vulnerability policy:** Block releases with critical vulnerabilities
-- **Airgap compatibility:** No telemetry or external calls in production
-- **Configure TLS programmatically:** Use `mysql::OptsBuilder` and `SslOpts` instead of URL parameters
-- **TLS Implementation:** Uses rustls-only implementation with platform certificate store integration (TLS support is always available without requiring feature flags)
+- **NEVER** log `DATABASE_URL` or credentials - implement automatic redaction
+- **NEVER** hardcode secrets in code or configuration
+- **ALWAYS** validate user inputs before processing
+
+### Airgap Compatibility
+
+- **Allowed**: Configured database connections (MySQL/MariaDB only)
+- **Prohibited**: Telemetry, call-home, non-essential outbound connections
+- **Runtime**: No external dependencies during execution
+
+### TLS Implementation
+
+- Uses rustls-only implementation with platform certificate store integration
+- TLS support is always available without requiring feature flags
+- Configure TLS programmatically via `mysql::OptsBuilder` and `SslOpts` instead of URL parameters
 
 #### Error Handling Patterns
 
@@ -266,8 +324,6 @@ SELECT CAST(id AS CHAR) as id, CAST(created_at AS CHAR) as created_at FROM users
 - Sync versions before any releases
 - Use semantic versioning with conventional commits
 
-## Testing Strategy
-
 ### Recommended Test Dependencies
 
 ```toml
@@ -287,6 +343,27 @@ testcontainers = "0.15"                                      # For real MySQL/Ma
 3. **Integration Tests:** Real database connectivity with testcontainers
 4. **CLI Tests:** End-to-end with environment variables
 5. **Benchmarks:** Performance regression detection
+
+## Commit Standards
+
+- **Format**: Conventional commits (`feat:`, `fix:`, `docs:`, etc.)
+- **Scopes**: Use `(cli)`, `(db)`, `(output)`, `(tls)`, `(config)`
+- **Automation**: cargo-dist handles versioning; git-cliff handles changelog
+
+## CI/CD Pipeline
+
+### GitHub Actions
+
+- **ci.yml**: PR/push validation (format, lint, test, security)
+- **release.yml**: Cross-platform artifacts via cargo-dist (auto-generated, DO NOT EDIT)
+
+### Release Requirements
+
+1. All CI checks pass
+2. No critical vulnerabilities
+3. Cross-platform binaries (x86_64/aarch64 for Linux, macOS, Windows)
+4. SHA256 checksums and Cosign signatures
+5. SBOM generation (CycloneDX format)
 
 ## AI Assistant Best Practices
 

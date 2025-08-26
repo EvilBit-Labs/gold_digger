@@ -90,31 +90,22 @@ verbose = []                               # Conditional println!/eprintln!
 
 **Note**: Simplified to rustls-only TLS implementation. The previous dual TLS approach (native-tls vs rustls) has been consolidated into a single, consistent implementation.
 
-## Code Quality Standards (Zero Tolerance)
+## Quality Standards
 
-### Quality Gates (Required Before Commits)
+### Required Before Commits
 
 ```bash
-cargo fmt --check           # 100-character line limit enforced
-cargo clippy -- -D warnings # Zero tolerance for warnings
-cargo nextest run           # Parallel test execution (preferred)
-cargo audit                 # Security vulnerability scanning (advisory)
+just fmt-check    # cargo fmt --check (100-char line limit)
+just lint         # cargo clippy -- -D warnings (ZERO tolerance)
+just test         # cargo nextest run (preferred) or cargo test
+just security     # cargo audit (advisory)
 ```
 
 ### Commit Standards
 
 - **Format:** Conventional commits (`feat:`, `fix:`, `docs:`, etc.)
-- **Scope:** Use Gold Digger scopes: `(cli)`, `(db)`, `(output)`, `(tls)`, `(config)`
-- **Automation:** cargo-dist handles versioning and distribution; git-cliff handles changelog generation
-- **CI Parity:** All CI operations executable locally
-
-### Error Handling Patterns
-
-- Use `anyhow::Result<T>` for all fallible functions
-- Never use `from_value::<String>()` - always handle `mysql::Value::NULL`
-- Implement credential redaction in all log output
-- Use `?` operator for error propagation
-- Feature-gate verbose output: `#[cfg(feature = "verbose")]`
+- **Scope:** Use `(cli)`, `(db)`, `(output)`, `(tls)`, `(config)`
+- **Automation:** cargo-dist handles versioning; git-cliff handles changelog
 
 ## Security Requirements
 
