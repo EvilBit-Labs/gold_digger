@@ -12,7 +12,7 @@ Gold Digger uses a single, consistent TLS implementation with platform certifica
 - **Smart Error Messages**: Provides specific guidance when certificate validation fails
 
 ```bash
-# Build with TLS support (default)
+# Build with TLS support (always included)
 cargo build --release
 ```
 
@@ -162,29 +162,17 @@ TLS error messages are scrubbed of sensitive information:
 
 ## Build Configuration
 
-### Feature Flags
-
-```toml
-# Cargo.toml features
-[features]
-default = ["json", "csv", "ssl", "additional_mysql_types", "verbose"]
-ssl = [
-  "mysql/rustls-tls",
-  "rustls",
-  "rustls-native-certs",
-  "rustls-pemfile",
-]
-```
-
 ### Build Options
 
 ```bash
-# Default build with TLS support
+# Standard build with TLS support (always included)
 cargo build --release
 
 # Minimal build without TLS
 cargo build --release --no-default-features --features "json csv"
 ```
+
+**Note**: TLS support is now always available in Gold Digger and no longer requires feature flags.
 
 ## Production Recommendations
 
@@ -220,31 +208,7 @@ gold_digger \
 
 ### Common TLS Issues
 
-#### Issue: "TLS feature not enabled"
-
-```text
-Error: TLS feature not enabled. Recompile with --features ssl to enable TLS support
-```
-
-**Solution**: Rebuild with TLS features:
-
-```bash
-cargo build --release --features ssl
-```
-
-#### Issue: Certificate validation failed
-
-```text
-Certificate validation failed: self signed certificate in certificate chain
-```
-
-**Solutions**:
-
-1. Install proper CA certificates
-2. Use certificates from trusted CA
-3. For testing only: consider certificate validation options
-
-#### Issue: Connection timeout
+#### Issue: TLS connection failed
 
 ```text
 TLS connection failed: connection timed out
@@ -256,6 +220,19 @@ TLS connection failed: connection timed out
 2. Verify server is running
 3. Confirm firewall allows TLS traffic
 4. Test with non-TLS connection first
+
+#### Issue: Certificate validation failed
+
+```text
+Certificate validation failed: self signed certificate in certificate chain
+```
+
+**Solutions**:
+
+1. Install proper CA certificates
+2. Use certificates from trusted CA
+3. For testing only: use `--allow-invalid-certificate` flag
+4. For custom CAs: use `--tls-ca-file /path/to/ca.pem`
 
 ### Debugging TLS Issues
 

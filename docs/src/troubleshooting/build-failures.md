@@ -124,7 +124,7 @@ error: failed to resolve dependencies
    just validate-deps
 
    # Check specific feature combination
-   cargo build --no-default-features --features "json csv ssl"
+   cargo build --no-default-features --features "json csv"
    ```
 
 ### Version Conflicts
@@ -310,7 +310,7 @@ error: conflicting requirements for `dependency`
 **Error Pattern:**
 
 ```
-error: TLS feature not enabled. Recompile with --features ssl to enable TLS support
+error: TLS connection failed: certificate validation error
 ```
 
 **Solutions:**
@@ -329,10 +329,10 @@ error: TLS feature not enabled. Recompile with --features ssl to enable TLS supp
 2. **Choose TLS Backend:**
 
    ```bash
-   # For native TLS (platform-specific)
-   cargo build --no-default-features --features "json csv ssl additional_mysql_types verbose"
+   # Standard build with TLS support (always included)
+   cargo build --release
 
-   # For standard TLS build (recommended)
+   # Minimal build without TLS
    cargo build --release
 
    # For no TLS (testing only)

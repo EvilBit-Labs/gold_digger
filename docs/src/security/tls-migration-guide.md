@@ -17,13 +17,8 @@ ssl-rustls = ["mysql/rustls-tls"] # Pure Rust TLS
 ### After (v0.2.7+)
 
 ```toml
-# Single rustls-based TLS feature
-ssl = [
-  "mysql/rustls-tls",
-  "rustls",
-  "rustls-native-certs",
-  "rustls-pemfile",
-]
+# TLS dependencies are now always included - no feature flags required
+# TLS support is built into all Gold Digger binaries
 ```
 
 ## Migration Steps
@@ -34,7 +29,7 @@ ssl = [
 
 ```bash
 # Native TLS build
-cargo build --release
+cargo build --release --features ssl
 
 # Pure Rust TLS build
 cargo build --release --no-default-features --features "json csv ssl-rustls additional_mysql_types verbose"
@@ -43,7 +38,7 @@ cargo build --release --no-default-features --features "json csv ssl-rustls addi
 **After:**
 
 ```bash
-# Standard rustls TLS build (recommended)
+# Standard build with TLS support (always included)
 cargo build --release
 
 # No TLS build (insecure connections only)
@@ -52,7 +47,7 @@ cargo build --release --no-default-features --features "json csv additional_mysq
 
 ### 2. Update CI/CD Configurations
 
-Remove any references to `ssl-rustls` feature from your CI/CD pipelines:
+Remove any references to SSL feature flags from your CI/CD pipelines:
 
 **Before:**
 
@@ -65,17 +60,17 @@ Remove any references to `ssl-rustls` feature from your CI/CD pipelines:
 **After:**
 
 ```yaml
-  - name: Build with rustls TLS
+  - name: Build with TLS support (always included)
     run: cargo build --release
 ```
 
 ### 3. Update Documentation
 
-Update any internal documentation that references the old dual TLS model:
+Update any internal documentation that references the old feature-based TLS model:
 
-- Remove mentions of `ssl-rustls` feature
-- Update build instructions to use the simplified `ssl` feature
-- Note that TLS is now consistently rustls-based across all platforms
+- Remove mentions of `ssl` and `ssl-rustls` features
+- Update build instructions to reflect that TLS is always available
+- Note that TLS is now consistently rustls-based across all platforms without requiring feature flags
 
 ## New TLS Features
 
@@ -165,9 +160,9 @@ If you encounter issues during migration:
 
 ### Breaking Changes
 
-- **Build commands**: Remove `ssl-rustls` feature references
-- **CI/CD**: Update build scripts to use simplified feature set
-- **Documentation**: Update any references to dual TLS implementation
+- **Build commands**: Remove all SSL feature flag references (`ssl`, `ssl-rustls`)
+- **CI/CD**: Update build scripts to remove feature flag dependencies
+- **Documentation**: Update any references to feature-based TLS implementation
 
 ## Example Migration
 

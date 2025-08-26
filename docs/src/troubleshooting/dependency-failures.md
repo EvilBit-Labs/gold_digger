@@ -104,7 +104,7 @@ error: lock file is out of date
 **Error Pattern:**
 
 ```
-error: TLS feature not enabled. Recompile with --features ssl to enable TLS support
+error: TLS connection failed: certificate validation error
 ```
 
 **Solutions:**
@@ -115,17 +115,18 @@ error: TLS feature not enabled. Recompile with --features ssl to enable TLS supp
    # Check TLS dependency conflicts
    just validate-deps
 
-   # Show TLS-related dependencies
-   cargo tree --format "{p} {f}" | grep -E "(ssl|tls)"
+   # Show TLS-related dependencies (always included)
+   cargo tree --format "{p} {f}" | grep -E "rustls"
    ```
 
 2. **Choose Single TLS Backend:**
 
    ```bash
-   # Use native TLS (platform-specific)
-   cargo build --no-default-features --features "json csv ssl additional_mysql_types verbose"
+   # Standard build with TLS support (always included)
+   cargo build --release
 
-   # Standard build with TLS
+   # Minimal build without TLS
+   cargo build --no-default-features --features "json csv additional_mysql_types verbose"
    cargo build --release
 
    # No TLS (testing only)

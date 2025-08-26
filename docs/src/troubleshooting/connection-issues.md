@@ -108,19 +108,20 @@ mysql://username:password@hostname:port/database
 
 ## TLS/SSL Connection Issues
 
-### TLS Feature Not Enabled (Exit Code 2)
+### TLS Connection Issues (Exit Code 3)
 
 **Error Message:**
 
 ```text
-TLS feature not enabled. Recompile with --features ssl to enable TLS support
+TLS handshake failed: protocol version mismatch
 ```
 
-**Solution:**
+**Solutions:**
 
 ```bash
-# Rebuild with TLS support
-cargo build --release --features ssl
+# TLS support is always available - check server configuration
+# Verify server supports TLS 1.2 or higher
+# Check certificate validity and chain
 ```
 
 ### Certificate Validation Failed (Exit Code 3)
