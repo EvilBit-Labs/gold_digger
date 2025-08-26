@@ -4,14 +4,7 @@ use std::path::PathBuf;
 use thiserror::Error;
 
 #[cfg(feature = "ssl")]
-use rustls::{
-    RootCertStore,
-    client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier},
-    pki_types::{CertificateDer, ServerName, UnixTime},
-};
-
-#[cfg(feature = "ssl")]
-use std::sync::Arc;
+use rustls::pki_types::CertificateDer;
 
 /// TLS-specific error types for better error handling and user guidance
 #[derive(Error, Debug)]
@@ -362,194 +355,6 @@ impl TlsError {
     }
 }
 
-/// Custom certificate verifier that skips hostname verification but validates certificate chain
-#[cfg(feature = "ssl")]
-#[derive(Debug)]
-pub struct SkipHostnameVerifier {
-    _roots: Arc<RootCertStore>,
-}
-
-#[cfg(feature = "ssl")]
-impl SkipHostnameVerifier {
-    /// Creates a new SkipHostnameVerifier using the platform certificate store
-    pub fn new() -> Result<Self, TlsError> {
-        let mut root_store = RootCertStore::empty();
-
-        // Load platform certificate store
-        let cert_result = rustls_native_certs::load_native_certs();
-
-        // Handle any errors that occurred during certificate loading
-        if !cert_result.errors.is_empty() {
-            return Err(TlsError::certificate_validation_failed(format!(
-                "Failed to load some platform certificates: {:?}",
-                cert_result.errors
-            )));
-        }
-
-        let native_certs = cert_result.certs;
-
-        for cert in native_certs {
-            root_store.add(cert).map_err(|e| {
-                TlsError::certificate_validation_failed(format!("Failed to add platform certificate: {}", e))
-            })?;
-        }
-
-        Ok(Self {
-            _roots: Arc::new(root_store),
-        })
-    }
-
-    /// Creates a new SkipHostnameVerifier with custom CA certificates
-    pub fn with_custom_ca(ca_certs: Vec<CertificateDer<'static>>) -> Result<Self, TlsError> {
-        let mut root_store = RootCertStore::empty();
-
-        for cert in ca_certs {
-            root_store.add(cert).map_err(|e| {
-                TlsError::certificate_validation_failed(format!("Failed to add custom CA certificate: {}", e))
-            })?;
-        }
-
-        Ok(Self {
-            _roots: Arc::new(root_store),
-        })
-    }
-}
-
-#[cfg(feature = "ssl")]
-impl ServerCertVerifier for SkipHostnameVerifier {
-    fn verify_server_cert(
-        &self,
-        end_entity: &CertificateDer<'_>,
-        _intermediates: &[CertificateDer<'_>],
-        _server_name: &ServerName<'_>, // Ignore server name for hostname verification
-        _ocsp_response: &[u8],
-        _now: UnixTime,
-    ) -> Result<ServerCertVerified, rustls::Error> {
-        // Validate certificate chain against root store but skip hostname verification
-        // This provides security against invalid certificates while allowing hostname mismatches
-
-        // Basic validation: ensure we have at least one certificate
-        if end_entity.is_empty() {
-            return Err(rustls::Error::General("Empty certificate".to_string()));
-        }
-
-        // For the mysql crate with rustls, we rely on the underlying rustls implementation
-        // to handle certificate chain validation. The SkipHostnameVerifier is used by
-        // the mysql crate's SslOpts to configure rustls appropriately.
-
-        // Since we're using SslOpts with danger_skip_domain_validation(true),
-        // the mysql crate will handle the certificate validation but skip hostname checks.
-        // We just need to accept the certificate here as the real validation is done
-        // by the mysql crate's rustls integration.
-
-        // Certificate chain validation is handled by rustls internally when using SslOpts
-        Ok(ServerCertVerified::assertion())
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        message: &[u8],
-        cert: &CertificateDer<'_>,
-        dss: &rustls::DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        rustls::crypto::verify_tls12_signature(
-            message,
-            cert,
-            dss,
-            &rustls::crypto::aws_lc_rs::default_provider().signature_verification_algorithms,
-        )
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        message: &[u8],
-        cert: &CertificateDer<'_>,
-        dss: &rustls::DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        rustls::crypto::verify_tls13_signature(
-            message,
-            cert,
-            dss,
-            &rustls::crypto::aws_lc_rs::default_provider().signature_verification_algorithms,
-        )
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        rustls::crypto::aws_lc_rs::default_provider()
-            .signature_verification_algorithms
-            .supported_schemes()
-    }
-}
-
-/// Custom certificate verifier that accepts any certificate without validation
-#[cfg(feature = "ssl")]
-#[derive(Debug)]
-pub struct AcceptAllVerifier;
-
-#[cfg(feature = "ssl")]
-impl AcceptAllVerifier {
-    /// Creates a new AcceptAllVerifier
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-#[cfg(feature = "ssl")]
-impl Default for AcceptAllVerifier {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[cfg(feature = "ssl")]
-impl ServerCertVerifier for AcceptAllVerifier {
-    fn verify_server_cert(
-        &self,
-        _end_entity: &CertificateDer<'_>,
-        _intermediates: &[CertificateDer<'_>],
-        _server_name: &ServerName<'_>,
-        _ocsp_response: &[u8],
-        _now: UnixTime,
-    ) -> Result<ServerCertVerified, rustls::Error> {
-        // Accept any certificate without validation
-        Ok(ServerCertVerified::assertion())
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        message: &[u8],
-        cert: &CertificateDer<'_>,
-        dss: &rustls::DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        rustls::crypto::verify_tls12_signature(
-            message,
-            cert,
-            dss,
-            &rustls::crypto::aws_lc_rs::default_provider().signature_verification_algorithms,
-        )
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        message: &[u8],
-        cert: &CertificateDer<'_>,
-        dss: &rustls::DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, rustls::Error> {
-        rustls::crypto::verify_tls13_signature(
-            message,
-            cert,
-            dss,
-            &rustls::crypto::aws_lc_rs::default_provider().signature_verification_algorithms,
-        )
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        rustls::crypto::aws_lc_rs::default_provider()
-            .signature_verification_algorithms
-            .supported_schemes()
-    }
-}
-
 /// Certificate loading utilities for custom CA files
 #[cfg(feature = "ssl")]
 pub mod cert_utils {
@@ -744,6 +549,8 @@ pub fn create_tls_connection(database_url: &str, tls_config: Option<TlsConfig>) 
 /// Creates a MySQL connection pool without TLS (fallback when SSL feature disabled)
 #[cfg(not(feature = "ssl"))]
 pub fn create_tls_connection(database_url: &str, tls_config: Option<TlsConfig>) -> Result<Pool, TlsError> {
+    use mysql::Opts;
+
     // Check if user tried to use TLS configuration without SSL feature
     if let Some(config) = tls_config
         && config.is_enabled()
@@ -751,8 +558,12 @@ pub fn create_tls_connection(database_url: &str, tls_config: Option<TlsConfig>) 
         return Err(TlsError::feature_not_enabled());
     }
 
+    // Parse the database URL first to validate format (consistent with SSL-enabled path)
+    let opts = Opts::from_url(database_url)
+        .map_err(|e| TlsError::connection_failed(format!("Invalid database URL format: {}", e)))?;
+
     // Create connection pool without TLS support
-    Pool::new(database_url).map_err(|e| TlsError::connection_failed(format!("Database connection failed: {}", e)))
+    Pool::new(opts).map_err(|e| TlsError::connection_failed(format!("Database connection failed: {}", e)))
 }
 
 /// Helper function to redact sensitive information from URLs for safe error logging
@@ -1539,160 +1350,130 @@ mod tests {
     }
 
     #[cfg(feature = "ssl")]
-    mod rustls_verifier_tests {
-        use super::*;
+    #[test]
+    fn test_cert_utils_load_nonexistent_file() {
+        let nonexistent_path = PathBuf::from("/nonexistent/ca.pem");
+        let result = cert_utils::load_ca_certificates(&nonexistent_path);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("CA certificate file not found")
+        );
+    }
+
+    #[cfg(feature = "ssl")]
+    #[test]
+    fn test_cert_utils_load_invalid_file() {
         use std::io::Write;
         use tempfile::NamedTempFile;
 
-        #[test]
-        fn test_skip_hostname_verifier_creation() {
-            let verifier = SkipHostnameVerifier::new();
-            assert!(verifier.is_ok());
-        }
+        // Create a temporary file with invalid content
+        let mut temp_file = NamedTempFile::new().unwrap();
+        writeln!(temp_file, "This is not a valid PEM certificate").unwrap();
 
-        #[test]
-        fn test_skip_hostname_verifier_with_custom_ca() {
-            // Create a dummy certificate for testing
-            let cert_der = CertificateDer::from(vec![0x30, 0x82]); // Minimal DER structure
-            let verifier = SkipHostnameVerifier::with_custom_ca(vec![cert_der]);
-            // This will likely fail due to invalid certificate, but tests the interface
-            assert!(verifier.is_err()); // Expected to fail with invalid cert
-        }
+        let result = cert_utils::load_ca_certificates(&temp_file.path().to_path_buf());
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Invalid CA certificate format")
+        );
+    }
 
-        #[test]
-        fn test_accept_all_verifier_creation() {
-            let verifier = AcceptAllVerifier::new();
-            // Should always succeed
-            assert_eq!(std::mem::size_of_val(&verifier), 0); // Zero-sized type
-        }
+    #[cfg(feature = "ssl")]
+    #[test]
+    fn test_cert_utils_load_empty_file() {
+        use tempfile::NamedTempFile;
 
-        #[test]
-        fn test_cert_utils_load_nonexistent_file() {
-            let nonexistent_path = PathBuf::from("/nonexistent/ca.pem");
-            let result = cert_utils::load_ca_certificates(&nonexistent_path);
-            assert!(result.is_err());
-            assert!(
-                result
-                    .unwrap_err()
-                    .to_string()
-                    .contains("CA certificate file not found")
-            );
-        }
+        // Create an empty temporary file
+        let temp_file = NamedTempFile::new().unwrap();
 
-        #[test]
-        fn test_cert_utils_load_invalid_file() {
-            // Create a temporary file with invalid content
-            let mut temp_file = NamedTempFile::new().unwrap();
-            writeln!(temp_file, "This is not a valid PEM certificate").unwrap();
+        let result = cert_utils::load_ca_certificates(&temp_file.path().to_path_buf());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("No valid certificates found"));
+    }
 
-            let result = cert_utils::load_ca_certificates(&temp_file.path().to_path_buf());
-            assert!(result.is_err());
-            assert!(
-                result
-                    .unwrap_err()
-                    .to_string()
-                    .contains("Invalid CA certificate format")
-            );
-        }
+    #[cfg(feature = "ssl")]
+    #[test]
+    fn test_cert_utils_validate_ca_file() {
+        let nonexistent_path = PathBuf::from("/nonexistent/ca.pem");
+        let result = cert_utils::validate_ca_file(&nonexistent_path);
+        assert!(result.is_err());
+    }
 
-        #[test]
-        fn test_cert_utils_load_empty_file() {
-            // Create an empty temporary file
-            let temp_file = NamedTempFile::new().unwrap();
+    #[cfg(feature = "ssl")]
+    #[test]
+    fn test_tls_config_to_ssl_opts_with_rustls() {
+        // Test platform mode
+        let config = TlsConfig::new();
+        let ssl_opts = config.to_ssl_opts();
+        assert!(ssl_opts.is_ok());
+        assert!(ssl_opts.unwrap().is_some());
 
-            let result = cert_utils::load_ca_certificates(&temp_file.path().to_path_buf());
-            assert!(result.is_err());
-            assert!(result.unwrap_err().to_string().contains("No valid certificates found"));
-        }
+        // Test skip hostname verification mode
+        let config = TlsConfig::with_skip_hostname_verification();
+        let ssl_opts = config.to_ssl_opts();
+        assert!(ssl_opts.is_ok());
+        assert!(ssl_opts.unwrap().is_some());
 
-        #[test]
-        fn test_cert_utils_validate_ca_file() {
-            let nonexistent_path = PathBuf::from("/nonexistent/ca.pem");
-            let result = cert_utils::validate_ca_file(&nonexistent_path);
-            assert!(result.is_err());
-        }
+        // Test accept invalid mode
+        let config = TlsConfig::with_accept_invalid();
+        let ssl_opts = config.to_ssl_opts();
+        assert!(ssl_opts.is_ok());
+        assert!(ssl_opts.unwrap().is_some());
 
-        #[test]
-        fn test_tls_config_to_ssl_opts_with_rustls() {
-            // Test platform mode
-            let config = TlsConfig::new();
-            let ssl_opts = config.to_ssl_opts();
-            assert!(ssl_opts.is_ok());
-            assert!(ssl_opts.unwrap().is_some());
+        // Test custom CA with nonexistent file
+        let config = TlsConfig::with_custom_ca("/nonexistent/ca.pem");
+        let ssl_opts = config.to_ssl_opts();
+        assert!(ssl_opts.is_err());
+        assert!(
+            ssl_opts
+                .unwrap_err()
+                .to_string()
+                .contains("CA certificate file not found")
+        );
+    }
 
-            // Test skip hostname verification mode
-            let config = TlsConfig::with_skip_hostname_verification();
-            let ssl_opts = config.to_ssl_opts();
-            assert!(ssl_opts.is_ok());
-            assert!(ssl_opts.unwrap().is_some());
+    #[cfg(feature = "ssl")]
+    #[test]
+    fn test_tls_error_from_rustls_error() {
+        // Test certificate validation error
+        let rustls_error = rustls::Error::InvalidCertificate(rustls::CertificateError::BadSignature);
+        let tls_error = TlsError::from_rustls_error(rustls_error, None);
+        assert!(tls_error.to_string().contains("Certificate has invalid signature"));
+        assert!(tls_error.to_string().contains("--allow-invalid-certificate"));
 
-            // Test accept invalid mode
-            let config = TlsConfig::with_accept_invalid();
-            let ssl_opts = config.to_ssl_opts();
-            assert!(ssl_opts.is_ok());
-            assert!(ssl_opts.unwrap().is_some());
+        // Test certificate expired error
+        let rustls_error = rustls::Error::InvalidCertificate(rustls::CertificateError::Expired);
+        let tls_error = TlsError::from_rustls_error(rustls_error, None);
+        assert!(tls_error.to_string().contains("Certificate has expired"));
 
-            // Test custom CA with nonexistent file
-            let config = TlsConfig::with_custom_ca("/nonexistent/ca.pem");
-            let ssl_opts = config.to_ssl_opts();
-            assert!(ssl_opts.is_err());
-            assert!(
-                ssl_opts
-                    .unwrap_err()
-                    .to_string()
-                    .contains("CA certificate file not found")
-            );
-        }
+        // Test certificate not yet valid error
+        let rustls_error = rustls::Error::InvalidCertificate(rustls::CertificateError::NotValidYet);
+        let tls_error = TlsError::from_rustls_error(rustls_error, None);
+        assert!(tls_error.to_string().contains("Certificate is not yet valid"));
 
-        #[test]
-        fn test_tls_error_from_rustls_error() {
-            // Test certificate validation error
-            let rustls_error = rustls::Error::InvalidCertificate(rustls::CertificateError::BadSignature);
-            let tls_error = TlsError::from_rustls_error(rustls_error, None);
-            assert!(tls_error.to_string().contains("Certificate has invalid signature"));
-            assert!(tls_error.to_string().contains("--allow-invalid-certificate"));
+        // Test invalid purpose error
+        let rustls_error = rustls::Error::InvalidCertificate(rustls::CertificateError::InvalidPurpose);
+        let tls_error = TlsError::from_rustls_error(rustls_error, None);
+        assert!(
+            tls_error
+                .to_string()
+                .contains("Certificate not valid for server authentication")
+        );
 
-            // Test certificate expired error
-            let rustls_error = rustls::Error::InvalidCertificate(rustls::CertificateError::Expired);
-            let tls_error = TlsError::from_rustls_error(rustls_error, None);
-            assert!(tls_error.to_string().contains("Certificate has expired"));
+        // Test hostname verification error (using General as placeholder)
+        let rustls_error = rustls::Error::General("invalid hostname".to_string());
+        let tls_error = TlsError::from_rustls_error(rustls_error, Some("example.com"));
+        assert!(tls_error.to_string().contains("TLS handshake failed"));
 
-            // Test certificate not yet valid error
-            let rustls_error = rustls::Error::InvalidCertificate(rustls::CertificateError::NotValidYet);
-            let tls_error = TlsError::from_rustls_error(rustls_error, None);
-            assert!(tls_error.to_string().contains("Certificate is not yet valid"));
-
-            // Test invalid purpose error
-            let rustls_error = rustls::Error::InvalidCertificate(rustls::CertificateError::InvalidPurpose);
-            let tls_error = TlsError::from_rustls_error(rustls_error, None);
-            assert!(
-                tls_error
-                    .to_string()
-                    .contains("Certificate not valid for server authentication")
-            );
-
-            // Test hostname verification error (using General as placeholder)
-            let rustls_error = rustls::Error::General("invalid hostname".to_string());
-            let tls_error = TlsError::from_rustls_error(rustls_error, Some("example.com"));
-            assert!(tls_error.to_string().contains("TLS handshake failed"));
-
-            // Test general handshake error
-            let rustls_error = rustls::Error::General("handshake failed".to_string());
-            let tls_error = TlsError::from_rustls_error(rustls_error, None);
-            assert!(tls_error.to_string().contains("TLS handshake failed"));
-        }
-
-        #[test]
-        fn test_verifier_supported_schemes() {
-            // Test that verifiers support signature schemes
-            let skip_verifier = SkipHostnameVerifier::new().unwrap();
-            let schemes = skip_verifier.supported_verify_schemes();
-            assert!(!schemes.is_empty());
-
-            let accept_verifier = AcceptAllVerifier::new();
-            let schemes = accept_verifier.supported_verify_schemes();
-            assert!(!schemes.is_empty());
-        }
+        // Test general handshake error
+        let rustls_error = rustls::Error::General("handshake failed".to_string());
+        let tls_error = TlsError::from_rustls_error(rustls_error, None);
+        assert!(tls_error.to_string().contains("TLS handshake failed"));
     }
 
     #[cfg(feature = "ssl")]

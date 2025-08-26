@@ -182,7 +182,7 @@ deny:
 
 # Check for license/security issues (CI strict enforcement)
 deny-ci:
-    cargo deny check --config deny.ci.toml || echo "cargo-deny not installed - run 'just install-tools'"
+    cargo deny check --config deny.ci.toml
 
 # Comprehensive security scanning (combines audit, deny, and grype)
 security:

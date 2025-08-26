@@ -26,6 +26,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -47,6 +50,9 @@ jobs:
   # Test TLS CLI integration
   tls-cli-tests:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -56,9 +62,15 @@ jobs:
         run: |
           cargo build --release --features "ssl"
 
+          # Set up binary path with Windows .exe suffix detection
+          BIN="./target/release/gold_digger"
+          if [ -f "${BIN}.exe" ]; then
+            BIN="${BIN}.exe"
+          fi
+
           # Test help includes TLS flags
-          ./target/release/gold_digger --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)"
+          "$BIN" --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)"
 
           # Test mutual exclusion (should fail)
           echo "test" > /tmp/test.pem
-          ! ./target/release/gold_digger --tls-ca-file /tmp/test.pem --insecure-skip-hostname-verify --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null
+          ! "$BIN" --tls-ca-file /tmp/test.pem --insecure-skip-hostname-verify --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null

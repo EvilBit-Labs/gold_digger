@@ -25,7 +25,7 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: quality
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -73,10 +73,16 @@ jobs:
           # Test that mutually exclusive flags are rejected
           echo "Testing mutually exclusive TLS flags..."
 
+          # Set up binary path with Windows .exe suffix detection
+          BIN="./target/release/gold_digger"
+          if [ -f "${BIN}.exe" ]; then
+            BIN="${BIN}.exe"
+          fi
+
           # These should fail with configuration errors
-          ! ./target/release/gold_digger --tls-ca-file /tmp/nonexistent.pem --insecure-skip-hostname-verify --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
-          ! ./target/release/gold_digger --tls-ca-file /tmp/nonexistent.pem --allow-invalid-certificate --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
-          ! ./target/release/gold_digger --insecure-skip-hostname-verify --allow-invalid-certificate --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
+          ! "$BIN" --tls-ca-file /tmp/nonexistent.pem --insecure-skip-hostname-verify --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
+          ! "$BIN" --tls-ca-file /tmp/nonexistent.pem --allow-invalid-certificate --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
+          ! "$BIN" --insecure-skip-hostname-verify --allow-invalid-certificate --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
 
           echo "TLS flag validation tests passed"
 
@@ -88,7 +94,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: quality
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -129,7 +135,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     needs: quality
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -186,8 +192,14 @@ jobs:
           -----END CERTIFICATE-----
           EOF
 
+          # Set up binary path with Windows .exe suffix detection
+          BIN="./target/release/gold_digger"
+          if [ -f "${BIN}.exe" ]; then
+            BIN="${BIN}.exe"
+          fi
+
           # Test CLI help shows TLS options
-          ./target/release/gold_digger --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)" || exit 1
+          "$BIN" --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)" || exit 1
 
           echo "TLS security mode tests completed successfully on ${{ matrix.platform }}"
 
@@ -196,7 +208,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: quality
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -224,12 +236,18 @@ jobs:
         run: |
           echo "Testing TLS configuration validation..."
 
+          # Set up binary path with Windows .exe suffix detection
+          BIN="./target/release/gold_digger"
+          if [ -f "${BIN}.exe" ]; then
+            BIN="${BIN}.exe"
+          fi
+
           # Test invalid CA file path
-          ! ./target/release/gold_digger --tls-ca-file /nonexistent/path.pem --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
+          ! "$BIN" --tls-ca-file /nonexistent/path.pem --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
 
           # Test invalid certificate content
           echo "invalid certificate" > /tmp/invalid-cert.pem
-          ! ./target/release/gold_digger --tls-ca-file /tmp/invalid-cert.pem --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
+          ! "$BIN" --tls-ca-file /tmp/invalid-cert.pem --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
 
           echo "TLS configuration validation tests passed"
 
@@ -238,7 +256,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: quality
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -277,7 +295,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [tls-cli-validation, test-no-ssl, cross-platform-tls, tls-error-handling, tls-feature-variations]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable

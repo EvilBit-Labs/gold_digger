@@ -73,7 +73,7 @@ just test-all         # Run all tests including integration tests
 
 - **Rust**: Tests require the same Rust version as the main project
 - **Docker** (optional): Required only for tests marked with `#[ignore]`
-- **MySQL Image**: Docker tests will automatically pull `mysql:8.1` image
+- **MariaDB Image**: Docker tests will automatically pull `mariadb:10.11` image
 - **integration_tests feature** (optional): Feature flag required for heavy integration tests
 
 ## Test Features

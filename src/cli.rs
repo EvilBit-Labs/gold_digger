@@ -75,6 +75,7 @@ pub enum Shell {
 /// TLS configuration options (mutually exclusive)
 #[cfg_attr(not(feature = "ssl"), derive(Args, Debug, Clone, Default))]
 #[cfg_attr(feature = "ssl", derive(Args, Debug, Clone))]
+#[group(id = "tls_mode", multiple = false)]
 pub struct TlsOptions {
     /// Path to CA certificate file for trust anchor pinning
     #[cfg(feature = "ssl")]

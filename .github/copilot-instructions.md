@@ -216,7 +216,7 @@ This project has implemented CLI-first design and is evolving toward v1.0 with t
 
 - Streaming output (F007) - currently loads all rows into memory
 - Structured logging with `tracing` (F008)
-- Deterministic JSON output (F010) - currently uses HashMap
+- Deterministic JSON output (F010) - implemented using BTreeMap for ordered output
 - Proper exit codes (F005) - currently uses `exit(-1)`
 
 When suggesting improvements, consider compatibility with these future features and use CLI-first patterns.
