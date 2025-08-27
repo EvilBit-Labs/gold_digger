@@ -27,7 +27,7 @@ Closes #[issue number]
 ## Code Quality
 
 - [ ] Code follows the project's style guidelines
-- [ ] I have run `cargo fmt` and `cargo clippy -- -D warnings`
+- [ ] I have run `just fmt` and `just ci-check`
 - [ ] I have added/updated tests for new functionality
 - [ ] I have updated documentation if needed
 - [ ] I have not introduced any new warnings

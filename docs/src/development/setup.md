@@ -285,8 +285,7 @@ just build
 # Release build
 just build-release
 
-# Build with pure Rust TLS
-just build-rustls
+
 
 # Build all variants
 just build-all
@@ -316,19 +315,15 @@ Gold Digger uses Cargo features for conditional compilation:
 
 ```toml
 # Default features
-default = ["json", "csv", "ssl", "additional_mysql_types", "verbose"]
+default = ["json", "csv", "additional_mysql_types", "verbose"]
 
 # Individual features
-json = ["serde_json"]
-csv = ["csv"]
-ssl = [
-  "mysql/rustls-tls",
-  "rustls",
-  "rustls-native-certs",
-  "rustls-pemfile",
-]
+json = []  # Enable JSON output format
+csv = []   # Enable CSV output format
 additional_mysql_types = ["mysql_common?/bigdecimal", ...]
-verbose = []
+verbose = []  # Enable verbose logging
+
+# Note: TLS support is built-in
 ```
 
 ### Testing Feature Combinations
@@ -340,10 +335,10 @@ cargo test
 # Test minimal features
 cargo test --no-default-features --features "csv json"
 
-# Test with TLS
+# Test with all features
 cargo test --release
 
-# Test without TLS
+# Test without optional features
 cargo test --no-default-features --features "json csv additional_mysql_types verbose"
 ```
 

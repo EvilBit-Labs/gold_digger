@@ -101,18 +101,12 @@ build:
 build-release:
     cargo build --release
 
-# Build with TLS support (always included)
-build-tls:
-    cargo build --release
-
-
-
 # Build minimal version (no default features)
 build-minimal:
     cargo build --release --no-default-features --features "csv,json"
 
 # Build all feature combinations
-build-all: build build-release build-tls build-minimal
+build-all: build build-release build-minimal
 
 # Install locally from workspace
 install:
@@ -199,11 +193,11 @@ security:
 # DEPENDENCIES & VALIDATION
 # =============================================================================
 
-# Validate TLS dependency tree (always-available rustls implementation)
+# Validate TLS dependency tree
 validate-deps:
     @echo "Validating TLS dependencies..."
     @if ! cargo tree -e=no-dev -f "{p} {f}" | grep -q "rustls"; then \
-    echo "ERROR: rustls not found in standard build (TLS should always be available)"; \
+    echo "ERROR: rustls not found in standard build"; \
     cargo tree -e=no-dev -f "{p} {f}"; \
     exit 1; \
     fi
@@ -214,7 +208,7 @@ validate-deps:
     fi
     @echo "✓ Standard build includes rustls TLS support"
     @echo "✓ No native-tls dependencies found"
-    @echo "✓ TLS validation passed - rustls is always available"
+    @echo "✓ TLS validation passed"
 
 # Check for outdated dependencies
 outdated:
@@ -287,13 +281,10 @@ watch:
 features:
     @echo "Available feature combinations:"
     @echo ""
-    @echo "Default features:"
+    @echo "Standard build:"
     @echo "  cargo build --release"
     @echo ""
-    @echo "Standard build with TLS support (always included):"
-    @echo "  cargo build --release"
-    @echo ""
-    @echo "Minimal build (no TLS, no extra types):"
+    @echo "Minimal build (fewer features):"
     @echo "  cargo build --no-default-features --features \"csv json\""
     @echo ""
     @echo "All MySQL types:"
@@ -526,7 +517,7 @@ release-dry:
     if ! git diff-index --quiet HEAD --; then
     echo "Warning: Working directory has uncommitted changes"
     fi
-    just build-tls
+    just build-release
     BINARY_PATH="target/release/gold_digger"
     if [[ ! -f "$BINARY_PATH" ]]; then
     echo "Binary not found at $BINARY_PATH"
@@ -549,7 +540,7 @@ release-dry:
 
 [windows]
 release-dry:
-    just build-rustls
+    just build-release
     $BINARY_PATH = "target\release\gold_digger.exe"
     if (-not (Test-Path $BINARY_PATH)) {
         Write-Error "Binary not found at $BINARY_PATH"
@@ -603,7 +594,7 @@ help:
     @echo "  deny          License and security checks"
     @echo "  security      Comprehensive security scanning (audit + deny + grype)"
     @echo "  sbom          Generate Software Bill of Materials for inspection"
-    @echo "  validate-deps Validate TLS dependency tree (rustls migration)"
+    @echo "  validate-deps Validate TLS dependency tree"
     @echo ""
     @echo "Running:"
     @echo "  run OUTPUT_FILE DATABASE_URL DATABASE_QUERY  Run with custom env vars"

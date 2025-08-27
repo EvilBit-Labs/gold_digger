@@ -41,14 +41,14 @@ jobs:
       - name: Check formatting
         run: cargo fmt --check
 
-      - name: Run clippy (with SSL)
-        run: cargo clippy --no-default-features --features "json csv ssl additional_mysql_types verbose" -- -D warnings
+      - name: Run clippy (default features with TLS always available)
+        run: cargo clippy -- -D warnings
 
-      - name: Run clippy (without SSL)
+      - name: Run clippy (minimal features with TLS always available)
         run: cargo clippy --no-default-features --features "json csv additional_mysql_types verbose" -- -D warnings
 
-  # Test TLS flag validation and CLI parsing
-  tls-cli-validation:
+  # Test TLS functionality (always available)
+  test-tls:
     runs-on: ubuntu-latest
     needs: quality
     steps:
@@ -68,7 +68,7 @@ jobs:
       - name: Test TLS CLI flag validation
         run: |
           # Test mutually exclusive TLS flags
-          cargo build --release --features "ssl"
+          cargo build --release
 
           # Test that mutually exclusive flags are rejected
           echo "Testing mutually exclusive TLS flags..."
@@ -80,19 +80,41 @@ jobs:
           fi
 
           # These should fail with configuration errors
-          ! "$BIN" --tls-ca-file /tmp/nonexistent.pem --insecure-skip-hostname-verify --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
-          ! "$BIN" --tls-ca-file /tmp/nonexistent.pem --allow-invalid-certificate --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
-          ! "$BIN" --insecure-skip-hostname-verify --allow-invalid-certificate --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
+          ! "$BIN" --tls-ca-file /tmp/nonexistent.pem --insecure-skip-hostname-verify \
+            --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
+          ! "$BIN" --tls-ca-file /tmp/nonexistent.pem --allow-invalid-certificate \
+            --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
+          ! "$BIN" --insecure-skip-hostname-verify --allow-invalid-certificate \
+            --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
 
           echo "TLS flag validation tests passed"
 
       - name: Test TLS configuration unit tests
-        run: cargo nextest run --features "ssl" tls_config_unit_tests
+        run: cargo nextest run tls_config_unit_tests
 
-  # Test no-SSL configuration
-  test-no-ssl:
+      - name: Verify TLS always available
+        run: |
+          # Test that TLS flags are always available in CLI help
+          "$BIN" --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)" \
+            || exit 1
+
+          # Verify rustls dependencies are present
+          cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
+
+          # Verify no native-tls dependencies (rustls-only implementation)
+          ! cargo tree | grep "native-tls" || exit 1
+
+          echo "TLS always available test passed"
+
+  # Test with different feature combinations (TLS always available)
+  test-features:
     runs-on: ubuntu-latest
     needs: quality
+    strategy:
+      matrix:
+        features:
+          - "default"
+          - "minimal"
     steps:
       - uses: actions/checkout@v4
 
@@ -107,22 +129,49 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Run tests (no SSL)
+      - name: Run tests (default features)
+        if: matrix.features == 'default'
+        run: cargo nextest run
+
+      - name: Run tests (minimal features)
+        if: matrix.features == 'minimal'
         run: cargo nextest run --no-default-features --features "json csv additional_mysql_types verbose"
 
-      - name: Build release (no SSL)
-        run: cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
-
-      - name: Test SSL feature disabled behavior
+      - name: Build release
         run: |
-          # Build without SSL and verify TLS-related functionality is properly disabled
-          cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
+          if [ "${{ matrix.features }}" = "default" ]; then
+            cargo build --release
+          else
+            cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
+          fi
 
-          # Test that SSL-related tests are properly skipped
-          cargo nextest run --no-default-features --features "json csv additional_mysql_types verbose" ssl_disabled_tests
+      - name: Verify TLS always available
+        run: |
+          # Set up binary path with Windows .exe suffix detection
+          BIN="./target/release/gold_digger"
+          if [ -f "${BIN}.exe" ]; then
+            BIN="${BIN}.exe"
+          fi
 
-  # Test cross-platform TLS certificate store integration
-  cross-platform-tls:
+          # Test that TLS flags are always available in CLI help
+          "$BIN" --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)" \
+            || exit 1
+
+          # Verify rustls dependencies are present
+          if [ "${{ matrix.features }}" = "default" ]; then
+            cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
+          else
+            cargo tree --no-default-features --features "json csv additional_mysql_types verbose" \
+              | grep -E "(rustls|rustls-native-certs)" || exit 1
+          fi
+
+          # Verify no native-tls dependencies (rustls-only implementation)
+          ! cargo tree | grep "native-tls" || exit 1
+
+          echo "TLS always available test passed for ${{ matrix.features }} features"
+
+  # Test cross-platform TLS functionality (always available)
+  test-cross-platform:
     strategy:
       matrix:
         include:
@@ -151,47 +200,23 @@ jobs:
       - name: Test TLS functionality on ${{ matrix.platform }}
         run: |
           # Run TLS-specific tests
-          cargo nextest run --features "ssl" tls_config_unit_tests
-          cargo nextest run --features "ssl" tls_integration
-          cargo nextest run --features "ssl" dependency_validation
+          cargo nextest run tls_config_unit_tests
+          cargo nextest run tls_integration
+          cargo nextest run dependency_validation
 
       - name: Test platform certificate store integration
         run: |
-          # Build with SSL support
-          cargo build --release --features "ssl"
+          # Build with TLS support (always available)
+          cargo build --release
 
           # Test that platform certificate dependencies are present
-          cargo tree --features "ssl" | grep -E "(rustls|rustls-native-certs)" || exit 1
+          cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
 
           # Verify no native-tls dependencies (rustls-only implementation)
-          ! cargo tree --features "ssl" | grep "native-tls" || exit 1
+          ! cargo tree | grep "native-tls" || exit 1
 
-      - name: Test TLS security modes on ${{ matrix.platform }}
+      - name: Test TLS CLI functionality on ${{ matrix.platform }}
         run: |
-          # Test each TLS security mode builds correctly
-          echo "Testing TLS security modes on ${{ matrix.platform }}..."
-
-          # Create a temporary certificate file for testing
-          mkdir -p /tmp/tls-test
-          cat > /tmp/tls-test/test-ca.pem << 'EOF'
-          -----BEGIN CERTIFICATE-----
-          MIIDXTCCAkWgAwIBAgIJAKoK/heBjcOuMA0GCSqGSIb3DQEBBQUAMEUxCzAJBgNV
-          BAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBX
-          aWRnaXRzIFB0eSBMdGQwHhcNMTcwODI4MTExNzE2WhcNMTgwODI4MTExNzE2WjBF
-          MQswCQYDVQQGEwJBVTETMBEGA1UECAwKU29tZS1TdGF0ZTEhMB8GA1UECgwYSW50
-          ZXJuZXQgV2lkZ2l0cyBQdHkgTHRkMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIB
-          CgKCAQEAuuExKvY1xzHFw4A9J3QnsdTtjScjjQ3WM94I2FtpMRCZDBrT7PN2RQae
-          1UBMHall7afNzoglf7Gpir6+sQBaoXI6F0S2ZuuAiYU9zqhxHKjVfz6rZqQkLrZQ
-          kOcHXiIhIdOviydpX3MelAwNjGSteHyGA1TqRBxh9obFoAoRQmlHnVkycnARP8qd
-          tNatja7VgHd7NuiE5vTaFzCREHk2lQaHdgAIuRs6Z4zw1h5BzHyUK4DqsJqGrRLm
-          YehM4wlBOmrsBc7afNdlko/YVFkLJ7AsGQJ1951i6cWQmaq5WZEyLPp1FNRRRyep
-          7TqBnLf2xURg5BDVvbhP0A42VpQIDAQABo1AwTjAdBgNVHQ4EFgQUhHf2808b6+RE
-          oCgEMWMWgRkH+6wwHwYDVR0jBBgwFoAUhHf2808b6+REoCgEMWMWgRkH+6wwDAYD
-          VR0TBAUwAwEB/zANBgkqhkiG9w0BAQUFAAOCAQEAGRuOfQqk5T5OhzgiuLxhQYsy
-          XqSR4fNMW7M0PJjdXNzGxhMvKs9vEehxiaUHLjUx7bZT2+WBxNki4NfeCEHeQpZs
-          -----END CERTIFICATE-----
-          EOF
-
           # Set up binary path with Windows .exe suffix detection
           BIN="./target/release/gold_digger"
           if [ -f "${BIN}.exe" ]; then
@@ -199,12 +224,13 @@ jobs:
           fi
 
           # Test CLI help shows TLS options
-          "$BIN" --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)" || exit 1
+          "$BIN" --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)" \
+            || exit 1
 
-          echo "TLS security mode tests completed successfully on ${{ matrix.platform }}"
+          echo "TLS functionality tests completed successfully on ${{ matrix.platform }}"
 
-  # Test TLS error handling and user guidance
-  tls-error-handling:
+  # Test TLS error handling and configuration validation
+  test-tls-validation:
     runs-on: ubuntu-latest
     needs: quality
     steps:
@@ -223,14 +249,14 @@ jobs:
 
       - name: Test TLS error handling
         run: |
-          # Build with SSL support
-          cargo build --release --features "ssl"
+          # Build with TLS support (always available)
+          cargo build --release
 
           # Test TLS error classification and guidance
-          cargo nextest run --features "ssl" tls_error_handling_tests
+          cargo nextest run tls_error_handling_tests
 
           # Test security warning system
-          cargo nextest run --features "ssl" security_warning_tests
+          cargo nextest run security_warning_tests
 
       - name: Test TLS configuration validation
         run: |
@@ -243,57 +269,28 @@ jobs:
           fi
 
           # Test invalid CA file path
-          ! "$BIN" --tls-ca-file /nonexistent/path.pem --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
+          ! "$BIN" --tls-ca-file /nonexistent/path.pem --db-url "mysql://test" \
+            --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
 
           # Test invalid certificate content
           echo "invalid certificate" > /tmp/invalid-cert.pem
-          ! "$BIN" --tls-ca-file /tmp/invalid-cert.pem --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
+          ! "$BIN" --tls-ca-file /tmp/invalid-cert.pem --db-url "mysql://test" \
+            --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
 
           echo "TLS configuration validation tests passed"
 
-  # Test TLS feature compilation variations
-  tls-feature-variations:
-    runs-on: ubuntu-latest
-    needs: quality
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Test feature flag combinations
+      - name: Verify TLS always available
         run: |
-          echo "Testing TLS feature flag combinations..."
-
-          # Test default features (includes SSL)
-          cargo build --release
-          cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
-
-          # Test minimal features (no SSL)
-          cargo build --release --no-default-features --features "json csv"
-          ! cargo tree --no-default-features --features "json csv" | grep -E "(rustls|native-tls)" || echo "No TLS dependencies found (expected)"
-
-          # Test SSL feature explicitly
-          cargo build --release --no-default-features --features "json csv ssl additional_mysql_types verbose"
-          cargo tree --no-default-features --features "ssl" | grep -E "(rustls|rustls-native-certs)" || exit 1
-
-          echo "Feature flag combination tests passed"
-
-      - name: Test conditional compilation
-        run: |
-          # Test that TLS-related code is properly feature-gated
-          cargo nextest run --features "ssl" dependency_validation
+          # Test that TLS-related code is always available
+          cargo nextest run dependency_validation
 
           # Verify rustls-only implementation (no native-tls)
-          ! cargo tree --features "ssl" | grep "native-tls" || exit 1
+          ! cargo tree | grep "native-tls" || exit 1
 
-  # Generate coverage for all configurations
+  # Generate coverage for TLS-enabled builds
   coverage:
     runs-on: ubuntu-latest
-    needs: [tls-cli-validation, test-no-ssl, cross-platform-tls, tls-error-handling, tls-feature-variations]
+    needs: [test-tls, test-features, test-cross-platform, test-tls-validation]
     steps:
       - uses: actions/checkout@v4
 
@@ -308,16 +305,18 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Generate coverage (with SSL)
-        run: cargo llvm-cov --workspace --lcov --output-path lcov-ssl.info --features "ssl"
+      - name: Generate coverage (default features with TLS)
+        run: cargo llvm-cov --workspace --lcov --output-path lcov-default.info
 
-      - name: Generate coverage (without SSL)
-        run: cargo llvm-cov --workspace --lcov --output-path lcov-no-ssl.info --no-default-features --features "json csv additional_mysql_types verbose"
+      - name: Generate coverage (minimal features with TLS)
+        run: |
+          cargo llvm-cov --workspace --lcov --output-path lcov-minimal.info \
+            --no-default-features --features "json csv additional_mysql_types verbose"
 
       - name: Combine coverage reports
         run: |
           # Combine both coverage reports
-          cat lcov-ssl.info lcov-no-ssl.info > lcov.info
+          cat lcov-default.info lcov-minimal.info > lcov.info
 
       - name: Upload to Codecov
         uses: codecov/codecov-action@v5

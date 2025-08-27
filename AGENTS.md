@@ -218,6 +218,7 @@ The project has detailed requirements in `project_spec/requirements.md` but sign
 - **justfile**: Cross-platform build automation and common tasks
 - **.pre-commit-config.yaml**: Git hook configuration for quality gates
 - **CHANGELOG.md**: Auto-generated version history (conventional commits)
+- **dist-workspace.toml**: `cargo-dist` workspace configuration
 
 ### Documentation Standards
 

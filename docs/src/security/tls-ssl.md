@@ -4,17 +4,12 @@ Configure secure connections to your MySQL/MariaDB database with Gold Digger's f
 
 ## TLS Implementation
 
-Gold Digger uses a single, consistent TLS implementation with platform certificate store integration:
+Gold Digger uses rustls for secure database connections with platform certificate store integration:
 
 - **Pure Rust TLS**: Uses rustls for consistent cross-platform behavior
 - **Platform Integration**: Automatically uses system certificate stores (Windows, macOS, Linux)
 - **Enhanced Security Controls**: Four distinct TLS security modes via CLI flags
 - **Smart Error Messages**: Provides specific guidance when certificate validation fails
-
-```bash
-# Build with TLS support (always included)
-cargo build --release
-```
 
 ## TLS Security Modes
 
@@ -162,17 +157,13 @@ TLS error messages are scrubbed of sensitive information:
 
 ## Build Configuration
 
-### Build Options
-
 ```bash
-# Standard build with TLS support (always included)
+# Standard build
 cargo build --release
 
-# Minimal build without TLS
+# Minimal build
 cargo build --release --no-default-features --features "json csv"
 ```
-
-**Note**: TLS support is now always available in Gold Digger and no longer requires feature flags.
 
 ## Production Recommendations
 

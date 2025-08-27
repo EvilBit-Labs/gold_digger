@@ -241,7 +241,7 @@ just sbom           # Generate Software Bill of Materials (SBOM)
 
 # Building
 just build-release  # Build optimized release binary
-just build-rustls   # Build with pure Rust TLS
+
 just build-all      # Build all feature combinations
 
 # Local Testing

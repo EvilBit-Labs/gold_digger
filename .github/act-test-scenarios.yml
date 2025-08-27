@@ -192,7 +192,7 @@ matrix:
   # Feature combinations
   features:
     - name: "ssl"
-      flags: "--no-default-features --features json,csv,ssl,additional_mysql_types,verbose"
+      flags: "--no-default-features --features json,csv,additional_mysql_types,verbose"
     - name: "default"
       flags: "--release"
     - name: "minimal"

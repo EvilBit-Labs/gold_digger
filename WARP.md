@@ -90,8 +90,6 @@ $env:DATABASE_QUERY="SELECT 1 as x"
 cargo run --release
 ```
 
-**⚠️ Important:** Despite README mentions, there is NO dotenv support in the code. Use exported environment variables or an external env loader.
-
 ## Architecture and Data Flow
 
 ### Current Implementation (v0.2.6)
@@ -154,8 +152,6 @@ pub fn write<W: Write>(rows: Vec<Vec<String>>, output: W) -> anyhow::Result<()>
 - `default`: `["json", "csv", "additional_mysql_types", "verbose"]`
 - `additional_mysql_types`: Support for BigDecimal, Decimal, Time, Frunk
 - `verbose`: Conditional logging via println!/eprintln!
-
-Note: TLS is now always available and is no longer a feature flag.
 
 ## Output Format Dispatch and Edge Cases
 
@@ -230,7 +226,7 @@ match mysql_value {
 ### README vs. Code Mismatches
 
 - **No dotenv support** despite README implications
-- Install command should be `cargo install --path .` not `cargo install`
+- Install command should be focused around the `cargo-dist` artifacts, not `cargo install`
 - Verbose logging is feature-gated, not always available
 
 ## Current vs. Target Requirements Gap Analysis
@@ -272,6 +268,7 @@ Based on `project_spec/requirements.md`, major missing features:
 - **justfile**: Cross-platform build automation and common tasks
 - **.pre-commit-config.yaml**: Git hook configuration for quality gates
 - **CHANGELOG.md**: Auto-generated version history (conventional commits)
+- **dist-workspace.toml**: `cargo-dist` workspace configuration
 
 **Documentation Standards:**
 All public functions require doc comments with examples:
@@ -459,7 +456,7 @@ Fall back to other GitHub integration methods only if `gh` is not available or d
 
 Before submitting any changes:
 
-- [ ] Run `cargo fmt --check` and `cargo clippy -- -D warnings` locally
+- [ ] Run `just format` and `just ci-check` locally
 - [ ] Avoid logging secrets or connection details
 - [ ] Target small, reviewable changes
 - [ ] Use conventional commit messages

@@ -16,7 +16,7 @@ Gold Digger is a Rust-based MySQL/MariaDB query tool that exports results to str
 - **CLI-first design** with environment variable fallbacks and comprehensive command-line interface
 - **Multiple output formats**: CSV (RFC 4180), JSON with pretty-printing, TSV
 - **Safe type handling**: Graceful NULL and type conversion without panics, with intelligent JSON type inference
-- **Secure TLS support**: Platform-native or pure Rust TLS implementations with detailed error handling
+- **Secure TLS support**: Built-in rustls implementation with detailed error handling
 - **Comprehensive error handling**: Structured exit codes, intelligent error categorization, and actionable error messages
 - **Shell completion**: Support for Bash, Zsh, Fish, and PowerShell with easy generation
 - **Configuration debugging**: JSON config dump with automatic credential redaction
@@ -74,18 +74,17 @@ cargo install --path .
 ### Build Options
 
 ```bash
-# Standard build with TLS support (recommended)
+# Standard build
 cargo build --release
 
-# Minimal build (no TLS support)
+# Minimal build (fewer features)
 cargo build --release --no-default-features --features "json csv"
 ```
 
 ### TLS Support
 
-Gold Digger includes built-in secure database connections with a unified rustls-based TLS implementation:
+Gold Digger includes built-in secure database connections with rustls implementation:
 
-- **Always Available**: TLS support is included in all builds without requiring feature flags
 - **Pure Rust TLS**: Consistent cross-platform behavior using rustls with platform certificate store integration
 - **Platform Certificate Store**: Automatic integration with system certificate stores (Windows/macOS/Linux)
 - **Flexible Security Controls**: Four distinct TLS validation modes via mutually exclusive CLI flags
@@ -277,7 +276,7 @@ just test-all         # Run all tests including integration tests
 
 - No external dependencies required
 - Run in CI environments
-- Cover TLS configuration, error handling, and format validation
+- Cover configuration, error handling, and format validation
 
 ### Test Coverage
 

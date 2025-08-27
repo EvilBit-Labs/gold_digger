@@ -20,7 +20,7 @@ env:
   CI: true
 
 jobs:
-  # Test TLS functionality across platforms
+  # Test TLS functionality across platforms (always available)
   tls-cross-platform:
     strategy:
       matrix:
@@ -37,17 +37,23 @@ jobs:
           tool: cargo-nextest
       - uses: Swatinem/rust-cache@v2
 
-      - name: Run TLS tests
-        run: cargo nextest run --features "ssl" -E 'test(tls)'
+      - name: Run TLS tests (always available)
+        run: cargo nextest run -E 'test(tls)'
 
-      - name: Verify TLS dependencies
+      - name: Verify TLS dependencies (rustls-only)
         run: |
-          # Should have rustls dependencies
-          cargo tree --features "ssl" | grep rustls
+          # Should have rustls dependencies (always available)
+          cargo tree | grep rustls
           # Should NOT have native-tls (rustls-only implementation)
-          ! cargo tree --features "ssl" | grep "native-tls"
+          ! cargo tree | grep "native-tls"
 
-  # Test TLS CLI integration
+      - name: Test TLS with minimal features
+        run: |
+          # TLS should be available even with minimal features
+          cargo build --no-default-features --features "json csv"
+          cargo tree --no-default-features --features "json csv" | grep rustls
+
+  # Test TLS CLI integration (always available)
   tls-cli-tests:
     runs-on: ubuntu-latest
     defaults:
@@ -58,9 +64,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
-      - name: Build and test TLS CLI
+      - name: Build and test TLS CLI (always available)
         run: |
-          cargo build --release --features "ssl"
+          cargo build --release
 
           # Set up binary path with Windows .exe suffix detection
           BIN="./target/release/gold_digger"
@@ -68,9 +74,26 @@ jobs:
             BIN="${BIN}.exe"
           fi
 
-          # Test help includes TLS flags
-          "$BIN" --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)"
+          # Test help includes TLS flags (always available)
+          "$BIN" --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)" \
+            || exit 1
 
           # Test mutual exclusion (should fail)
           echo "test" > /tmp/test.pem
-          ! "$BIN" --tls-ca-file /tmp/test.pem --insecure-skip-hostname-verify --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null
+          ! "$BIN" --tls-ca-file /tmp/test.pem --insecure-skip-hostname-verify \
+            --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null
+
+      - name: Test TLS CLI with minimal build
+        run: |
+          # Build with minimal features and verify TLS CLI is still available
+          cargo build --release --no-default-features --features "json csv"
+
+          # Set up binary path with Windows .exe suffix detection
+          BIN="./target/release/gold_digger"
+          if [ -f "${BIN}.exe" ]; then
+            BIN="${BIN}.exe"
+          fi
+
+          # Test help includes TLS flags even with minimal features
+          "$BIN" --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)" \
+            || exit 1
