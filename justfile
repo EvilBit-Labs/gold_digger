@@ -73,6 +73,7 @@ ci-check:
     just lint
     just test
     just validate-deps
+    just deny-check
 
 # Comprehensive full checks (all non-destructive validation)
 full-checks:
@@ -119,7 +120,13 @@ install:
 # Run tests (prefer nextest, fallback to cargo test)
 test:
     cd {{justfile_dir()}}
-    cargo nextest run --run-ignored all || cargo test -- --include-ignored
+    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
+        echo "Running tests with nextest..."; \
+        cargo nextest run --run-ignored all; \
+    else \
+        echo "nextest not available, falling back to cargo test..."; \
+        cargo test -- --include-ignored; \
+    fi
 
 # Run tests without Docker tests (non-ignored only)
 test-no-docker:
@@ -172,6 +179,10 @@ audit:
 
 # Check for license/security issues (local development - tolerant)
 deny:
+    cargo deny check || echo "cargo-deny not installed - run 'just install-tools'"
+
+# Check for license/security issues with all features
+deny-check:
     cargo deny check || echo "cargo-deny not installed - run 'just install-tools'"
 
 # Check for license/security issues (CI strict enforcement)
@@ -578,6 +589,7 @@ help:
     @echo "  check         Quick development checks"
     @echo "  ci-check      Full CI equivalent checks"
     @echo "  full-checks   Comprehensive validation (all non-destructive checks)"
+    @echo "  deny-check    Run cargo-deny checks (license & duplicates)"
     @echo ""
     @echo "Testing:"
     @echo "  test          Run tests with nextest (including ignored Docker tests)"
@@ -592,6 +604,7 @@ help:
     @echo "Security:"
     @echo "  audit         Security audit"
     @echo "  deny          License and security checks"
+    @echo "  deny-check    License and security checks with all features"
     @echo "  security      Comprehensive security scanning (audit + deny + grype)"
     @echo "  sbom          Generate Software Bill of Materials for inspection"
     @echo "  validate-deps Validate TLS dependency tree"

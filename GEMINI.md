@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Gold Digger is a Rust-based MySQL/MariaDB query tool that outputs structured data (CSV/JSON/TSV) via environment variables. It defines essential architecture patterns, safety requirements, and development constraints for headless database automation workflows with CLI-first architecture.
+Gold Digger is a Rust-based MySQL/MariaDB query tool configured via CLI and environment variables that outputs query results to stdout or files in CSV/JSON/TSV formats. It defines essential architecture patterns, safety requirements, and development constraints for headless database automation workflows with CLI-first architecture.
 
 ## Project File Organization
 

@@ -333,7 +333,7 @@ error: TLS connection failed: certificate validation error
    cargo build --release
 
    # Minimal build without TLS
-   cargo build --release
+   cargo build --release --no-default-features
 
    # For no TLS (testing only)
    cargo build --no-default-features --features "json csv additional_mysql_types verbose"

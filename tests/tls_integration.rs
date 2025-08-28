@@ -14,9 +14,7 @@ use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
 
-/// The dead_code attributes are required due to feature flags allowing these tests to be disabled.
 /// Helper function to create a temporary certificate file for testing
-#[allow(dead_code)]
 fn create_temp_cert_file(content: &str) -> Result<(TempDir, PathBuf)> {
     let temp_dir = tempfile::tempdir()?;
     let cert_path = temp_dir.path().join("test_cert.pem");
@@ -26,7 +24,6 @@ fn create_temp_cert_file(content: &str) -> Result<(TempDir, PathBuf)> {
 
 /// Sample valid PEM certificate for testing
 /// This is a self-signed certificate for testing purposes
-#[allow(dead_code)]
 const VALID_CERT_PEM: &str = r#"-----BEGIN CERTIFICATE-----
 MIIDGDCCAgACCQD2WSi79mOTeDANBgkqhkiG9w0BAQsFADBOMQswCQYDVQQGEwJV
 UzENMAsGA1UECAwEVGVzdDENMAsGA1UEBwwEVGVzdDENMAsGA1UECgwEVGVzdDES
@@ -48,7 +45,6 @@ nrKVKzHYOR+fmZ0Fim9yiudVIcaQXbi3aT21tPkS21X3X/99LXdqMzgppnAtS2X0
 -----END CERTIFICATE-----"#;
 
 /// Check if we're running in CI environment to avoid testcontainers
-#[allow(dead_code)]
 fn is_ci() -> bool {
     std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok()
 }
@@ -371,9 +367,6 @@ mod integration_tests {
         }
 
         // Start MariaDB container using testcontainers
-        // Note: The MariaDB module has built-in wait strategies that wait for MariaDB to be ready
-        // before returning from .start(). This is different from GenericImage which requires
-        // explicit wait strategies with .with_wait_for().
         let mariadb_container = testcontainers_modules::mariadb::Mariadb::default()
             .start()
             .expect("Failed to start MariaDB container");
@@ -411,9 +404,6 @@ mod integration_tests {
         }
 
         // Start MariaDB container for testing
-        // Note: The MariaDB module has built-in wait strategies that wait for MariaDB to be ready
-        // before returning from .start(). This is different from GenericImage which requires
-        // explicit wait strategies with .with_wait_for().
         let mariadb_container = testcontainers_modules::mariadb::Mariadb::default()
             .start()
             .expect("Failed to start MariaDB container");
@@ -468,9 +458,6 @@ mod integration_tests {
         }
 
         // Start MariaDB container for testing
-        // Note: The MariaDB module has built-in wait strategies that wait for MariaDB to be ready
-        // before returning from .start(). This is different from GenericImage which requires
-        // explicit wait strategies with .with_wait_for().
         let mariadb_container = testcontainers_modules::mariadb::Mariadb::default()
             .start()
             .expect("Failed to start MariaDB container");
@@ -625,9 +612,6 @@ mod integration_tests {
         }
 
         // Start MariaDB container for testing
-        // Note: The MariaDB module has built-in wait strategies that wait for MariaDB to be ready
-        // before returning from .start(). This is different from GenericImage which requires
-        // explicit wait strategies with .with_wait_for().
         let mariadb_container = testcontainers_modules::mariadb::Mariadb::default()
             .start()
             .expect("Failed to start MariaDB container");
@@ -664,9 +648,6 @@ mod integration_tests {
         }
 
         // Start MariaDB container for testing
-        // Note: The MariaDB module has built-in wait strategies that wait for MariaDB to be ready
-        // before returning from .start(). This is different from GenericImage which requires
-        // explicit wait strategies with .with_wait_for().
         let mariadb_container = testcontainers_modules::mariadb::Mariadb::default()
             .start()
             .expect("Failed to start MariaDB container");
@@ -693,7 +674,8 @@ mod integration_tests {
         let processing_time = start_time.elapsed();
 
         // Validate we can process large datasets
-        assert_eq!(large_dataset.len(), 1000, "Expected 1000 items, got {}", large_dataset.len());
+        let actual_len = large_dataset.len();
+        assert_eq!(actual_len, 1000, "Expected 1000 items, got {}", actual_len);
 
         // Performance assertion: processing should complete within reasonable time
         let max_acceptable_time = std::time::Duration::from_millis(100);

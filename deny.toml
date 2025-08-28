@@ -45,9 +45,10 @@ targets = [
 all-features = false
 # If true, metadata will be collected with `--no-default-features`. The same
 # caveat with `all-features` applies
-# Configure cargo-deny to use rustls features instead of default (native-tls) features
-# This avoids pulling in OpenSSL dependencies that are explicitly banned
-no-default-features = true
+# Note: TLS support is now unconditional and always available.
+# We evaluate default-feature variants to catch vulnerabilities that might only
+# appear in default configurations, while CI uses deny.ci.toml with no-default-features
+# for strict enforcement of the minimal feature set.
 # If set, these feature will be enabled when collecting metadata. If `--features`
 # is specified on the cmd line they will take precedence over this option.
 features = ["json", "csv", "additional_mysql_types", "verbose"]
@@ -185,6 +186,21 @@ deny = [
     # Note: OpenSSL crate bans removed - rustls ecosystem components may carry OpenSSL license
     # but don't actually depend on OpenSSL crates. We rely on feature selection to avoid
     # pulling in actual OpenSSL dependencies.
+
+    # Uncomment the following lines to enforce rustls-only and prevent native-tls/openssl regressions:
+    # "native-tls",                    # Enforce rustls-only TLS implementation
+    # "openssl",                       # Prevent OpenSSL crate usage
+    # "openssl-sys",                   # Prevent OpenSSL system bindings
+    # "openssl-probe",                 # Prevent OpenSSL probe utilities
+    # "openssl-verify",                # Prevent OpenSSL verification utilities
+    # "openssl-vendored",              # Prevent vendored OpenSSL builds
+    # "openssl-pkcs12",                # Prevent OpenSSL PKCS#12 support
+    # "openssl-pkey",                  # Prevent OpenSSL private key operations
+    # "openssl-rand",                  # Prevent OpenSSL random number generation
+    # "openssl-hash",                  # Prevent OpenSSL hash functions
+    # "openssl-encrypt",               # Prevent OpenSSL encryption utilities
+    # "openssl-ssl",                   # Prevent OpenSSL SSL/TLS implementation
+    # "openssl-x509",                  # Prevent OpenSSL X.509 certificate handling
 ]
 
 # List of features to allow/deny

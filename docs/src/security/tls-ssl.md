@@ -210,7 +210,13 @@ TLS connection failed: connection timed out
 1. Check network connectivity
 2. Verify server is running
 3. Confirm firewall allows TLS traffic
-4. Test with non-TLS connection first
+4. Verify TLS configuration:
+   - Check server certificate validity and chain integrity
+   - Confirm server is listening on the TLS port (typically 3306)
+   - Validate TLS cipher/protocol compatibility between client and server
+   - Test using `openssl s_client -connect host:3306` or `curl --tlsv1.2` to capture handshake details
+   - Review server logs for TLS-related errors or connection rejections
+   - Enable verbose TLS client debug output to diagnose timeouts and handshake failures
 
 #### Issue: Certificate validation failed
 

@@ -54,6 +54,7 @@
   - Update logging to use CLI verbose flag instead of feature flag
   - Ensure TLS configuration details are logged when verbose mode is enabled
   - Update security warning display to always be available
+  - Note: This change applies only to TLS-specific logging; global verbose output may still be controlled by the existing feature flag or CLI flag
   - _Requirements: 8.1, 8.2, 8.3, 8.4_
 
 - [x] 8. Remove feature gating from certificate utilities

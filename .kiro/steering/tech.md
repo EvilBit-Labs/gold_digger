@@ -85,10 +85,10 @@ OutputFormat::Csv => anyhow::bail!("CSV support not compiled in"),
 # Standard build (TLS always available)
 cargo build --release
 
-# Build without extra features (TLS still available)
+# Build with a subset of features enabled (TLS still available)
 cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
 
-# Minimal feature build (TLS still available)
+# Build with minimal features only (TLS still available)
 cargo build --no-default-features --features "csv json"
 ```
 

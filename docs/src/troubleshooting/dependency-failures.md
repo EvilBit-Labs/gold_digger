@@ -127,7 +127,6 @@ error: TLS connection failed: certificate validation error
 
    # Minimal build without TLS
    cargo build --no-default-features --features "json csv additional_mysql_types verbose"
-   cargo build --release
 
    # No TLS (testing only)
    cargo build --no-default-features --features "json csv additional_mysql_types verbose"
@@ -173,18 +172,13 @@ error: Package does not have feature `missing_feature`
 2. **Add Missing Features:**
 
    ```toml
-   # In Cargo.toml - native TLS configuration
-   [dependencies]
-   mysql = { version = "24.0", features = ["native-tls"] }
-   serde = { version = "1.0", features = ["derive"] }
-   ```
-
-   ```toml
-   # In Cargo.toml - rustls configuration
+   # In Cargo.toml - rustls configuration (recommended)
    [dependencies]
    mysql = { version = "24.0", features = ["rustls-tls"] }
    serde = { version = "1.0", features = ["derive"] }
    ```
+
+   **Note:** Gold Digger uses rustls exclusively for TLS support. The native-tls backend is not supported.
 
 3. **Conditional Feature Compilation:**
 

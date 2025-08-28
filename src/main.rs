@@ -350,7 +350,6 @@ fn dump_configuration(cli: &Cli) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
     use tempfile::NamedTempFile;
 
     /// Creates a CLI instance with common test arguments
@@ -451,31 +450,24 @@ mod tests {
     fn test_resolve_database_url_from_env() {
         let cli = Cli::parse_from(["gold_digger", "--query", "SELECT 1", "--output", "test.json"]);
 
-        // Set environment variable
-        unsafe {
-            env::set_var("DATABASE_URL", "mysql://env_test");
-        }
-        let result = resolve_database_url(&cli);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "mysql://env_test");
-
-        // Clean up
-        unsafe {
-            env::remove_var("DATABASE_URL");
-        }
+        // Set environment variable using temp_env
+        temp_env::with_var("DATABASE_URL", Some("mysql://env_test"), || {
+            let result = resolve_database_url(&cli);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), "mysql://env_test");
+        });
     }
 
     #[test]
     fn test_resolve_database_url_missing() {
         let cli = Cli::parse_from(["gold_digger", "--query", "SELECT 1", "--output", "test.json"]);
 
-        // Ensure env var is not set
-        unsafe {
-            env::remove_var("DATABASE_URL");
-        }
-        let result = resolve_database_url(&cli);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Missing database URL"));
+        // Ensure env var is not set using temp_env
+        temp_env::with_var("DATABASE_URL", None::<&str>, || {
+            let result = resolve_database_url(&cli);
+            assert!(result.is_err());
+            assert!(result.unwrap_err().to_string().contains("Missing database URL"));
+        });
     }
 
     #[test]
@@ -511,31 +503,24 @@ mod tests {
     fn test_resolve_database_query_from_env() {
         let cli = Cli::parse_from(["gold_digger", "--db-url", "mysql://test", "--output", "test.json"]);
 
-        // Set environment variable
-        unsafe {
-            env::set_var("DATABASE_QUERY", "SELECT * FROM env_table");
-        }
-        let result = resolve_database_query(&cli);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "SELECT * FROM env_table");
-
-        // Clean up
-        unsafe {
-            env::remove_var("DATABASE_QUERY");
-        }
+        // Set environment variable using temp_env
+        temp_env::with_var("DATABASE_QUERY", Some("SELECT * FROM env_table"), || {
+            let result = resolve_database_query(&cli);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), "SELECT * FROM env_table");
+        });
     }
 
     #[test]
     fn test_resolve_database_query_missing() {
         let cli = Cli::parse_from(["gold_digger", "--db-url", "mysql://test", "--output", "test.json"]);
 
-        // Ensure env var is not set
-        unsafe {
-            env::remove_var("DATABASE_QUERY");
-        }
-        let result = resolve_database_query(&cli);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Missing database query"));
+        // Ensure env var is not set using temp_env
+        temp_env::with_var("DATABASE_QUERY", None::<&str>, || {
+            let result = resolve_database_query(&cli);
+            assert!(result.is_err());
+            assert!(result.unwrap_err().to_string().contains("Missing database query"));
+        });
     }
 
     #[test]
@@ -567,31 +552,24 @@ mod tests {
     fn test_resolve_output_file_from_env() {
         let cli = Cli::parse_from(["gold_digger", "--db-url", "mysql://test", "--query", "SELECT 1"]);
 
-        // Set environment variable
-        unsafe {
-            env::set_var("OUTPUT_FILE", "/tmp/env_output.csv");
-        }
-        let result = resolve_output_file(&cli);
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), PathBuf::from("/tmp/env_output.csv"));
-
-        // Clean up
-        unsafe {
-            env::remove_var("OUTPUT_FILE");
-        }
+        // Set environment variable using temp_env
+        temp_env::with_var("OUTPUT_FILE", Some("/tmp/env_output.csv"), || {
+            let result = resolve_output_file(&cli);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), PathBuf::from("/tmp/env_output.csv"));
+        });
     }
 
     #[test]
     fn test_resolve_output_file_missing() {
         let cli = Cli::parse_from(["gold_digger", "--db-url", "mysql://test", "--query", "SELECT 1"]);
 
-        // Ensure env var is not set
-        unsafe {
-            env::remove_var("OUTPUT_FILE");
-        }
-        let result = resolve_output_file(&cli);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Missing output file"));
+        // Ensure env var is not set using temp_env
+        temp_env::with_var("OUTPUT_FILE", None::<&str>, || {
+            let result = resolve_output_file(&cli);
+            assert!(result.is_err());
+            assert!(result.unwrap_err().to_string().contains("Missing output file"));
+        });
     }
 
     #[test]
@@ -626,47 +604,40 @@ mod tests {
 
     #[test]
     fn test_dump_configuration_with_env_query() -> anyhow::Result<()> {
-        unsafe {
-            env::set_var("DATABASE_QUERY", "SELECT password FROM users");
-        }
+        temp_env::with_var("DATABASE_QUERY", Some("SELECT password FROM users"), || {
+            let cli = Cli::parse_from(["gold_digger", "--db-url", "mysql://test", "--output", "test.json"]);
 
-        let cli = Cli::parse_from(["gold_digger", "--db-url", "mysql://test", "--output", "test.json"]);
-
-        let result = dump_configuration(&cli);
-        assert!(result.is_ok());
-
-        // Clean up
-        unsafe {
-            env::remove_var("DATABASE_QUERY");
-        }
+            let result = dump_configuration(&cli);
+            assert!(result.is_ok());
+        });
 
         Ok(())
     }
-}
-#[test]
-fn test_generate_completion_bash() {
-    use gold_digger::cli::Shell;
-    // This should not panic
-    generate_completion(Shell::Bash);
-}
+    #[test]
+    fn test_generate_completion_bash() {
+        use gold_digger::cli::Shell;
+        // This should not panic
+        generate_completion(Shell::Bash);
+    }
 
-#[test]
-fn test_generate_completion_zsh() {
-    use gold_digger::cli::Shell;
-    // This should not panic
-    generate_completion(Shell::Zsh);
-}
+    #[test]
+    fn test_generate_completion_zsh() {
+        use gold_digger::cli::Shell;
+        // This should not panic
+        generate_completion(Shell::Zsh);
+    }
 
-#[test]
-fn test_generate_completion_fish() {
-    use gold_digger::cli::Shell;
-    // This should not panic
-    generate_completion(Shell::Fish);
-}
+    #[test]
+    fn test_generate_completion_fish() {
+        use gold_digger::cli::Shell;
+        // This should not panic
+        generate_completion(Shell::Fish);
+    }
 
-#[test]
-fn test_generate_completion_powershell() {
-    use gold_digger::cli::Shell;
-    // This should not panic
-    generate_completion(Shell::PowerShell);
+    #[test]
+    fn test_generate_completion_powershell() {
+        use gold_digger::cli::Shell;
+        // This should not panic
+        generate_completion(Shell::PowerShell);
+    }
 }

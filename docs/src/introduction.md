@@ -7,7 +7,7 @@ Welcome to the Gold Digger documentation! Gold Digger is a fast, secure MySQL/Ma
 Gold Digger is a command-line tool designed for extracting data from MySQL and MariaDB databases with structured output support. It provides:
 
 - **Multiple Output Formats**: Export data as CSV, JSON, or TSV
-- **Security First**: Built-in TLS/SSL support and credential protection
+- **Security First**: Built-in TLS (rustls) support and credential protection
 - **Type Safety**: Rust-powered reliability with proper NULL handling
 - **CLI-First Design**: Environment variable support with CLI override capability
 

@@ -53,6 +53,7 @@ testcontainers-modules = { version = "0.12", features = ["mariadb","blocking"] }
 tempfile = "3.21"
 assert_cmd = "2.0"
 insta = "1.43"
+temp-env = "0.2"
 
 [profile.release]
 lto = true

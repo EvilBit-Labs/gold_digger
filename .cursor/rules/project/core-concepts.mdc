@@ -76,7 +76,6 @@ src/
 ## Known Bugs & Issues
 
 1. **Memory**: No streaming support - O(row_count × row_width) memory usage
-2. **Version mismatch**: CHANGELOG.md v0.2.6 vs Cargo.toml v0.2.5
 
 ## Feature Flags
 
@@ -86,9 +85,7 @@ additional_mysql_types = ["mysql_common?/bigdecimal", "mysql_common?/rust_decima
 verbose = []                               # Conditional println!/eprintln!
 ```
 
-**Note**: TLS is now always available and is no longer a feature flag. The previous dual TLS approach (native-tls vs rustls) has been consolidated into a single, consistent rustls-only implementation.
-
-**Note**: Simplified to rustls-only TLS implementation. The previous dual TLS approach (native-tls vs rustls) has been consolidated into a single, consistent implementation.
+**Note**: TLS is now always available and is no longer a feature flag. The project uses a rustls-only implementation instead of the previous dual native-tls/rustls approach.
 
 ## Quality Standards
 
@@ -203,8 +200,8 @@ fn write_output(rows: &[Row], output_file: &str, output: &mut impl Write) -> Res
 ```bash
 # Build variations
 cargo build --release                                    # Standard build (TLS always available)
-cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"  # Build without extra features
-cargo build --no-default-features --features "csv json" # Minimal build (TLS still available)
+cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"  # No-default-features build
+cargo build --no-default-features --features "csv json" # No-default-features build
 
 # Development (CLI-first approach)
 cargo install --path .  # Local install

@@ -28,7 +28,7 @@ cargo build
 # Release build
 cargo build --release
 
-# Standard build (TLS always available)
+# Standard build (TLS enabled by default)
 cargo build --release
 
 # Minimal build (no default features)
@@ -469,21 +469,23 @@ Before submitting any changes:
 ### Feature Combinations
 
 ```bash
-# Default build (TLS always available)
+# Default build (includes TLS, JSON, CSV, additional MySQL types, verbose logging)
 cargo build --release
 
-# Minimal build (no extra types, TLS still available)
+# Minimal build (includes TLS, only CSV and JSON output formats)
 cargo build --no-default-features --features "csv json"
 
-# Database admin build (all MySQL types)
+# Database admin build (includes TLS, all MySQL types, all output formats)
 cargo build --release --features "default additional_mysql_types"
 ```
 
+**TLS Configuration:** TLS support is **always compiled in** by default and cannot be disabled via feature flags. The `mysql` crate dependency includes `rustls-tls` feature, and TLS dependencies (`rustls`, `rustls-native-certs`, `rustls-pemfile`) are always included in the build. To disable TLS at runtime, use `--tls-mode=disabled` CLI flag or configure the database connection URL appropriately.
+
 ### Dependencies by Feature
 
-- **Base:** `mysql`, `anyhow`, `csv`, `serde_json`, `clap`
-- **TLS:** `mysql/rustls-tls`, `rustls`, `rustls-native-certs`, `rustls-pemfile` (always included - pure Rust implementation with platform certificate store integration)
-- **Types:** `mysql_common` with bigdecimal, rust_decimal, time, frunk
+- **Base:** `mysql` (with `rustls-tls` feature), `anyhow`, `csv`, `serde_json`, `clap`
+- **TLS:** `rustls`, `rustls-native-certs`, `rustls-pemfile` (always included - pure Rust implementation with platform certificate store integration)
+- **Types:** `mysql_common` with bigdecimal, rust_decimal, time, frunk (when `additional_mysql_types` feature enabled)
 - **No native TLS dependencies** in any configuration
 
 ---

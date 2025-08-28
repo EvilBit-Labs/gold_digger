@@ -258,7 +258,7 @@ impl TlsError {
     pub fn is_client_configuration_error(&self) -> bool {
         matches!(
             self,
-            Self::CaFileNotFound { .. } | Self::InvalidCaFormat { .. } | Self::MutuallyExclusiveFlags { .. }
+            Self::CaFileNotFound { .. } | Self::InvalidCaFormat { .. } | Self::MutuallyExclusiveFlags { .. },
         )
     }
 
@@ -764,10 +764,9 @@ mod tests {
     fn test_to_ssl_opts_default() {
         let config = TlsConfig::default();
         let ssl_opts = config.to_ssl_opts();
-        {
-            assert!(ssl_opts.is_ok());
-            assert!(ssl_opts.unwrap().is_some());
-        }
+        assert!(ssl_opts.is_ok());
+        let opt = ssl_opts.unwrap();
+        assert!(opt.is_some());
     }
 
     #[test]

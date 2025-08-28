@@ -339,7 +339,7 @@ cargo test --no-default-features --features "csv json"
 cargo test --release
 
 # Test without optional features
-cargo test --no-default-features --features "json csv additional_mysql_types verbose"
+cargo test --no-default-features
 ```
 
 ## Database Setup for Testing

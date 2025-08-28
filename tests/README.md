@@ -17,17 +17,40 @@ Contains testcontainers-based TLS integration tests that validate:
 
 ## Running Tests
 
-### All Tests (excluding Docker-dependent tests)
+### Full Test Suite
 
 ```bash
-# Standard tests with TLS support (always available)
-cargo test --test tls_integration
+# Run all tests (unit, integration, and TLS tests)
+cargo test
 
 # Release build tests
+cargo test --release
+
+# Run all tests including Docker-dependent ones (requires Docker)
+cargo test -- --ignored
+```
+
+### TLS Integration Tests Only
+
+```bash
+# Run only TLS integration tests
+cargo test --test tls_integration
+
+# Release build TLS tests
 cargo test --test tls_integration --release
 
-# Minimal build tests (without TLS)
-cargo test --test tls_integration --no-default-features --features json,csv
+# Run TLS tests including Docker-dependent ones (requires Docker)
+cargo test --test tls_integration -- --ignored
+```
+
+### Minimal Build Tests (without TLS)
+
+```bash
+# Run library unit tests only (no TLS features)
+cargo test --no-default-features --features json,csv --lib
+
+# Run all unit tests (no TLS features)
+cargo test --no-default-features --features json,csv --tests
 ```
 
 ### Docker-dependent Tests

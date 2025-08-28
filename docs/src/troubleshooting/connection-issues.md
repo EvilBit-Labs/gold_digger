@@ -108,66 +108,37 @@ mysql://username:password@hostname:port/database
 
 ## TLS/SSL Connection Issues
 
-### TLS Connection Issues (Exit Code 3)
+### TLS Handshake and Connection Issues (Exit Code 3)
 
-**Error Message:**
+**Common Error Messages:**
 
 ```text
 TLS handshake failed: protocol version mismatch
-```
-
-**Solutions:**
-
-```bash
-# TLS support is always available - check server configuration
-# Verify server supports TLS 1.2 or higher
-# Check certificate validity and chain
-```
-
-### Certificate Validation Failed (Exit Code 3)
-
-**Error Message:**
-
-```text
-Certificate validation failed: unable to get local issuer certificate.
-Check certificate chain, expiration, and CA configuration
-```
-
-**Causes & Solutions:**
-
-- **Missing CA certificates**: Install system CA certificates
-- **Self-signed certificates**: Add CA to system trust store
-- **Expired certificates**: Renew server certificates
-- **Certificate chain issues**: Verify complete certificate chain
-- **Testing environments**: Use `ssl-mode=preferred` or `ssl-mode=disabled` in connection URL (not recommended for production)
-
-### TLS Handshake Failed (Exit Code 3)
-
-**Error Message:**
-
-```text
-TLS handshake failed: protocol version mismatch.
-Check server TLS configuration and certificate validity
-```
-
-**Causes & Solutions:**
-
-- **TLS version mismatch**: Ensure server supports TLS 1.2+
-- **Cipher suite incompatibility**: Update server TLS configuration
-- **Certificate issues**: Verify certificate validity and chain
-
-### Unsupported TLS Version (Exit Code 3)
-
-**Error Message:**
-
-```text
+Certificate validation failed: unable to get local issuer certificate
 Unsupported TLS version: 1.0. Only TLS 1.2 and 1.3 are supported
 ```
 
-**Solution:**
+**Causes & Solutions:**
 
-- Upgrade database server to support TLS 1.2 or 1.3
-- Update server TLS configuration
+- **TLS version mismatch**: Ensure server supports TLS 1.2 or higher
+- **Cipher suite incompatibility**: Update server TLS configuration
+- **Certificate validation issues**:
+  - Install system CA certificates
+  - Add self-signed certificates to system trust store
+  - Verify certificate validity and complete certificate chain
+  - Renew expired server certificates
+- **Testing environments**: Use `ssl-mode=preferred` or `ssl-mode=disabled` in connection URL (not recommended for production)
+
+**Diagnostic Steps:**
+
+```bash
+# Check server TLS configuration
+SHOW VARIABLES LIKE 'tls_version';
+SHOW VARIABLES LIKE 'ssl_cipher';
+
+# Verify certificate chain
+openssl s_client -connect hostname:3306 -servername hostname
+```
 
 ## Network Troubleshooting
 
