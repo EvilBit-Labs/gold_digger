@@ -2,7 +2,7 @@ style: github
 template: CHANGELOG.tpl.md
 info:
   title: CHANGELOG
-  repository_url: https://github.com/unclesp1d3r/gold_digger
+  repository_url: https://github.com/EvilBit-Labs/gold_digger
 options:
   commits:
     filters:

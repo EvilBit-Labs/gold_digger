@@ -9,11 +9,11 @@ body:
       value: |
         > **⚠️ IMPORTANT: For security vulnerabilities, please use GitHub's private vulnerability reporting instead of opening a public issue.**
         >
-        > **Preferred method**: Go to the [Security tab](https://github.com/UncleSp1d3r/gold_digger/security) and click "Report a vulnerability" for private disclosure.
+        > **Preferred method**: Go to the [Security tab](https://github.com/EvilBit-Labs/gold_digger/security) and click "Report a vulnerability" for private disclosure.
         >
         > **If you must disclose publicly**: Redact all exploit details, sensitive information, and proof-of-concept code. Only include enough information for the maintainer to understand the issue scope.
         >
-        > **Contact maintainer directly**: For urgent or highly sensitive issues, contact [UncleSp1d3r](https://github.com/UncleSp1d3r) or email <unclespider@pm.me>.
+        > **Contact maintainer directly**: For urgent or highly sensitive issues, contact [EvilBit-Labs](https://github.com/EvilBit-Labs) or email <support@evilbitlabs.io>.
 
   - type: textarea
     id: vulnerability-description
@@ -170,7 +170,7 @@ body:
 
         **For sensitive security issues, please contact the maintainer directly:**
 
-        - **GitHub**: [UncleSp1d3r](https://github.com/UncleSp1d3r)
-        - **Email**: <unclespider@pm.me>
+        - **GitHub**: [EvilBit-Labs](https://github.com/EvilBit-Labs)
+        - **Email**: <support@evilbitlabs.io>
 
         **Note**: This is a single-maintainer project. Response times may vary, but security issues will be prioritized.

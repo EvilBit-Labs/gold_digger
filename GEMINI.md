@@ -300,6 +300,6 @@ testcontainers = "0.15" # Database integration
 
 ---
 
-**Maintainer:** UncleSp1d3r\
+**Maintainer:** EvilBit-Labs\
 **Status:** Active development toward v1.0\
 **Workflow:** Single-maintainer with CodeRabbit.ai reviews

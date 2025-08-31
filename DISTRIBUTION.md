@@ -36,7 +36,7 @@ Gold Digger uses [cargo-dist](https://opensource.axo.dev/cargo-dist/) to provide
 
 3. **Homebrew Formula**
 
-   - Available via `unclesp1d3r/tap/gold-digger`
+   - Available via `EvilBit-Labs/tap/gold-digger`
    - Supports both Intel and Apple Silicon Macs
    - Automatic dependency management
 
@@ -52,30 +52,30 @@ Gold Digger uses [cargo-dist](https://opensource.axo.dev/cargo-dist/) to provide
 
 ```bash
 # Linux/macOS (shell script)
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/unclesp1d3r/gold_digger/releases/latest/download/gold_digger-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/EvilBit-Labs/gold_digger/releases/latest/download/gold_digger-installer.sh | sh
 
 # Windows (PowerShell)
-powershell -c "irm https://github.com/unclesp1d3r/gold_digger/releases/latest/download/gold_digger-installer.ps1 | iex"
+powershell -c "irm https://github.com/EvilBit-Labs/gold_digger/releases/latest/download/gold_digger-installer.ps1 | iex"
 ```
 
 ### Package Managers
 
 ```bash
 # Homebrew (macOS/Linux)
-brew tap unclesp1d3r/tap
+brew tap EvilBit-Labs/tap
 brew install gold-digger
 
 # Chocolatey (Windows) — Planned
 # choco install gold-digger
 
 # Scoop (Windows) — Planned
-# scoop bucket add unclesp1d3r https://github.com/unclesp1d3r/scoop-bucket
+# scoop bucket add unclesp1d3r https://github.com/EvilBit-Labs/scoop-bucket
 # scoop install gold-digger
 ```
 
 ### Manual Download
 
-1. Visit [GitHub Releases](https://github.com/unclesp1d3r/gold_digger/releases)
+1. Visit [GitHub Releases](https://github.com/EvilBit-Labs/gold_digger/releases)
 2. Download the appropriate archive for your platform:
    - Linux: `gold_digger-x86_64-unknown-linux-gnu.tar.gz`
    - macOS: `gold_digger-x86_64-apple-darwin.tar.gz`
@@ -102,7 +102,7 @@ Each release includes comprehensive SBOMs in CycloneDX format:
 
 ```bash
 # Download and inspect SBOM
-curl -L -o sbom.json https://github.com/unclesp1d3r/gold_digger/releases/latest/download/gold_digger-x86_64-unknown-linux-gnu.sbom.cdx.json
+curl -L -o sbom.json https://github.com/EvilBit-Labs/gold_digger/releases/latest/download/gold_digger-x86_64-unknown-linux-gnu.sbom.cdx.json
 
 # View dependencies
 jq '.components[] | {name: .name, version: .version, type: .type}' sbom.json
@@ -114,7 +114,7 @@ All artifacts include SHA256 checksums:
 
 ```bash
 # Download checksums
-curl -L -o SHA256SUMS https://github.com/unclesp1d3r/gold_digger/releases/latest/download/SHA256SUMS
+curl -L -o SHA256SUMS https://github.com/EvilBit-Labs/gold_digger/releases/latest/download/SHA256SUMS
 
 # Verify downloaded binary
 sha256sum -c SHA256SUMS --ignore-missing
@@ -184,7 +184,7 @@ The cargo-dist workflow (`.github/workflows/cargo-dist.yml`) integrates with the
 
    ```bash
    # Force specific architecture
-   curl -L https://github.com/unclesp1d3r/gold_digger/releases/latest/download/gold_digger-aarch64-unknown-linux-gnu.tar.gz
+   curl -L https://github.com/EvilBit-Labs/gold_digger/releases/latest/download/gold_digger-aarch64-unknown-linux-gnu.tar.gz
    ```
 
 2. **Permission Issues**: Installers may need elevated permissions:
@@ -204,8 +204,8 @@ The cargo-dist workflow (`.github/workflows/cargo-dist.yml`) integrates with the
 
 ### Getting Help
 
-- **Issues**: [GitHub Issues](https://github.com/unclesp1d3r/gold_digger/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/unclesp1d3r/gold_digger/discussions)
+- **Issues**: [GitHub Issues](https://github.com/EvilBit-Labs/gold_digger/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/EvilBit-Labs/gold_digger/discussions)
 - **Security**: See [SECURITY.md](SECURITY.md) for security-related issues
 
 ## Future Enhancements

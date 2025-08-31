@@ -2,14 +2,14 @@
 
 Gold Digger is a Rust-based MySQL/MariaDB query tool that exports results to structured data files (CSV, JSON, TSV). Designed for headless operation and automation workflows, it provides CLI-first configuration with environment variable fallbacks.
 
-[![CI](https://github.com/unclesp1d3r/gold_digger/actions/workflows/ci.yml/badge.svg)](https://github.com/unclesp1d3r/gold_digger/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/unclesp1d3r/gold_digger/actions/workflows/codeql.yml/badge.svg)](https://github.com/unclesp1d3r/gold_digger/actions/workflows/codeql.yml)
-[![Security](https://github.com/unclesp1d3r/gold_digger/actions/workflows/security.yml/badge.svg)](https://github.com/unclesp1d3r/gold_digger/actions/workflows/security.yml)
-[![codecov](https://codecov.io/github/unclesp1d3r/gold_digger/graph/badge.svg)](https://codecov.io/github/unclesp1d3r/gold_digger)
-[![GitHub](https://img.shields.io/github/license/unclesp1d3r/gold_digger)](https://github.com/unclesp1d3r/gold_digger/blob/main/LICENSE)
-[![GitHub issues](https://img.shields.io/github/issues/unclesp1d3r/gold_digger)](https://github.com/unclesp1d3r/gold_digger/issues)
-[![GitHub Repo stars](https://img.shields.io/github/stars/unclesp1d3r/gold_digger?style=social)](https://github.com/unclesp1d3r/gold_digger/stargazers)
-[![Maintenance](https://img.shields.io/maintenance/yes/unclesp1d3r/gold_digger)](https://github.com/unclesp1d3r/gold_digger/graphs/commit-activity)
+[![CI](https://github.com/EvilBit-Labs/gold_digger/actions/workflows/ci.yml/badge.svg)](https://github.com/EvilBit-Labs/gold_digger/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/EvilBit-Labs/gold_digger/actions/workflows/codeql.yml/badge.svg)](https://github.com/EvilBit-Labs/gold_digger/actions/workflows/codeql.yml)
+[![Security](https://github.com/EvilBit-Labs/gold_digger/actions/workflows/security.yml/badge.svg)](https://github.com/EvilBit-Labs/gold_digger/actions/workflows/security.yml)
+[![codecov](https://codecov.io/github/EvilBit-Labs/gold_digger/graph/badge.svg)](https://codecov.io/github/EvilBit-Labs/gold_digger)
+[![GitHub](https://img.shields.io/github/license/EvilBit-Labs/gold_digger)](https://github.com/EvilBit-Labs/gold_digger/blob/main/LICENSE)
+[![GitHub issues](https://img.shields.io/github/issues/EvilBit-Labs/gold_digger)](https://github.com/EvilBit-Labs/gold_digger/issues)
+[![GitHub Repo stars](https://img.shields.io/github/stars/EvilBit-Labs/gold_digger?style=social)](https://github.com/EvilBit-Labs/gold_digger/stargazers)
+[![Maintenance](https://img.shields.io/maintenance/yes/EvilBit-Labs/gold_digger)](https://github.com/EvilBit-Labs/gold_digger/graphs/commit-activity)
 
 ## Features
 
@@ -33,7 +33,7 @@ The name "Gold Digger" refers to the tool's ability to extract valuable data fro
 
 ### Pre-built Binaries (Recommended)
 
-Download pre-built binaries from the [GitHub Releases](https://github.com/unclesp1d3r/gold_digger/releases) page, which include:
+Download pre-built binaries from the [GitHub Releases](https://github.com/EvilBit-Labs/gold_digger/releases) page, which include:
 
 - **Cross-platform binaries** for Linux (x86_64, ARM64), macOS (Intel, Apple Silicon), and Windows
 - **Automated installers** for easy setup
@@ -44,17 +44,17 @@ Download pre-built binaries from the [GitHub Releases](https://github.com/uncles
 
 ```bash
 # Shell installer (Linux/macOS)
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/unclesp1d3r/gold_digger/releases/latest/download/gold_digger-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/EvilBit-Labs/gold_digger/releases/latest/download/gold_digger-installer.sh | sh
 
 # PowerShell installer (Windows)
-powershell -c "irm https://github.com/unclesp1d3r/gold_digger/releases/latest/download/gold_digger-installer.ps1 | iex"
+powershell -c "irm https://github.com/EvilBit-Labs/gold_digger/releases/latest/download/gold_digger-installer.ps1 | iex"
 ```
 
 #### Package Managers
 
 ```bash
 # Homebrew (macOS/Linux)
-brew install unclesp1d3r/tap/gold-digger
+brew install EvilBit-Labs/tap/gold-digger
 
 # MSI installer (Windows)
 # Download from releases page: gold_digger-x86_64-pc-windows-msvc.msi
@@ -66,7 +66,7 @@ brew install unclesp1d3r/tap/gold-digger
 To build and install Gold Digger from source:
 
 ```bash
-git clone git@github.com:unclesp1d3r/gold_digger.git
+git clone git@github.com:EvilBit-Labs/gold_digger.git
 cd gold_digger
 cargo install --path .
 ```
@@ -308,11 +308,11 @@ Gold Digger maintains high security and quality standards for all releases:
 
 ## Authors
 
-Gold Digger is authored by [@unclesp1d3r](https://www.github.com/unclesp1d3r)
+Gold Digger is authored by [@unclesp1d3r](https://www.github.com/EvilBit-Labs)
 
 ## Contributing and Feedback
 
-We welcome your feedback and suggestions for Gold Digger! If you have any ideas for new features, encounter any bugs or issues, or have any other comments, please reach out to us by creating an issue on our [GitHub repository](https://github.com/unclesp1d3r/gold_digger/issues).
+We welcome your feedback and suggestions for Gold Digger! If you have any ideas for new features, encounter any bugs or issues, or have any other comments, please reach out to us by creating an issue on our [GitHub repository](https://github.com/EvilBit-Labs/gold_digger/issues).
 
 If you're interested in contributing to Gold Digger, we encourage you to submit a pull request. Please see our `CONTRIBUTING.md` for more information on how to get started.
 

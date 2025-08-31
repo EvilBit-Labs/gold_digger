@@ -49,7 +49,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/UncleSp1d3r/gold_digger.git
+git clone https://github.com/EvilBit-Labs/gold_digger.git
 cd gold_digger
 ```
 
@@ -587,8 +587,8 @@ instruments -t "Time Profiler" target/release/gold_digger
 ### Resources
 
 - **Documentation**: This guide and API docs
-- **Issues**: [GitHub Issues](https://github.com/UncleSp1d3r/gold_digger/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/UncleSp1d3r/gold_digger/discussions)
+- **Issues**: [GitHub Issues](https://github.com/EvilBit-Labs/gold_digger/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/EvilBit-Labs/gold_digger/discussions)
 
 ### Common Commands Reference
 

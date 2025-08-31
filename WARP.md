@@ -403,7 +403,7 @@ gh --version
 # Common operations
 gh issue create --title "Bug: Type conversion panic" --body "Details..."
 gh pr create --title "Fix: Extension dispatch pattern" --body "Fixes the Some(&_) bug"
-gh repo view UncleSp1d3r/gold_digger
+gh repo view EvilBit-Labs/gold_digger
 gh workflow list
 ```
 

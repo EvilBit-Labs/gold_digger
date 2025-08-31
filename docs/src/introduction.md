@@ -36,6 +36,6 @@ If you encounter issues or have questions:
 
 1. Check the [Troubleshooting Guide](troubleshooting/README.md)
 2. Review the [Configuration Documentation](usage/configuration.md)
-3. Visit the [GitHub Repository](https://github.com/UncleSp1d3r/gold_digger)
+3. Visit the [GitHub Repository](https://github.com/EvilBit-Labs/gold_digger)
 
 Let's get started with Gold Digger!

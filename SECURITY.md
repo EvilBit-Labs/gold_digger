@@ -15,15 +15,15 @@ Gold Digger follows semantic versioning. Security updates are provided for the f
 
 ### Preferred Method: Private Disclosure
 
-1. **Go to the [Security tab](https://github.com/unclesp1d3r/gold_digger/security)**
+1. **Go to the [Security tab](https://github.com/EvilBit-Labs/gold_digger/security)**
 2. Click "Report a vulnerability"
 3. Fill out the security report form
 4. Provide detailed information about the vulnerability
 
 ### Alternative Methods
 
-- **Email**: <unclespider@pm.me> (for urgent or highly sensitive issues)
-- **GitHub Issue**: Use the [Security Report template](https://github.com/unclesp1d3r/gold_digger/issues/new?template=security_report.yml) (public disclosure - redact sensitive details)
+- **Email**: <support@evilbitlabs.io> (for urgent or highly sensitive issues)
+- **GitHub Issue**: Use the [Security Report template](https://github.com/EvilBit-Labs/gold_digger/issues/new?template=security_report.yml) (public disclosure - redact sensitive details)
 
 ### What to Include
 
@@ -124,7 +124,7 @@ Security issues are prioritized over feature development.
 
 - **Maintainer**: UncleSp1d3r
 - **GitHub**: [@unclesp1d3r](https://github.com/unclesp1d3r)
-- **Email**: <unclespider@pm.me>
+- **Email**: <unclesp1d3r@evilbitlabs.io>
 
 ### Security Team
 

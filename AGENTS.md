@@ -11,7 +11,7 @@ Gold Digger is a Rust-based MySQL/MariaDB query tool that outputs results in CSV
 - CLI-first (uses Clap) with environment variable overrides
 - Outputs to structured formats based on file extension
 - Fully materialized result sets (no streaming)
-- Single-maintainer project by UncleSp1d3r
+- Single-maintainer project by EvilBit-Labs
 - Under active development toward v1.0
 
 ## 🚨 Critical Safety Requirements
@@ -388,6 +388,6 @@ testcontainers = "0.15"                                      # For real MySQL/Ma
 
 ---
 
-**Maintainer:** UncleSp1d3r
+**Maintainer:** EvilBit-Labs
 **Workflow:** Single-maintainer with CodeRabbit.ai reviews
 **Status:** Active development toward v1.0

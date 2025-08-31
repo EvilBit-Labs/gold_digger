@@ -2,7 +2,7 @@
 
 **Version**: 1.0
 **Status**: Draft
-**Author(s)**: UncleSp1d3r
+**Author(s)**: EvilBit-Labs
 **Date Created**: 2025-01-15
 **Last Modified**: 2025-01-15
 
@@ -632,13 +632,13 @@ pub enum GoldDiggerError {
 
 ## Document Metadata
 
-| Field               | Value       |
-| ------------------- | ----------- |
-| **Version**         | 1.0         |
-| **Created Date**    | 2025-01-15  |
-| **Last Modified**   | 2025-08-16  |
-| **Author(s)**       | UncleSp1d3r |
-| **Approval Status** | Draft       |
+| Field               | Value        |
+| ------------------- | ------------ |
+| **Version**         | 1.0          |
+| **Created Date**    | 2025-01-15   |
+| **Last Modified**   | 2025-08-16   |
+| **Author(s)**       | EvilBit-Labs |
+| **Approval Status** | Draft        |
 
 ---
 

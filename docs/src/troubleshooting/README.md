@@ -22,7 +22,7 @@ Before diving into specific issues, try these basic checks:
 
 If you can't find a solution here:
 
-1. Check the [GitHub Issues](https://github.com/UncleSp1d3r/gold_digger/issues)
+1. Check the [GitHub Issues](https://github.com/EvilBit-Labs/gold_digger/issues)
 2. Review the [Configuration Guide](../usage/configuration.md)
 3. Create a new issue with detailed error information
 

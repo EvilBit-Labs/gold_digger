@@ -4,7 +4,7 @@ Install Gold Digger on macOS systems.
 
 ## Pre-built Binaries (Recommended)
 
-1. Visit the [GitHub Releases](https://github.com/UncleSp1d3r/gold_digger/releases) page
+1. Visit the [GitHub Releases](https://github.com/EvilBit-Labs/gold_digger/releases) page
 2. Download the latest `gold_digger-macos` file
 3. Make it executable and move to PATH:
 
@@ -50,7 +50,7 @@ cargo install gold_digger
 
 ```bash
 # Clone the repository
-git clone https://github.com/UncleSp1d3r/gold_digger.git
+git clone https://github.com/EvilBit-Labs/gold_digger.git
 cd gold_digger
 
 # Build release version
@@ -92,4 +92,4 @@ gold_digger --help
 If you encounter issues:
 
 1. Check the [Troubleshooting Guide](../troubleshooting/README.md)
-2. Visit the [GitHub Issues](https://github.com/UncleSp1d3r/gold_digger/issues) page
+2. Visit the [GitHub Issues](https://github.com/EvilBit-Labs/gold_digger/issues) page

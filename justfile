@@ -316,7 +316,7 @@ status:
     @echo "Architecture: Environment variable driven, structured output"
     @echo "Current: v0.2.6 (check version discrepancy)"
     @echo "Target: v1.0 with CLI interface"
-    @echo "Maintainer: UncleSp1d3r"
+    @echo "Maintainer: EvilBit-Labs"
     @echo ""
     @echo "Critical Issues:"
     @echo "  • Type conversion panics on NULL/non-string values"
