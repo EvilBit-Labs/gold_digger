@@ -67,11 +67,9 @@ pub fn rows_to_strings(rows: Vec<Row>) -> anyhow::Result<Vec<Vec<String>>> {
         let mut data_row = Vec::with_capacity(row.len());
         for i in 0..row.len() {
             match row.as_ref(i) {
-                Some(value) => {
-                    match mysql_value_to_string(value) {
-                        Ok(string_value) => data_row.push(string_value),
-                        Err(e) => return Err(e.context("Type conversion failed during row processing")),
-                    }
+                Some(value) => match mysql_value_to_string(value) {
+                    Ok(string_value) => data_row.push(string_value),
+                    Err(e) => return Err(e.context("Type conversion failed during row processing")),
                 },
                 None => data_row.push(String::new()),
             }
@@ -178,7 +176,14 @@ fn mysql_value_to_string(value: &mysql::Value) -> anyhow::Result<String> {
 
             let sign = if *negative { "-" } else { "" };
             if *days > 0 {
-                Ok(format!("{}{:02}:{:02}:{:02}.{:06}", sign, days * 24 + *hours as u32, minutes, seconds, microseconds))
+                Ok(format!(
+                    "{}{:02}:{:02}:{:02}.{:06}",
+                    sign,
+                    days * 24 + *hours as u32,
+                    minutes,
+                    seconds,
+                    microseconds
+                ))
             } else {
                 Ok(format!("{}{:02}:{:02}:{:02}.{:06}", sign, hours, minutes, seconds, microseconds))
             }
@@ -321,11 +326,11 @@ mod tests {
         // For now, this serves as documentation that the error handling is in place
         // In a real scenario, invalid date/time values from the database would trigger this path
         let error = anyhow::anyhow!("Type conversion error: Invalid month value 13 in date");
-        
+
         // Verify that such an error would get mapped to exit code 4
         use crate::exit::map_error_to_exit_code;
         assert_eq!(map_error_to_exit_code(&error), 4);
-        
+
         // Verify the error message contains the expected text
         assert!(error.to_string().contains("Type conversion error"));
     }
