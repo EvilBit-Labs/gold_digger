@@ -93,9 +93,6 @@ jobs:
         run: |
           just install-tools
 
-      - name: Run pre-commit hooks
-        uses: pre-commit/action@v3.0.1
-
       - name: Setup summary
         run: |
           echo "✅ Gold Digger development environment setup complete!"
