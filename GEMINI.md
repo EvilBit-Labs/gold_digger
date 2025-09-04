@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Gold Digger is a Rust-based MySQL/MariaDB query tool configured via CLI and environment variables that outputs query results to stdout or files in CSV/JSON/TSV formats. It defines essential architecture patterns, safety requirements, and development constraints for headless database automation workflows with CLI-first architecture.
+Gold Digger is a Rust-based MySQL/MariaDB query tool that outputs structured data (CSV/JSON/TSV) via environment variables. It's designed for headless database automation workflows with CLI-first architecture.
 
 ## Project File Organization
 
@@ -18,7 +18,6 @@ Gold Digger is a Rust-based MySQL/MariaDB query tool configured via CLI and envi
 - **justfile**: Cross-platform build automation and common tasks
 - **.pre-commit-config.yaml**: Git hook configuration for quality gates
 - **CHANGELOG.md**: Auto-generated version history (conventional commits)
-- **dist-workspace.toml**: `cargo-dist` workspace configuration
 
 ### Documentation Standards
 
@@ -50,27 +49,47 @@ pub fn rows_to_strings(rows: Vec<mysql::Row>) -> anyhow::Result<Vec<Vec<String>>
 - Implement credential redaction in all log output
 - Use `?` operator for error propagation
 
-## 🚨 Critical Safety Requirements
+## 🚨 Critical Safety Rules
 
-### Database Type Safety (PANIC RISK)
+### Database Value Conversion (PANIC RISK)
 
 ```rust
-// DANGEROUS - causes runtime panics on NULL/non-string values
-from_value::<String>(row[column.name_str().as_ref()])
+// ❌ NEVER - causes panics on NULL/non-string types
+// from_value::<String>(row[column.name_str().as_ref()])
+// Use mysql_value_to_string() for CSV/TSV or mysql_value_to_json() for JSON instead
 
-// SAFE - explicit NULL handling required
-match mysql_value {
-    mysql::Value::NULL => "".to_string(),
-    val => from_value_opt::<String>(val.clone())
-        .unwrap_or_else(|_| format!("{:?}", val))
+// ✅ ALWAYS - safe NULL handling with dedicated helpers
+
+/// Converts MySQL value to String for CSV/TSV output
+fn mysql_value_to_string(mysql_value: &mysql::Value) -> String {
+    match mysql_value {
+        mysql::Value::NULL => "".to_string(),
+        val => from_value_opt::<String>(val.clone()).unwrap_or_else(|_| format!("{:?}", val)),
+    }
 }
+
+/// Converts MySQL value to serde_json::Value for JSON output
+fn mysql_value_to_json(mysql_value: &mysql::Value) -> serde_json::Value {
+    match mysql_value {
+        mysql::Value::NULL => serde_json::Value::Null,
+        val => from_value_opt::<serde_json::Value>(val.clone())
+            .unwrap_or_else(|_| serde_json::Value::String(format!("{:?}", val))),
+    }
+}
+
+// Usage per output format:
+// - CSV/TSV: mysql_value_to_string(&mysql_value)
+// - JSON: mysql_value_to_json(&mysql_value)
 ```
 
-### Security (NON-NEGOTIABLE)
+### Security (NEVER VIOLATE)
 
-- **NEVER** log `DATABASE_URL` or credentials - implement automatic redaction
-- **NEVER** make external network calls at runtime (offline-first design)
-- **ALWAYS** validate and sanitize all user inputs
+- **NEVER** log `DATABASE_URL` or credentials - always redact
+- **NEVER** make external service calls at runtime (offline-first)
+- ⚠️ **WARNING**: `CAST(column AS CHAR)` can corrupt binary data or produce mojibake for text in lossy encodings. Use safer alternatives:
+  - **BLOB/BINARY columns**: Use `HEX(column)` or `TO_BASE64(column)` for lossless binary representation
+  - **Text columns**: Use `CAST(column AS CHAR CHARACTER SET utf8mb4)` or `CONVERT(column USING utf8mb4)` to specify explicit encoding
+  - **Numeric/Date columns**: `CAST(column AS CHAR)` is generally safe for these types
 
 ### Configuration Architecture
 
@@ -90,46 +109,30 @@ Gold Digger uses CLI-first configuration with environment variable fallbacks:
 - `DATABASE_QUERY`: SQL query to execute
 - `OUTPUT_FILE`: Determines format by extension (.csv/.json/fallback to TSV)
 
-## Architecture Patterns
-
-### Configuration Resolution (CLI-First)
+**Resolution Pattern:**
 
 ```rust
-// Priority: CLI flags > Environment variables > Error
 fn resolve_config_value(cli: &Cli) -> anyhow::Result<String> {
     if let Some(value) = &cli.field {
         Ok(value.clone()) // CLI flag (highest priority)
     } else if let Ok(value) = env::var("ENV_VAR") {
         Ok(value) // Environment variable (fallback)
     } else {
-        anyhow::bail!("Missing required configuration")
+        anyhow::bail!("Missing required configuration") // Error if neither
     }
 }
 ```
 
-### Format Module Contract
-
-All format modules must implement:
-
-```rust
-pub fn write<W: Write>(rows: Vec<Vec<String>>, output: W) -> anyhow::Result<()>
-```
-
 **Note:** No dotenv support - use exported environment variables only.
 
-## Security Requirements (NON-NEGOTIABLE)
+## Security Requirements
 
-### Credential Protection
+### Critical Security Rules
 
-- **NEVER** log `DATABASE_URL` or credentials - implement automatic redaction
-- **NEVER** hardcode secrets in code or configuration
-- **ALWAYS** validate user inputs before processing
-
-### Airgap Compatibility
-
-- **Allowed**: Configured database connections (MySQL/MariaDB only)
-- **Prohibited**: Telemetry, call-home, non-essential outbound connections
-- **Runtime**: No external dependencies during execution
+- **Never log credentials:** Implement redaction for `DATABASE_URL` and secrets
+- **No hardcoded secrets:** Use environment variables or GitHub OIDC
+- **Vulnerability policy:** Block releases with critical vulnerabilities
+- **Airgap compatibility:** No telemetry or external calls in production
 
 ### Safe Patterns
 
@@ -153,83 +156,41 @@ println!("Connecting to database...");
 ### Feature Flags
 
 ```toml
-default = ["json", "csv", "additional_mysql_types", "verbose"]
+default = ["json", "csv", "ssl", "additional_mysql_types", "verbose"]
+ssl = ["mysql/native-tls"]                 # Platform native TLS (default)
+ssl-rustls = ["mysql/rustls-tls"]         # Pure Rust TLS (alternative)
 additional_mysql_types = [...]             # BigDecimal, Decimal, etc.
 verbose = []                               # Conditional logging
 ```
 
-Note: TLS is now always available and is no longer a feature flag.
-
 **TLS Implementation Notes:**
 
-- Single rustls-based implementation with platform certificate store integration
-- Simplified from previous dual TLS approach (native-tls vs rustls)
-- Consistent cross-platform behavior with enhanced security controls
-
-## Code Quality Standards (REQUIRED Before Commits)
-
-Run these commands before any commit:
-
-```bash
-just fmt-check    # cargo fmt --check (100-char line limit)
-just lint         # cargo clippy -- -D warnings (ZERO tolerance)
-just test         # cargo nextest run (preferred) or cargo test
-just security     # cargo audit (advisory)
-```
-
-### Formatting & Linting
-
-- **Line limit**: 100 characters (enforced by `rustfmt.toml`)
-- **Clippy warnings**: Zero tolerance (`-D warnings`)
-- **Error handling**: Use `anyhow` for applications, `thiserror` for libraries
-- **Documentation**: Doc comments (`///`) required for all public functions
-
-### Testing Requirements
-
-- **Runner**: `cargo nextest run` (preferred) or `cargo test`
-- **Coverage**: Target ≥80% with `cargo llvm-cov`
-- **Cross-platform**: Must pass on macOS, Windows, Linux
-
-## Testing Strategy
-
-### Test Organization
-
-- **Unit tests**: Core business logic and data processing
-- **Integration tests**: Database interactions (consider testcontainers-rs)
-- **CLI tests**: Command validation (assert_cmd crate)
-- **Snapshot tests**: Output format validation (insta crate)
-
-### Test Execution
-
-- Must pass on all platforms: macOS, Windows, Linux
-- No flaky tests - quarantine and fix immediately
-- Use `cargo nextest` for parallel execution
-
-## Essential Just Commands
-
-```bash
-just setup        # Install development dependencies
-just fmt          # Auto-format code
-just fmt-check    # Verify formatting (CI-compatible)
-just lint         # Run clippy with -D warnings
-just test         # Run tests
-just ci-check     # Full CI validation locally
-just build        # Build release artifacts
-```
+- `ssl` and `ssl-rustls` are mutually exclusive
+- The deprecated `vendored` feature has been removed
+- Default uses platform-native TLS libraries for better OS integration
 
 ## Development Commands
+
+### Essential Quality Checks
+
+```bash
+# Required before any commit
+cargo fmt --check           # Formatting validation
+cargo clippy -- -D warnings # Zero-tolerance linting
+cargo nextest run           # Parallel test execution
+```
 
 ### Build Variations
 
 ```bash
-# Standard build (TLS always available)
+# Standard build with native TLS
 cargo build --release
 
-# Minimal build (TLS still available)
-cargo build --no-default-features --features "csv json"
+# Pure Rust TLS build
+cargo build --release --no-default-features --features "json csv ssl-rustls additional_mysql_types verbose"
 
-# Build without extra types
-cargo build --release --no-default-features --features "json csv verbose"
+# Minimal build
+cargo build --no-default-features --features "csv json"
 ```
 
 ### Safe Testing Pattern
@@ -244,30 +205,10 @@ cargo run --release
 
 ## Known Issues to Address
 
-1. **Memory:** No streaming support - O(row_count × row_width) memory usage
-2. **JSON Output:** Uses BTreeMap for deterministic key ordering (implemented)
-3. **Version Sync:** CHANGELOG.md vs Cargo.toml version mismatch
-
-## Commit Standards
-
-- **Format**: Conventional commits (`feat:`, `fix:`, `docs:`, etc.)
-- **Scopes**: Use `(cli)`, `(db)`, `(output)`, `(tls)`, `(config)`
-- **Automation**: cargo-dist handles versioning; git-cliff handles changelog
-
-## CI/CD Pipeline
-
-### GitHub Actions
-
-- **ci.yml**: PR/push validation (format, lint, test, security)
-- **release.yml**: Cross-platform artifacts via cargo-dist (auto-generated, DO NOT EDIT)
-
-### Release Requirements
-
-1. All CI checks pass
-2. No critical vulnerabilities
-3. Cross-platform binaries (x86_64/aarch64 for Linux, macOS, Windows)
-4. SHA256 checksums and Cosign signatures
-5. SBOM generation (CycloneDX format)
+1. **Pattern Bug:** `Some(&_)` should be `Some(_)` in main.rs
+2. **Exit Codes:** Uses `exit(-1)` instead of proper error codes
+3. **JSON Output:** Should use BTreeMap for deterministic ordering
+4. **Version Sync:** CHANGELOG.md vs Cargo.toml version mismatch
 
 ## AI Assistant Guidelines
 
@@ -300,6 +241,6 @@ testcontainers = "0.15" # Database integration
 
 ---
 
-**Maintainer:** EvilBit-Labs\
+**Maintainer:** UncleSp1d3r\
 **Status:** Active development toward v1.0\
 **Workflow:** Single-maintainer with CodeRabbit.ai reviews

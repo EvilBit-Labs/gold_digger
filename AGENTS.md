@@ -4,45 +4,68 @@ This file provides guidance for AI assistants working with the Gold Digger codeb
 
 ## Project Overview
 
-Gold Digger is a Rust-based MySQL/MariaDB query tool that outputs results in CSV, JSON, or TSV formats. It defines essential architecture patterns, safety requirements, and development constraints for headless database automation workflows.
+Gold Digger is a Rust-based MySQL/MariaDB query tool that outputs results in CSV, JSON, or TSV formats. It's designed for headless operation via environment variables, making it ideal for database automation workflows.
 
 **Key Characteristics:**
 
 - CLI-first (uses Clap) with environment variable overrides
 - Outputs to structured formats based on file extension
 - Fully materialized result sets (no streaming)
-- Single-maintainer project by EvilBit-Labs
+- Single-maintainer project by UncleSp1d3r
 - Under active development toward v1.0
 
-## 🚨 Critical Safety Requirements
+## 🚨 Critical Safety Rules
 
-### Database Type Safety (PANIC RISK)
+### Database Value Conversion (PANIC RISK)
 
 ```rust
-// DANGEROUS - causes runtime panics on NULL/non-string values
-from_value::<String>(row[column.name_str().as_ref()])
+// ❌ NEVER - causes panics on NULL/non-string types
+// from_value::<String>(row[column.name_str().as_ref()])
+// Use mysql_value_to_string() for CSV/TSV or mysql_value_to_json() for JSON instead
 
-// SAFE - explicit NULL handling required
-match mysql_value {
-    mysql::Value::NULL => "".to_string(),
-    val => from_value_opt::<String>(val.clone())
-        .unwrap_or_else(|_| format!("{:?}", val))
+// ✅ ALWAYS - safe NULL handling with dedicated helpers
+
+/// Converts MySQL value to String for CSV/TSV output
+fn mysql_value_to_string(mysql_value: &mysql::Value) -> String {
+    match mysql_value {
+        mysql::Value::NULL => "".to_string(),
+        val => from_value_opt::<String>(val.clone()).unwrap_or_else(|_| format!("{:?}", val)),
+    }
 }
+
+/// Converts MySQL value to serde_json::Value for JSON output
+fn mysql_value_to_json(mysql_value: &mysql::Value) -> serde_json::Value {
+    match mysql_value {
+        mysql::Value::NULL => serde_json::Value::Null,
+        val => from_value_opt::<String>(val.clone())
+            .map(serde_json::Value::String)
+            .unwrap_or_else(|_| serde_json::Value::String(format!("{:?}", val))),
+    }
+}
+
+// Usage per output format:
+// - CSV/TSV: mysql_value_to_string(&mysql_value)
+// - JSON: mysql_value_to_json(&mysql_value)
 ```
 
-### Security (NON-NEGOTIABLE)
+### Security (NEVER VIOLATE)
 
-- **NEVER** log `DATABASE_URL` or credentials - implement automatic redaction
-- **NEVER** make external network calls at runtime (offline-first design)
-- **ALWAYS** validate and sanitize all user inputs
+- **NEVER** log `DATABASE_URL` or credentials - always redact
+- **NEVER** make external service calls at runtime (offline-first)
+- ⚠️ **WARNING**: `CAST(column AS CHAR)` can corrupt binary data or produce mojibake for text in lossy encodings. Use safer alternatives:
+  - **BLOB/BINARY columns**: Use `HEX(column)` or `TO_BASE64(column)` for lossless binary representation
+  - **Text columns**: Use `CAST(column AS CHAR CHARACTER SET utf8mb4)` or `CONVERT(column USING utf8mb4)` to specify explicit encoding
+  - **Numeric/Date columns**: `CAST(column AS CHAR)` is generally safe for these types
 
 ### Other Critical Issues
 
 1. **No Dotenv Support:** Despite README implications, there is no `.env` file support in the code. Use exported environment variables only.
 
-2. **Memory:** No streaming support - O(row_count × row_width) memory usage
+2. **Non-Standard Exit Codes:** `exit(-1)` becomes exit code 255, not the standard codes specified in requirements.
 
 3. **JSON Output:** Uses BTreeMap for deterministic key ordering as required.
+
+4. **Pattern Matching Bug:** In `src/main.rs`, the `if let Some(url) = &cli.db_url` pattern (and similar patterns in the resolve functions) uses `Some(&_)` which should be `Some(_)` in the match arm.
 
 ### Configuration Architecture
 
@@ -62,29 +85,18 @@ Gold Digger uses CLI-first configuration with environment variable fallbacks:
 - `DATABASE_QUERY`: SQL query string to execute
 - `OUTPUT_FILE`: Path to output file (extension determines format: .csv, .json, or defaults to TSV)
 
-## Architecture Patterns
-
-### Configuration Resolution (CLI-First)
+**Resolution Pattern:**
 
 ```rust
-// Priority: CLI flags > Environment variables > Error
 fn resolve_config_value(cli: &Cli) -> anyhow::Result<String> {
     if let Some(value) = &cli.field {
         Ok(value.clone()) // CLI flag (highest priority)
     } else if let Ok(value) = env::var("ENV_VAR") {
         Ok(value) // Environment variable (fallback)
     } else {
-        anyhow::bail!("Missing required configuration")
+        anyhow::bail!("Missing required configuration") // Error if neither
     }
 }
-```
-
-### Format Module Contract
-
-All format modules must implement:
-
-```rust
-pub fn write<W: Write>(rows: Vec<Vec<String>>, output: W) -> anyhow::Result<()>
 ```
 
 ### Current Architecture
@@ -107,57 +119,6 @@ pub fn write<W: Write>(rows: Vec<Vec<String>>, output: W) -> anyhow::Result<()>
 - `json.rs`: `{"data": [{...}]}` using BTreeMap (deterministic ordering)
 - `tab.rs`: TSV with `\t` delimiter and `QuoteStyle::Necessary`
 
-## Code Quality Standards (REQUIRED Before Commits)
-
-Run these commands before any commit:
-
-```bash
-just fmt-check    # cargo fmt --check (100-char line limit)
-just lint         # cargo clippy -- -D warnings (ZERO tolerance)
-just test         # cargo nextest run (preferred) or cargo test
-just security     # cargo audit (advisory)
-```
-
-### Formatting & Linting
-
-- **Line limit**: 100 characters (enforced by `rustfmt.toml`)
-- **Clippy warnings**: Zero tolerance (`-D warnings`)
-- **Error handling**: Use `anyhow` for applications, `thiserror` for libraries
-- **Documentation**: Doc comments (`///`) required for all public functions
-
-### Testing Requirements
-
-- **Runner**: `cargo nextest run` (preferred) or `cargo test`
-- **Coverage**: Target ≥80% with `cargo llvm-cov`
-- **Cross-platform**: Must pass on macOS, Windows, Linux
-
-## Testing Strategy
-
-### Test Organization
-
-- **Unit tests**: Core business logic and data processing
-- **Integration tests**: Database interactions (consider testcontainers-rs)
-- **CLI tests**: Command validation (assert_cmd crate)
-- **Snapshot tests**: Output format validation (insta crate)
-
-### Test Execution
-
-- Must pass on all platforms: macOS, Windows, Linux
-- No flaky tests - quarantine and fix immediately
-- Use `cargo nextest` for parallel execution
-
-## Essential Just Commands
-
-```bash
-just setup        # Install development dependencies
-just fmt          # Auto-format code
-just fmt-check    # Verify formatting (CI-compatible)
-just lint         # Run clippy with -D warnings
-just test         # Run tests
-just ci-check     # Full CI validation locally
-just build        # Build release artifacts
-```
-
 ## Development Commands
 
 ### Essential Commands
@@ -165,6 +126,8 @@ just build        # Build release artifacts
 ```bash
 # Build (release recommended for testing)
 cargo build --release
+
+# Quality gates (see "Code Quality Standards" section below for commands)
 
 # Run with CLI flags (preferred)
 cargo run --release -- \
@@ -181,11 +144,13 @@ cargo run --release
 
 ### Feature Flags
 
-- `default`: `["json", "csv", "additional_mysql_types", "verbose"]`
+- `default`: `["json", "csv", "ssl", "additional_mysql_types", "verbose"]`
+- `ssl`: MySQL native TLS support using platform-native libraries (SChannel on Windows, SecureTransport on macOS, may use OpenSSL on Linux)
+- `ssl-rustls`: Pure Rust TLS implementation (alternative to native TLS)
 - `additional_mysql_types`: Support for BigDecimal, Decimal, Time, Frunk
 - `verbose`: Conditional logging via println!/eprintln!
 
-Note: TLS is now always available and is no longer a feature flag.
+**Important**: `ssl` and `ssl-rustls` are mutually exclusive features.
 
 ## Requirements Gap Analysis
 
@@ -195,8 +160,8 @@ The project has detailed requirements in `project_spec/requirements.md` but sign
 
 - **F001-F003:** CLI interface exists (clap-based); finalize CLI flag precedence and documented flags
 - **F005:** Non-standard exit codes (should be 0=success, 1=no rows, 2=config error, etc.)
-- **F007:** Streaming output (currently loads all rows into memory)
 - **F014:** Type conversion panics on NULL/non-string values
+- **Extension dispatch bug fix**
 
 ### Medium Priority
 
@@ -218,7 +183,6 @@ The project has detailed requirements in `project_spec/requirements.md` but sign
 - **justfile**: Cross-platform build automation and common tasks
 - **.pre-commit-config.yaml**: Git hook configuration for quality gates
 - **CHANGELOG.md**: Auto-generated version history (conventional commits)
-- **dist-workspace.toml**: `cargo-dist` workspace configuration
 
 ### Documentation Standards
 
@@ -243,25 +207,16 @@ pub fn rows_to_strings(rows: Vec<mysql::Row>) -> anyhow::Result<Vec<Vec<String>>
 }
 ````
 
-## Security Requirements (NON-NEGOTIABLE)
+### Security Requirements
 
-### Credential Protection
+#### Critical Security Rules
 
-- **NEVER** log `DATABASE_URL` or credentials - implement automatic redaction
-- **NEVER** hardcode secrets in code or configuration
-- **ALWAYS** validate user inputs before processing
-
-### Airgap Compatibility
-
-- **Allowed**: Configured database connections (MySQL/MariaDB only)
-- **Prohibited**: Telemetry, call-home, non-essential outbound connections
-- **Runtime**: No external dependencies during execution
-
-### TLS Implementation
-
-- Uses rustls-only implementation with platform certificate store integration
-- TLS support is always available without requiring feature flags
-- Configure TLS programmatically via `mysql::OptsBuilder` and `SslOpts` instead of URL parameters
+- **Never log credentials:** Implement redaction for `DATABASE_URL` and secrets
+- **No hardcoded secrets:** Use environment variables or GitHub OIDC
+- **Vulnerability policy:** Block releases with critical vulnerabilities
+- **Airgap compatibility:** No telemetry or external calls in production
+- **Configure TLS programmatically:** Use `mysql::OptsBuilder` and `SslOpts` instead of URL parameters
+- **TLS Implementation:** Supports both platform-native TLS via the `ssl` feature and pure Rust TLS via the `ssl-rustls` feature
 
 #### Error Handling Patterns
 
@@ -310,6 +265,8 @@ SELECT id, created_at FROM users;
 
 -- ✅ This is safe
 SELECT CAST(id AS CHAR) as id, CAST(created_at AS CHAR) as created_at FROM users;
+-- Note: For BLOB/BINARY columns, use HEX(column) or TO_BASE64(column)
+-- For text columns with encoding concerns, use CAST(column AS CHAR CHARACTER SET utf8mb4)
 ```
 
 ### Adding New Features
@@ -321,9 +278,11 @@ SELECT CAST(id AS CHAR) as id, CAST(created_at AS CHAR) as created_at FROM users
 
 ### Version Management
 
-- Current version: v0.2.6 (synchronized across CHANGELOG.md and Cargo.toml)
+- Current discrepancy: CHANGELOG.md shows v0.2.6, Cargo.toml shows v0.2.5
 - Sync versions before any releases
 - Use semantic versioning with conventional commits
+
+## Testing Strategy
 
 ### Recommended Test Dependencies
 
@@ -345,27 +304,6 @@ testcontainers = "0.15"                                      # For real MySQL/Ma
 4. **CLI Tests:** End-to-end with environment variables
 5. **Benchmarks:** Performance regression detection
 
-## Commit Standards
-
-- **Format**: Conventional commits (`feat:`, `fix:`, `docs:`, etc.)
-- **Scopes**: Use `(cli)`, `(db)`, `(output)`, `(tls)`, `(config)`
-- **Automation**: cargo-dist handles versioning; git-cliff handles changelog
-
-## CI/CD Pipeline
-
-### GitHub Actions
-
-- **ci.yml**: PR/push validation (format, lint, test, security)
-- **release.yml**: Cross-platform artifacts via cargo-dist (auto-generated, DO NOT EDIT)
-
-### Release Requirements
-
-1. All CI checks pass
-2. No critical vulnerabilities
-3. Cross-platform binaries (x86_64/aarch64 for Linux, macOS, Windows)
-4. SHA256 checksums and Cosign signatures
-5. SBOM generation (CycloneDX format)
-
 ## AI Assistant Best Practices
 
 1. **Always check for the type conversion panic issue** when working with queries
@@ -378,16 +316,16 @@ testcontainers = "0.15"                                      # For real MySQL/Ma
 
 ## Quick Reference
 
-| File                           | Purpose         | Key Issues                                   |
-| ------------------------------ | --------------- | -------------------------------------------- |
-| `src/main.rs`                  | Entry point     | Exit codes, pattern bug, env var handling    |
-| `src/lib.rs`                   | Core logic      | Type conversion panics, NULL handling        |
-| `src/json.rs`                  | JSON output     | Deterministic BTreeMap / ordered JSON output |
-| `Cargo.toml`                   | Dependencies    | Version mismatch with CHANGELOG              |
-| `project_spec/requirements.md` | Target features | Comprehensive feature roadmap                |
+| File                           | Purpose         | Key Issues                                |
+| ------------------------------ | --------------- | ----------------------------------------- |
+| `src/main.rs`                  | Entry point     | Exit codes, pattern bug, env var handling |
+| `src/lib.rs`                   | Core logic      | Type conversion panics, NULL handling     |
+| `src/json.rs`                  | JSON output     | Non-deterministic HashMap                 |
+| `Cargo.toml`                   | Dependencies    | Version mismatch with CHANGELOG           |
+| `project_spec/requirements.md` | Target features | Comprehensive feature roadmap             |
 
 ---
 
-**Maintainer:** EvilBit-Labs
+**Maintainer:** UncleSp1d3r
 **Workflow:** Single-maintainer with CodeRabbit.ai reviews
 **Status:** Active development toward v1.0
