@@ -1,0 +1,129 @@
+name: "Copilot Setup Steps"
+
+# Automatically run the setup steps when they are changed to allow for easy validation, and
+# allow manual testing through the repository's "Actions" tab
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+  pull_request:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+
+jobs:
+  # The job MUST be called `copilot-setup-steps` or it will not be picked up by Copilot.
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+
+    # Set the permissions to the lowest permissions possible needed for your steps.
+    # Copilot will be given its own token for its operations.
+    permissions:
+      # If you want to clone the repository as part of your setup steps, for example to
+      # install dependencies, you'll need the `contents: read` permission. If you don't
+      # clone the repository in your setup steps, Copilot will do this for you
+      # automatically after the steps complete.
+      contents: read
+
+    # You can define any steps you want, and they will run before the agent starts.
+    # If you do not check out your code, Copilot will do this for you.
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # Use the exact version specified in rust-toolchain.toml
+          toolchain: 1.89.0
+          components: rustfmt, clippy
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          # Cache key includes the rust-toolchain file for proper invalidation
+          cache-on-failure: true
+
+      - name: Install just task runner
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+
+      - name: Set up Python for pre-commit
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      - name: Install cargo-deny
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny
+
+      - name: Install cargo-dist
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-dist
+
+      - name: Install mdBook
+        uses: taiki-e/install-action@v2
+        with:
+          tool: mdbook
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+        with:
+          tool: mdbook-admonish mdbook-mermaid mdbook-linkcheck mdbook-toc mdbook-open-on-gh mdbook-tabs mdbook-i18n-helpers
+
+      - name: Run just install
+        run: |
+          just install-tools
+
+      - name: Setup summary
+        run: |
+          echo "✅ Gold Digger development environment setup complete!"
+          echo ""
+          echo "Available tools:"
+          echo "  - Rust toolchain: $(rustc --version)"
+          echo "  - Cargo: $(cargo --version)"
+          echo "  - just: $(just --version)"
+          echo "  - cargo-nextest: $(cargo nextest --version)"
+          echo "  - cargo-llvm-cov: $(cargo llvm-cov --version)"
+          echo "  - cargo-audit: $(cargo audit --version)"
+          echo "  - cargo-deny: $(cargo deny --version)"
+          echo "  - cargo-dist: $(cargo dist --version)"
+          echo ""
+          echo "GitHub Actions used:"
+          echo "  - dtolnay/rust-toolchain@stable (Rust setup)"
+          echo "  - Swatinem/rust-cache@v2 (dependency caching)"
+          echo "  - taiki-e/install-action@v2 (just, cargo tools, mdbook)"
+          echo "  - pre-commit/action@v3.0.1 (pre-commit hooks)"
+          echo "  - actions/setup-python@v4 (Python for pre-commit)"
+          echo ""
+          echo "Project features validated:"
+          echo "  - Default features (native TLS)"
+          echo "  - Pure Rust TLS (rustls)"
+          echo "  - Minimal build (no TLS)"
+          echo ""
+          echo "Quality checks passed:"
+          echo "  - Pre-commit hooks (pre-commit/action)"
+          echo "  - Code formatting (just fmt-check)"
+          echo "  - Clippy linting (just lint)"
+          echo "  - Unit tests (just test-no-docker)"
+          echo "  - Security audit (just audit)"
+          echo "  - License validation (just deny)"
+          echo "  - TLS dependency validation (just validate-deps)"

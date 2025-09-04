@@ -52,7 +52,10 @@ fn mysql_value_to_json(mysql_value: &mysql::Value) -> serde_json::Value {
 
 - **NEVER** log `DATABASE_URL` or credentials - always redact
 - **NEVER** make external service calls at runtime (offline-first)
-- Always recommend SQL `CAST(column AS CHAR)` for type safety
+- ⚠️ **WARNING**: `CAST(column AS CHAR)` can corrupt binary data or produce mojibake for text in lossy encodings. Use safer alternatives:
+  - **BLOB/BINARY columns**: Use `HEX(column)` or `TO_BASE64(column)` for lossless binary representation
+  - **Text columns**: Use `CAST(column AS CHAR CHARACTER SET utf8mb4)` or `CONVERT(column USING utf8mb4)` to specify explicit encoding
+  - **Numeric/Date columns**: `CAST(column AS CHAR)` is generally safe for these types
 
 ### Other Critical Issues
 
@@ -262,6 +265,8 @@ SELECT id, created_at FROM users;
 
 -- ✅ This is safe
 SELECT CAST(id AS CHAR) as id, CAST(created_at AS CHAR) as created_at FROM users;
+-- Note: For BLOB/BINARY columns, use HEX(column) or TO_BASE64(column)
+-- For text columns with encoding concerns, use CAST(column AS CHAR CHARACTER SET utf8mb4)
 ```
 
 ### Adding New Features
