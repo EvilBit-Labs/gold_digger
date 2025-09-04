@@ -36,9 +36,9 @@ community looks forward to your contributions. 🎉
 ## Code of Conduct
 
 This project and everyone participating in it is governed by the
-[gold_digger Code of Conduct](https://github.com/EvilBit-Labs/gold_diggerblob/master/CODE_OF_CONDUCT.md).
+[gold_digger Code of Conduct](https://github.com/EvilBit-Labs/gold_digger/blob/main/CODE_OF_CONDUCT.md).
 By participating, you are expected to uphold this code. Please report unacceptable behavior
-to .
+to <conduct@evilbit-labs.com>.
 
 ## I Have a Question
 
@@ -81,7 +81,7 @@ following steps in advance to help us fix any potential bug as fast as possible.
   to check [this section](#i-have-a-question)).
 - To see if other users have experienced (and potentially already solved) the same issue you are having, check if there
   is not already a bug report existing for your bug or error in
-  the [bug tracker](https://github.com/EvilBit-Labs/gold_diggerissues?q=label%3Abug).
+  the [bug tracker](https://github.com/EvilBit-Labs/gold_digger/issues?q=label%3Abug).
 - Also make sure to search the internet (including Stack Overflow) to see if users outside the GitHub community have
   discussed the issue.
 - Collect information about the bug:

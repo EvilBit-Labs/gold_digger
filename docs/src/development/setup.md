@@ -218,6 +218,9 @@ just security
 
 # Generate Software Bill of Materials (SBOM)
 just sbom
+
+# Cargo-deny configuration validation
+just deny
 ```
 
 ### 3. Cargo-deny Configuration
@@ -255,10 +258,7 @@ just deny-ci
 - `deny.ci.toml` - CI-specific configuration with strict enforcement
 - Both files maintain the same license and security policies, differing only in yanked crate handling
 
-```
-
-### 3. Testing
-```
+````
 
 ### 3. Testing
 
@@ -274,7 +274,7 @@ just coverage
 
 # Run specific test
 cargo test test_name
-```
+````
 
 ### 4. Building
 
@@ -315,7 +315,7 @@ Gold Digger uses Cargo features for conditional compilation:
 
 ```toml
 # Default features
-default = ["json", "csv", "additional_mysql_types", "verbose"]
+default = ["json", "csv", "additional_mysql_types", "verbose", "ssl-rustls"]
 
 # Individual features
 json = []  # Enable JSON output format
@@ -323,7 +323,11 @@ csv = []   # Enable CSV output format
 additional_mysql_types = ["mysql_common?/bigdecimal", ...]
 verbose = []  # Enable verbose logging
 
-# Note: TLS support is built-in
+# TLS implementation options
+ssl = ["native-tls", "mysql/native-tls"]  # Native TLS implementation (OpenSSL/SecureTransport)
+ssl-rustls = ["rustls", "rustls-native-certs", "rustls-pemfile", "mysql/rustls-tls"]  # Pure Rust TLS implementation
+
+# Note: TLS support is provided via optional ssl/ssl-rustls feature flags
 ```
 
 ### Testing Feature Combinations

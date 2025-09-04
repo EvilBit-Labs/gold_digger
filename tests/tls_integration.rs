@@ -9,7 +9,7 @@
 //! Requirements covered: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6
 
 use anyhow::Result;
-use gold_digger::tls::TlsConfig;
+use gold_digger::tls::{TlsConfig, redact_url};
 use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -347,8 +347,8 @@ mod integration_tests {
     /// Check if integration tests should be skipped
     /// Note: With testcontainers, we don't need TEST_DATABASE_URL as containers are managed automatically
     ///
-    /// The testcontainers_modules::mysql::Mysql module has built-in wait strategies that wait for
-    /// MySQL to be ready before returning from .start(). This is why we don't need explicit
+    /// The testcontainers_modules::mariadb::MariaDb module has built-in wait strategies that wait for
+    /// MariaDB to be ready before returning from .start(). This is why we don't need explicit
     /// wait strategies like with GenericImage.
     fn should_skip_integration_tests() -> bool {
         // For now, we'll skip if Docker is not available
@@ -507,9 +507,9 @@ mod integration_tests {
 
         // Log the test scenario for clarity
         eprintln!("Configuration test for skip hostname verification:");
-        eprintln!("  - localhost connection: {}", localhost_connection_string);
-        eprintln!("  - IP connection: {}", ip_connection_string);
-        eprintln!("  - Container hostname connection: {}", container_connection_string);
+        eprintln!("  - localhost connection: {}", redact_url(&localhost_connection_string));
+        eprintln!("  - IP connection: {}", redact_url(&ip_connection_string));
+        eprintln!("  - Container hostname connection: {}", redact_url(&container_connection_string));
         eprintln!("  - Skip hostname verification enabled: true");
         eprintln!("  - Configuration validation: PASSED");
         eprintln!("  - Note: Actual TLS hostname verification not tested (MariaDB not TLS-enabled)");

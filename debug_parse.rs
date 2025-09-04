@@ -1,8 +1,8 @@
 use std::fs;
 
-fn main() {
-    let content = fs::read_to_string("/tmp/tree_debug.txt").unwrap();
-    let dependencies = parse_dependency_tree(&content);
+fn main() -> anyhow::Result<()> {
+    let content = fs::read_to_string("/tmp/tree_debug.txt")?;
+    let dependencies = parse_dependency_tree(&content)?;
 
     println!("Total dependencies found: {}", dependencies.len());
     println!(
@@ -19,11 +19,13 @@ fn main() {
 
     // Show first 20 dependencies
     println!("First 20 dependencies: {:?}", &dependencies[..std::cmp::min(20, dependencies.len())]);
+
+    Ok(())
 }
 
 /// Helper function to parse cargo tree output and extract dependency names
-fn parse_dependency_tree(tree_output: &str) -> Vec<String> {
-    tree_output
+fn parse_dependency_tree(tree_output: &str) -> anyhow::Result<Vec<String>> {
+    let dependencies = tree_output
         .lines()
         .filter_map(|line| {
             // Remove tree drawing characters and extract package name
@@ -44,5 +46,7 @@ fn parse_dependency_tree(tree_output: &str) -> Vec<String> {
                 None
             }
         })
-        .collect()
+        .collect();
+
+    Ok(dependencies)
 }

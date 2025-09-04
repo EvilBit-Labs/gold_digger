@@ -269,6 +269,7 @@ just test-all         # Run all tests including integration tests
 **Integration Tests:**
 
 - Docker installed and running
+- MariaDB testcontainers module (automatically pulled)
 - `integration_tests` feature enabled
 - Tests are marked with `#[ignore]` by default
 

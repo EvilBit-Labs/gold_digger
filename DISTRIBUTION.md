@@ -69,7 +69,7 @@ brew install gold-digger
 # choco install gold-digger
 
 # Scoop (Windows) — Planned
-# scoop bucket add unclesp1d3r https://github.com/EvilBit-Labs/scoop-bucket
+# scoop bucket add evilbit-labs https://github.com/EvilBit-Labs/scoop-bucket
 # scoop install gold-digger
 ```
 

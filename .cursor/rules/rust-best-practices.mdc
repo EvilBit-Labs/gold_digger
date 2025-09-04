@@ -28,8 +28,17 @@ alwaysApply: true
 All format modules must implement:
 
 ```rust
-pub fn write<W: Write>(rows: Vec<Vec<String>>, output: W) -> anyhow::Result<()>
+pub fn write<W: Write>(
+    rows: impl IntoIterator<Item = impl IntoIterator<Item = impl AsRef<str>>>,
+    output: &mut W
+) -> anyhow::Result<()>
 ```
+
+This zero-copy API accepts:
+
+- **Rows**: Any iterable of iterables (slices, Vecs, iterators) where items are convertible to `&str`
+- **Output**: Mutable reference to any `Write` implementation (files, stdout, memory buffers)
+- **Performance**: Avoids unnecessary allocations and supports streaming writes
 
 ## Code Quality Standards
 
@@ -74,7 +83,8 @@ Required for all public functions using `///`:
 /// # Example
 /// ```
 /// let string_rows = rows_to_strings(mysql_rows)?;
-/// csv::write(string_rows, output)?;
+/// let mut writer = std::io::BufWriter::new(std::fs::File::create("output.csv")?);
+/// csv::write(&string_rows, &mut writer)?;
 /// ```
 pub fn rows_to_strings(rows: Vec<mysql::Row>) -> anyhow::Result<Vec<Vec<String>>> {
     // Implementation

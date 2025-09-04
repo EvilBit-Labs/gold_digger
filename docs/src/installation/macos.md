@@ -61,13 +61,13 @@ cargo build --release
 
 ## TLS Support
 
-macOS builds use the native SecureTransport TLS implementation by default. For pure Rust TLS:
+Pure Rust TLS (rustls) by default; no native SecureTransport path.
 
 ```bash
-# Standard installation with TLS support
+# Standard installation (TLS via rustls)
 cargo install gold_digger
 
-# Or minimal installation without TLS
+# Or minimal installation without extra features (TLS still available)
 cargo install gold_digger --no-default-features --features "json,csv,additional_mysql_types,verbose"
 ```
 

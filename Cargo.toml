@@ -11,6 +11,7 @@ homepage = "https://evilbitlabs.io/gold_digger/"
 license = "MIT"
 keywords = ["mysql", "query", "tool", "mariadb"]
 categories = ["command-line-utilities", "database"]
+
 exclude = [
   ".github/",
   "CODE_OF_CONDUCT.md",
@@ -31,10 +32,10 @@ license = false
 eula = false
 
 [package.metadata.cargo-machete]
-ignored = ["mysql_common", "rustls-native-certs"]
+ignored = ["mysql_common", "rustls-native-certs", "native-tls"]
 
 [dependencies]
-mysql = { version = "26.0.1", features = ["minimal", "rustls-tls"], default-features = false }
+mysql = { version = "26.0.1", features = ["minimal"] }
 anyhow = "1.0.99"
 csv = "1.3.1"
 serde_json = "1.0.143"
@@ -43,17 +44,18 @@ clap_complete = "4.5.57"
 mysql_common = { version = "0.35.5", optional = true }
 thiserror = "2.0.16"
 url = "2.5.7"
-# TLS dependencies - always included for secure database connections
-rustls = "0.23"
-rustls-native-certs = "0.8.1"
-rustls-pemfile = "2.0"
+# TLS dependencies - all optional, enabled via features
+rustls = { version = "0.23.31", optional = true }
+rustls-native-certs = { version = "0.8.1", optional = true }
+rustls-pemfile = { version = "2.2.0", optional = true }
+native-tls = { version = "0.2", optional = true }
 
 [dev-dependencies]
-testcontainers-modules = { version = "0.13", features = ["mariadb","blocking"] }
-tempfile = "3.21"
-assert_cmd = "2.0"
-insta = "1.43"
-temp-env = "0.3"
+testcontainers-modules = { version = "0.13.0", features = ["mariadb","blocking"] }
+tempfile = "3.21.0"
+assert_cmd = "2.0.17"
+insta = "1.43.1"
+temp-env = "0.3.6"
 
 [profile.release]
 lto = true
@@ -70,7 +72,7 @@ inherits = "release"
 lto = "fat"  # Use fat LTO for maximum performance optimization in distribution builds
 
 [features]
-default = ["json", "csv", "additional_mysql_types", "verbose"]
+default = ["json", "csv", "additional_mysql_types", "verbose", "ssl-rustls"]
 
 # Output format support
 json = []  # Enable JSON output format with deterministic field ordering
@@ -91,4 +93,6 @@ verbose = []  # Enable detailed logging and diagnostic output
 # Integration testing support
 integration_tests = []  # Enable heavy integration tests requiring external databases
 
-# Note: TLS support is always available and no longer requires feature flags
+# TLS implementation options
+ssl = ["native-tls", "mysql/native-tls"]  # Native TLS implementation (OpenSSL/SecureTransport)
+ssl-rustls = ["rustls", "rustls-native-certs", "rustls-pemfile", "mysql/rustls-tls"]  # Pure Rust TLS implementation

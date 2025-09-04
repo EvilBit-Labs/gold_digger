@@ -30,16 +30,16 @@
 
 
 <a name="v0.2.6"></a>
-## [v0.2.6] - 2024-05-15
-### Documentation Update
-- Updated maintain tag
+## [v0.2.6] - 2025-09-04
 
-### Style
-- Remove unused category tag and added git types
+### Dependencies
+- Fixed invalid dependency versions in Cargo.toml to use published crates.io versions
+- Updated testcontainers-modules, tempfile, assert_cmd, insta, temp-env, rustls, and rustls-pemfile to latest stable versions
 
-### Pull Requests
-- Merge pull request [#9](https://github.com/EvilBit-Labs/gold_digger/issues/9) from EvilBit-Labs/dependabot/github_actions/github/codeql-action-3
-- Merge pull request [#8](https://github.com/EvilBit-Labs/gold_digger/issues/8) from EvilBit-Labs/dependabot/github_actions/actions/checkout-4
+### TLS Migration
+- Migrated from native-tls/OpenSSL to always-available rustls implementation
+- Removed ssl and ssl-rustls feature flags in favor of built-in TLS support
+- Enhanced TLS configuration with new CLI flags for custom CA files and validation controls
 
 
 <a name="v0.2.5"></a>

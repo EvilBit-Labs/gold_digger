@@ -54,7 +54,7 @@ fmt-check:
 lint:
     cd {{justfile_dir()}}
     cargo clippy --all-targets --release -- -D warnings
-    cargo clippy --all-targets --no-default-features --features "json csv additional_mysql_types verbose" -- -D warnings
+    cargo clippy --all-targets --no-default-features --features "json csv additional_mysql_types verbose ssl-rustls" -- -D warnings
 
 # Run clippy with fixes
 fix:
@@ -104,7 +104,7 @@ build-release:
 
 # Build minimal version (no default features)
 build-minimal:
-    cargo build --release --no-default-features --features "csv,json"
+    cargo build --release --no-default-features --features "csv,json,ssl-rustls"
 
 # Build all feature combinations
 build-all: build build-release build-minimal

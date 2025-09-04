@@ -119,33 +119,27 @@ error: TLS connection failed: certificate validation error
    cargo tree --format "{p} {f}" | grep -E "rustls"
    ```
 
-2. **Choose Single TLS Backend:**
+2. **Build with TLS Support:**
 
    ```bash
    # Standard build with TLS support (always included)
    cargo build --release
 
-   # Minimal build without TLS
-   cargo build --no-default-features --features "json csv additional_mysql_types verbose"
-
-   # No TLS (testing only)
+   # Minimal build (TLS still available)
    cargo build --no-default-features --features "json csv additional_mysql_types verbose"
    ```
 
-3. **Fix Feature Configuration:**
+3. **Verify TLS Dependencies:**
 
    ```toml
-   # In Cargo.toml - ensure mutually exclusive features
-   [features]
-   default = ["json", "csv", "ssl", "additional_mysql_types", "verbose"]
-   ssl = [
-     "mysql/rustls-tls",
-     "rustls",
-     "rustls-native-certs",
-     "rustls-pemfile",
-   ]
+   # In Cargo.toml - rustls is always available
+   [dependencies]
+   mysql = { version = "26.0.1", features = ["minimal"] }
+   rustls = "0.23.31"
+   rustls-native-certs = "0.8.1"
+   rustls-pemfile = "2.2.0"
 
-   # Single rustls-based TLS implementation
+   # TLS is built-in, no feature toggling required
    ```
 
 ### Missing Feature Dependencies
@@ -172,19 +166,21 @@ error: Package does not have feature `missing_feature`
 2. **Add Missing Features:**
 
    ```toml
-   # In Cargo.toml - rustls configuration (recommended)
+   # In Cargo.toml - rustls configuration (always available)
    [dependencies]
-   mysql = { version = "24.0", features = ["rustls-tls"] }
+   mysql = { version = "26.0.1", features = ["minimal"] }
+   rustls = "0.23.31"
+   rustls-native-certs = "0.8.1"
+   rustls-pemfile = "2.2.0"
    serde = { version = "1.0", features = ["derive"] }
    ```
 
-   **Note:** Gold Digger uses rustls exclusively for TLS support. The native-tls backend is not supported.
+   **Note:** Gold Digger uses rustls exclusively for TLS support. TLS is always available and does not require feature toggling.
 
-3. **Conditional Feature Compilation:**
+3. **TLS Configuration:**
 
    ```rust
-   // In source code
-   #[cfg(feature = "ssl")]
+   // In source code - TLS is always available
    use mysql::SslOpts;
 
    #[cfg(feature = "json")]

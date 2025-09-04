@@ -136,7 +136,7 @@ The tests are designed to work in CI environments:
 - Docker-dependent tests are ignored by default
 - Unit tests run without external dependencies
 - Tests work with always-available rustls TLS implementation
-- Tests validate that TLS is always available in standard builds and properly excluded in minimal builds
+- Tests validate that TLS is available in both standard and minimal builds
 
 ## Troubleshooting
 

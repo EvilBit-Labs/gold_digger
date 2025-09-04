@@ -287,6 +287,19 @@ impl TlsError {
                 rustls::CertificateError::Revoked => Self::CertificateRevoked {
                     message: "Certificate has been revoked by the issuing CA".to_string(),
                 },
+                rustls::CertificateError::NotValidForName => Self::HostnameVerificationFailed {
+                    hostname: hostname.unwrap_or("unknown").to_string(),
+                    message: "Certificate hostname mismatch: certificate not valid for the requested hostname"
+                        .to_string(),
+                },
+                rustls::CertificateError::NotValidForNameContext {
+                    expected: _,
+                    presented: _,
+                } => Self::HostnameVerificationFailed {
+                    hostname: hostname.unwrap_or("unknown").to_string(),
+                    message: "Certificate hostname mismatch: certificate not valid for the requested hostname context"
+                        .to_string(),
+                },
                 _ => Self::CertificateValidationFailed {
                     message: format!(
                         "Certificate validation failed: {:?}. Use --allow-invalid-certificate to bypass",
@@ -294,9 +307,8 @@ impl TlsError {
                     ),
                 },
             },
-            rustls::Error::InvalidMessage(_) => Self::HostnameVerificationFailed {
-                hostname: hostname.unwrap_or("unknown").to_string(),
-                message: "Hostname does not match certificate Subject Alternative Name (SAN) or Common Name (CN)"
+            rustls::Error::InvalidMessage(_) => Self::HandshakeFailed {
+                message: "Invalid TLS message received from server. Possible protocol mismatch or corrupted handshake"
                     .to_string(),
             },
             rustls::Error::PeerIncompatible(incompatible_error) => {
@@ -441,10 +453,16 @@ pub fn create_tls_connection(
             },
         }
     } else {
-        // No explicit TLS configuration provided - use default behavior
-        // The mysql crate will use TLS if the server supports it and URL doesn't disable it
+        // No explicit TLS configuration provided - explicitly configure TLS with platform certificates
+        // This ensures TLS is always used instead of relying on driver defaults
+        let ssl_opts = SslOpts::default()
+            .with_danger_accept_invalid_certs(false)
+            .with_danger_skip_domain_validation(false);
+
+        opts_builder = opts_builder.ssl_opts(ssl_opts);
+
         if verbose {
-            eprintln!("🔒 TLS: Using default configuration (platform certificates)");
+            eprintln!("🔒 TLS: Using explicit configuration (platform certificates, hostname verification enabled)");
         }
     }
 
@@ -884,10 +902,22 @@ mod tests {
 
     #[test]
     fn test_from_rustls_error_hostname_handling() {
-        use rustls::{Error as RustlsError, InvalidMessage};
+        use rustls::{CertificateError, Error as RustlsError};
 
-        // Test hostname verification with hostname provided
-        let rustls_error = RustlsError::InvalidMessage(InvalidMessage::InvalidCertRequest);
+        // Test hostname verification with NotValidForName
+        let rustls_error = RustlsError::InvalidCertificate(CertificateError::NotValidForName);
+        let tls_error = TlsError::from_rustls_error(rustls_error, Some("example.com"));
+        if let TlsError::HostnameVerificationFailed { hostname, .. } = tls_error {
+            assert_eq!(hostname, "example.com");
+        } else {
+            panic!("Expected HostnameVerificationFailed error");
+        }
+
+        // Test hostname verification with NotValidForNameContext
+        let rustls_error = RustlsError::InvalidCertificate(CertificateError::NotValidForNameContext {
+            expected: rustls::pki_types::ServerName::try_from("example.com").unwrap(),
+            presented: vec!["wrong.com".to_string()],
+        });
         let tls_error = TlsError::from_rustls_error(rustls_error, Some("example.com"));
         if let TlsError::HostnameVerificationFailed { hostname, .. } = tls_error {
             assert_eq!(hostname, "example.com");
@@ -896,7 +926,7 @@ mod tests {
         }
 
         // Test hostname verification without hostname provided
-        let rustls_error = RustlsError::InvalidMessage(InvalidMessage::InvalidCertRequest);
+        let rustls_error = RustlsError::InvalidCertificate(CertificateError::NotValidForName);
         let tls_error = TlsError::from_rustls_error(rustls_error, None);
         if let TlsError::HostnameVerificationFailed { hostname, .. } = tls_error {
             assert_eq!(hostname, "unknown");

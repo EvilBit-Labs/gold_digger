@@ -92,7 +92,7 @@ pub fn write<W: Write>(rows: Vec<Vec<String>>, output: W) -> anyhow::Result<()>
 ```toml
 default = ["json", "csv", "additional_mysql_types", "verbose"]
 json = [] # Enable JSON output format
-csv = [] # Enable CSV output format  
+csv = [] # Enable CSV output format
 additional_mysql_types = [ # Extended MySQL type support
   "mysql_common",
   "mysql_common?/bigdecimal",
@@ -268,7 +268,7 @@ match get_extension_from_filename(&output_file) {
 ```bash
 # Build variations
 cargo build --release                                    # Standard build (rustls TLS)
-cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"  # No TLS support
+cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"  # Minimal build (TLS still available)
 cargo build --no-default-features --features "csv json" # Minimal build
 
 # Development (CLI-first approach)

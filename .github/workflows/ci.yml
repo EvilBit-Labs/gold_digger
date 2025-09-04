@@ -94,6 +94,15 @@ jobs:
 
       - name: Verify TLS always available
         run: |
+          # Build the binary first
+          cargo build --release
+
+          # Set up binary path with Windows .exe suffix detection
+          BIN="./target/release/gold_digger"
+          if [ -f "${BIN}.exe" ]; then
+            BIN="${BIN}.exe"
+          fi
+
           # Test that TLS flags are always available in CLI help
           "$BIN" --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)" \
             || exit 1
