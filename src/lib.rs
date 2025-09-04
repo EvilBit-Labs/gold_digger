@@ -1,4 +1,4 @@
-use std::{borrow::Cow, env, ffi::OsStr, path::Path};
+use std::{env, ffi::OsStr, path::Path};
 
 use anyhow::{Context, Result};
 use mysql::Row;
@@ -106,16 +106,10 @@ fn mysql_value_to_string(value: &mysql::Value) -> anyhow::Result<String> {
         mysql::Value::Bytes(bytes) => {
             // Try to convert bytes to UTF-8 string, fallback to lossy conversion
             // Use Cow to avoid unnecessary allocation when bytes are valid UTF-8
-            match std::str::from_utf8(bytes) {
+            Ok(match std::str::from_utf8(bytes) {
                 Ok(s) => s.to_string(),
-                Err(_) => {
-                    // String::from_utf8_lossy returns Cow<str>, only allocate if needed
-                    let cow: Cow<str> = String::from_utf8_lossy(bytes);
-                    cow.into_owned()
-                },
-            }
-            // Try to convert bytes to UTF-8 string, fallback to debug representation
-            Ok(String::from_utf8_lossy(bytes).into_owned())
+                Err(_) => String::from_utf8_lossy(bytes).into_owned(),
+            })
         },
         mysql::Value::Int(i) => Ok(i.to_string()),
         mysql::Value::UInt(u) => Ok(u.to_string()),
