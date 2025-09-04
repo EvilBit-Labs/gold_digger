@@ -54,9 +54,6 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Run pre-commit hooks
-        uses: pre-commit/action@v3.0.1
-
       - name: Install cargo-nextest
         uses: taiki-e/install-action@v2
         with:
@@ -95,6 +92,9 @@ jobs:
       - name: Run just install
         run: |
           just install-tools
+
+      - name: Run pre-commit hooks
+        uses: pre-commit/action@v3.0.1
 
       - name: Setup summary
         run: |
