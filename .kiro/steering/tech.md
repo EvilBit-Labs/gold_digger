@@ -6,7 +6,7 @@ inclusion: always
 
 ## Language & Runtime
 
-- **Rust 2021 Edition** - Memory safety and performance
+- **Rust 2024 Edition** - Memory safety and performance
 - **Cargo** - Package management and build system
 - **Target platforms**: x86_64/aarch64 for Linux, macOS, Windows
 
@@ -39,15 +39,16 @@ inclusion: always
 ### Default Feature Set
 
 ```toml
-default = ["json", "csv", "ssl", "additional_mysql_types", "verbose"]
+default = ["json", "csv", "additional_mysql_types", "verbose"]
 ```
 
 ### TLS/SSL Implementation
 
-- **mysql/native-tls** - Platform-native TLS (default)
-  - Windows: SChannel, macOS: SecureTransport, Linux: OpenSSL
-- **mysql/rustls-tls** - Pure Rust TLS (opt-in alternative)
-- **Mutually exclusive**: Choose one TLS implementation
+- **mysql/rustls-tls** - Pure Rust TLS with platform certificate store integration (default)
+  - Consistent cross-platform behavior
+  - Enhanced security controls and validation options
+  - Automatic system certificate store usage on all platforms
+- **Simplified**: Single TLS implementation (previous dual approach consolidated)
 
 ### Extended MySQL Types
 
@@ -81,13 +82,13 @@ OutputFormat::Csv => anyhow::bail!("CSV support not compiled in"),
 ### Build Variations
 
 ```bash
-# Standard build (platform-native TLS)
+# Standard build (TLS always available)
 cargo build --release
 
-# Pure Rust TLS build
-cargo build --release --no-default-features --features ssl-rustls
+# Build with a subset of features enabled (TLS still available)
+cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
 
-# Minimal feature build
+# Build with minimal features only (TLS still available)
 cargo build --no-default-features --features "csv json"
 ```
 
@@ -98,20 +99,6 @@ cargo build --no-default-features --features "csv json"
 - **Current model**: Fully materialized results - O(row_count × row_width)
 - **Connection model**: Single database connection per execution
 - **No streaming**: All query results loaded into memory before processing
-
-### Database Type Safety
-
-```rust
-// DANGEROUS - causes runtime panics
-from_value::<String>(row[column.name_str().as_ref()])
-
-// SAFE - explicit NULL handling
-match mysql_value {
-    mysql::Value::NULL => "".to_string(),
-    val => from_value_opt::<String>(val)
-        .unwrap_or_else(|_| format!("{:?}", val))
-}
-```
 
 ### Security Implementation
 
@@ -166,7 +153,7 @@ rustup component add llvm-tools-preview rust-src
 
 ### Cross-Platform Support
 
-- **Native dependencies**: Platform-specific TLS implementations
-- **Pure Rust option**: `ssl-rustls` feature for maximum portability
+- **Pure Rust TLS**: Single rustls-based implementation for consistent cross-platform behavior
+- **Platform Integration**: Automatic system certificate store usage (Windows/macOS/Linux)
 - **Minimal builds**: Feature flags allow targeted compilation
 - **Runtime dependencies**: System libraries only (no external services)

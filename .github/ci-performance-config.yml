@@ -96,10 +96,7 @@ monitoring:
 feature_targets:
   ssl:
     build_time: 180.0
-    binary_size: 8388608 # 8MB
-  ssl-rustls:
-    build_time: 200.0
-    binary_size: 10485760 # 10MB
+    binary_size: 9437184 # 9MB (rustls implementation)
   minimal:
     build_time: 120.0
     binary_size: 6291456 # 6MB

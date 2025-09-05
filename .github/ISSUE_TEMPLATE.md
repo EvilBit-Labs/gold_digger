@@ -45,9 +45,9 @@ Add any other context about the issue here.
 
 Please select the appropriate template for your issue:
 
-- [Bug Report](https://github.com/UncleSp1d3r/gold_digger/issues/new?template=bug_report.md)
-- [Feature Request](https://github.com/UncleSp1d3r/gold_digger/issues/new?template=feature_request.md)
-- [Security Report](https://github.com/UncleSp1d3r/gold_digger/issues/new?template=security_report.md)
+- [Bug Report](https://github.com/EvilBit-Labs/gold_digger/issues/new?template=bug_report.md)
+- [Feature Request](https://github.com/EvilBit-Labs/gold_digger/issues/new?template=feature_request.md)
+- [Security Report](https://github.com/EvilBit-Labs/gold_digger/issues/new?template=security_report.yml)
 
 ---
 

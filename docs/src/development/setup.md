@@ -49,7 +49,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/UncleSp1d3r/gold_digger.git
+git clone https://github.com/EvilBit-Labs/gold_digger.git
 cd gold_digger
 ```
 
@@ -219,9 +219,46 @@ just security
 # Generate Software Bill of Materials (SBOM)
 just sbom
 
-# Coverage alias for CI consistency
-just cover
+# Cargo-deny configuration validation
+just deny
 ```
+
+### 3. Cargo-deny Configuration
+
+Gold Digger uses a dual cargo-deny configuration to balance local development flexibility with CI security enforcement:
+
+#### Local Development (Tolerant)
+
+- **File**: `deny.toml` (default)
+- **Yanked crates**: `warn` (shows warnings but doesn't fail)
+- **Purpose**: Allows local development to continue even with yanked dependencies
+
+#### CI Environment (Strict)
+
+- **File**: `deny.ci.toml`
+- **Yanked crates**: `error` (fails pipeline on yanked crates)
+- **Purpose**: Enforces strict security policies in CI
+
+#### Usage
+
+```bash
+# Local development (tolerant)
+just deny
+
+# CI enforcement (strict)
+just deny-ci
+
+# CI workflow automatically uses strict configuration
+# See .github/workflows/security.yml
+```
+
+#### Configuration Files
+
+- `deny.toml` - Local development configuration with tolerant settings
+- `deny.ci.toml` - CI-specific configuration with strict enforcement
+- Both files maintain the same license and security policies, differing only in yanked crate handling
+
+````
 
 ### 3. Testing
 
@@ -237,7 +274,7 @@ just coverage
 
 # Run specific test
 cargo test test_name
-```
+````
 
 ### 4. Building
 
@@ -248,14 +285,13 @@ just build
 # Release build
 just build-release
 
-# Build with pure Rust TLS
-just build-rustls
+
 
 # Build all variants
 just build-all
 ```
 
-### 5. Documentation
+### 4. Documentation
 
 ```bash
 # Build documentation
@@ -279,15 +315,15 @@ Gold Digger uses Cargo features for conditional compilation:
 
 ```toml
 # Default features
-default = ["json", "csv", "ssl", "additional_mysql_types", "verbose"]
+default = ["json", "csv", "additional_mysql_types", "verbose"]
 
 # Individual features
-json = ["serde_json"]
-csv = ["csv"]
-ssl = ["mysql/native-tls"]
-ssl-rustls = ["mysql/rustls-tls"]
+json = []  # Enable JSON output format
+csv = []   # Enable CSV output format
 additional_mysql_types = ["mysql_common?/bigdecimal", ...]
-verbose = []
+verbose = []  # Enable verbose logging
+
+# TLS is always enabled with rustls - no feature flags needed
 ```
 
 ### Testing Feature Combinations
@@ -299,8 +335,11 @@ cargo test
 # Test minimal features
 cargo test --no-default-features --features "csv json"
 
-# Test rustls TLS
-cargo test --no-default-features --features "json csv ssl-rustls additional_mysql_types verbose"
+# Test with all features
+cargo test --release
+
+# Test without optional features
+cargo test --no-default-features
 ```
 
 ## Database Setup for Testing
@@ -548,8 +587,8 @@ instruments -t "Time Profiler" target/release/gold_digger
 ### Resources
 
 - **Documentation**: This guide and API docs
-- **Issues**: [GitHub Issues](https://github.com/UncleSp1d3r/gold_digger/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/UncleSp1d3r/gold_digger/discussions)
+- **Issues**: [GitHub Issues](https://github.com/EvilBit-Labs/gold_digger/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/EvilBit-Labs/gold_digger/discussions)
 
 ### Common Commands Reference
 

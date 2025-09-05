@@ -1,0 +1,9 @@
+---
+source: tests/tls_cli_integration.rs
+expression: stderr
+---
+error: the argument '--insecure-skip-hostname-verify' cannot be used with '--allow-invalid-certificate'
+
+Usage: gold_digger --insecure-skip-hostname-verify --db-url <DB_URL> --query <QUERY> --output <OUTPUT>
+
+For more information, try '--help'.

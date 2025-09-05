@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Rust Test Coverage Validator",
+  "description": "When a new Rust file is created, ensure that there are proper tests implemented to cover at least 80% of the file's functionality, per our code coverage standards.",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "src/**/*.rs"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "A new Rust file has been created or modified. Please analyze the file and ensure it has proper test coverage meeting our 80% code coverage standard. \n\nFor new files in src/, check if:\n1. The file has corresponding unit tests (either in the same file with #[cfg(test)] or in tests/ directory)\n2. All public functions have test coverage\n3. Critical error paths and edge cases are tested\n4. The tests follow our project conventions (using anyhow::Result, proper error handling)\n\nIf tests are missing or insufficient:\n1. Create comprehensive unit tests covering at least 80% of the functionality\n2. Include tests for error conditions and edge cases\n3. Follow the project's testing patterns (cargo nextest, proper assertions)\n4. Ensure tests are cross-platform compatible\n\nUse the project's testing standards from the pipeline requirements and ensure all tests can be run with `just test` or `cargo nextest run`."
+  }
+}

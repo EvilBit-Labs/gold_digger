@@ -124,7 +124,7 @@ error: failed to resolve dependencies
    just validate-deps
 
    # Check specific feature combination
-   cargo build --no-default-features --features "json csv ssl"
+   cargo build --no-default-features --features "json csv"
    ```
 
 ### Version Conflicts
@@ -176,22 +176,22 @@ error: conflicting requirements for `dependency`
 
 **Common Issues:**
 
-- OpenSSL compilation failures
 - Visual Studio Build Tools missing
 - Long path limitations
 - MSVC vs GNU toolchain conflicts
 
 **Solutions:**
 
-1. **OpenSSL Issues:**
+1. **Standard Build:**
 
    ```bash
-   # Recommended: Use rustls for pure Rust solution (no OpenSSL dependency)
-   cargo build --no-default-features --features "json csv ssl-rustls"
+   # Standard build (TLS always available with rustls)
+   cargo build --release
 
-   # Alternative: Install vcpkg and OpenSSL (requires additional setup)
-   set VCPKG_ROOT=C:\vcpkg
-   vcpkg install openssl:x64-windows-static
+   # Minimal build (TLS still available)
+   cargo build --no-default-features --features "json csv"
+
+   # No additional TLS dependencies needed - rustls is pure Rust
    ```
 
 2. **Visual Studio Build Tools:**
@@ -220,8 +220,8 @@ error: conflicting requirements for `dependency`
 **Common Issues:**
 
 - Xcode command line tools missing
-- Homebrew OpenSSL linking issues
 - Apple Silicon vs Intel differences
+- Homebrew dependency conflicts
 
 **Solutions:**
 
@@ -235,18 +235,17 @@ error: conflicting requirements for `dependency`
    xcode-select -p
    ```
 
-2. **OpenSSL Linking:**
+2. **Build Configuration:**
 
    ```bash
-   # Use Homebrew OpenSSL (modern systems use openssl@3)
-   brew install openssl@3
-   export OPENSSL_DIR=$(brew --prefix openssl@3)
+   # Standard build (TLS always available with rustls)
+   cargo build --release
 
-   # Or use rustls for pure Rust solution
-   cargo build --no-default-features --features "json csv ssl-rustls"
+   # Minimal build (TLS still available)
+   cargo build --no-default-features --features "json csv"
    ```
 
-   **Note:** Modern Homebrew installations use `openssl@3` as the default formula. If `brew --prefix openssl` fails, use `openssl@3` instead.
+   **Note:** Gold Digger uses rustls exclusively - no Homebrew OpenSSL installation required.
 
 3. **Apple Silicon Issues:**
 
@@ -283,11 +282,11 @@ error: conflicting requirements for `dependency`
 
    # CentOS/RHEL/Fedora
    sudo yum groupinstall "Development Tools"
-   sudo yum install openssl-devel pkg-config
+   sudo yum install pkg-config
 
    # Or use dnf on newer systems
    sudo dnf groupinstall "Development Tools"
-   sudo dnf install openssl-devel pkg-config
+   sudo dnf install pkg-config
    ```
 
 2. **Library Path Issues:**
@@ -307,8 +306,7 @@ error: conflicting requirements for `dependency`
 **Error Pattern:**
 
 ```
-error: feature `ssl` and `ssl-rustls` cannot be used together
-error: native-tls and rustls dependencies conflict
+error: TLS connection failed: certificate validation error
 ```
 
 **Solutions:**
@@ -319,19 +317,19 @@ error: native-tls and rustls dependencies conflict
    # Check TLS dependency conflicts
    just validate-deps
 
-   # Test individual TLS backends
-   cargo build --no-default-features --features "json csv ssl"
-   cargo build --no-default-features --features "json csv ssl-rustls"
+   # Test TLS and non-TLS builds
+   cargo build --release  # With TLS
+   cargo build --no-default-features --features "json csv"  # Without TLS
    ```
 
 2. **Choose TLS Backend:**
 
    ```bash
-   # For native TLS (platform-specific)
-   cargo build --no-default-features --features "json csv ssl additional_mysql_types verbose"
+   # Standard build with TLS support (always included)
+   cargo build --release
 
-   # For pure Rust TLS (portable)
-   cargo build --no-default-features --features "json csv ssl-rustls additional_mysql_types verbose"
+   # Minimal build without TLS
+   cargo build --release --no-default-features
 
    # For no TLS (testing only)
    cargo build --no-default-features --features "json csv additional_mysql_types verbose"

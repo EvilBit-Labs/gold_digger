@@ -37,20 +37,20 @@ Brief overview of the most important changes in this release.
 
 ```bash
 # Linux/macOS
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/unclesp1d3r/gold_digger/releases/download/{{VERSION}}/gold_digger-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/EvilBit-Labs/gold_digger/releases/download/{{VERSION}}/gold_digger-installer.sh | sh
 
 # Windows
-powershell -c "irm https://github.com/unclesp1d3r/gold_digger/releases/download/{{VERSION}}/gold_digger-installer.ps1 | iex"
+powershell -c "irm https://github.com/EvilBit-Labs/gold_digger/releases/download/{{VERSION}}/gold_digger-installer.ps1 | iex"
 ````
 
 ### Package Managers
 
 ```bash
 # Homebrew
-brew install unclesp1d3r/tap/gold-digger
+brew install EvilBit-Labs/tap/gold-digger
 
 # Manual download
-# Visit: https://github.com/unclesp1d3r/gold_digger/releases/tag/v1.0.0
+# Visit: https://github.com/EvilBit-Labs/gold_digger/releases/tag/v1.0.0
 ```
 
 ## 🔍 What's Changed
@@ -91,7 +91,7 @@ After verification, check the included SBOM and SHA256 files for complete integr
 
 ## 📋 Changelog
 
-For a complete list of changes, see the [CHANGELOG.md](https://github.com/unclesp1d3r/gold_digger/blob/main/CHANGELOG.md).
+For a complete list of changes, see the [CHANGELOG.md](https://github.com/EvilBit-Labs/gold_digger/blob/main/CHANGELOG.md).
 
 ## 🐛 Known Issues
 
@@ -111,9 +111,9 @@ For a complete list of changes, see the [CHANGELOG.md](https://github.com/uncles
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/unclesp1d3r/gold_digger/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/unclesp1d3r/gold_digger/discussions)
-- **Security**: [SECURITY.md](https://github.com/unclesp1d3r/gold_digger/blob/main/SECURITY.md)
+- **Issues**: [GitHub Issues](https://github.com/EvilBit-Labs/gold_digger/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/EvilBit-Labs/gold_digger/discussions)
+- **Security**: [SECURITY.md](https://github.com/EvilBit-Labs/gold_digger/blob/main/SECURITY.md)
 
 ## 🙏 Contributors
 
@@ -124,7 +124,7 @@ Thanks to all contributors who made this release possible:
 
 ## 📄 License
 
-Gold Digger is released under the MIT License. See [LICENSE](https://github.com/unclesp1d3r/gold_digger/blob/main/LICENSE) for details.
+Gold Digger is released under the MIT License. See [LICENSE](https://github.com/EvilBit-Labs/gold_digger/blob/main/LICENSE) for details.
 
 ````markdown
 
@@ -191,4 +191,4 @@ When using cargo-dist, the release notes can be:
 
 ## Example Completed Release Notes
 
-See the [GitHub Releases](https://github.com/unclesp1d3r/gold_digger/releases) page for examples of completed release notes for previous versions.
+See the [GitHub Releases](https://github.com/EvilBit-Labs/gold_digger/releases) page for examples of completed release notes for previous versions.

@@ -17,17 +17,40 @@ Contains testcontainers-based TLS integration tests that validate:
 
 ## Running Tests
 
-### All Tests (excluding Docker-dependent tests)
+### Full Test Suite
 
 ```bash
-# With native-tls (ssl feature)
-cargo test --test tls_integration --features ssl
+# Run all tests (unit, integration, and TLS tests)
+cargo test
 
-# With rustls (ssl-rustls feature)
-cargo test --test tls_integration --no-default-features --features ssl-rustls
+# Release build tests
+cargo test --release
 
-# Without TLS features (tests error handling)
-cargo test --test tls_integration --no-default-features --features json,csv
+# Run all tests including Docker-dependent ones (requires Docker)
+cargo test -- --ignored
+```
+
+### TLS Integration Tests Only
+
+```bash
+# Run only TLS integration tests
+cargo test --test tls_integration
+
+# Release build TLS tests
+cargo test --test tls_integration --release
+
+# Run TLS tests including Docker-dependent ones (requires Docker)
+cargo test --test tls_integration -- --ignored
+```
+
+### Minimal Build Tests (without TLS)
+
+```bash
+# Run library unit tests only (no TLS features)
+cargo test --no-default-features --features json,csv --lib
+
+# Run all unit tests (no TLS features)
+cargo test --no-default-features --features json,csv --tests
 ```
 
 ### Docker-dependent Tests
@@ -36,10 +59,26 @@ Some tests require Docker and MySQL containers. These are marked with `#[ignore]
 
 ```bash
 # Run all tests including Docker-dependent ones (requires Docker)
-cargo test --test tls_integration --features ssl -- --ignored
+cargo test --test tls_integration -- --ignored
 
 # Run specific Docker test
-cargo test --test tls_integration --features ssl test_basic_tls_connection_establishment -- --ignored
+cargo test --test tls_integration test_basic_tls_connection_establishment -- --ignored
+```
+
+### Heavy Integration Tests
+
+For comprehensive testing with real database connections, enable the `integration_tests` feature:
+
+```bash
+# Run integration tests (requires Docker and integration_tests feature)
+cargo test --test tls_integration --features "integration_tests" -- --ignored
+
+# Run all tests including integration tests
+cargo test --test tls_integration --features "integration_tests" -- --include-ignored
+
+# Using justfile commands
+just test-integration  # Run only integration tests
+just test-all         # Run all tests including integration tests
 ```
 
 ### Test Categories
@@ -51,12 +90,14 @@ cargo test --test tls_integration --features ssl test_basic_tls_connection_estab
 4. **Performance Tests** (`tls_performance_tests`): Test connection pooling and concurrency (require
    Docker)
 5. **No-TLS Tests** (`no_tls_tests`): Test behavior when TLS features are disabled
+6. **Heavy Integration Tests** (`integration_tests`): Comprehensive database integration tests (require Docker, TEST_DATABASE_URL, and `integration_tests` feature)
 
 ## Requirements
 
 - **Rust**: Tests require the same Rust version as the main project
 - **Docker** (optional): Required only for tests marked with `#[ignore]`
-- **MySQL Image**: Docker tests will automatically pull `mysql:8.1` image
+- **MariaDB Image**: Docker tests will automatically pull `mariadb:10.11` image
+- **integration_tests feature** (optional): Feature flag required for heavy integration tests
 
 ## Test Features
 
@@ -94,8 +135,8 @@ The tests are designed to work in CI environments:
 
 - Docker-dependent tests are ignored by default
 - Unit tests run without external dependencies
-- Tests work with both `ssl` and `ssl-rustls` features
-- Tests validate that TLS features are properly disabled when not compiled
+- Tests work with always-available rustls TLS implementation
+- Tests validate that TLS is available in both standard and minimal builds
 
 ## Troubleshooting
 
@@ -119,6 +160,6 @@ If certificate tests fail:
 
 If feature-related tests fail:
 
-1. Verify correct feature flags are enabled
-2. Check that both `ssl` and `ssl-rustls` features work
-3. Ensure conditional compilation is working correctly
+1. Verify TLS is available in standard builds
+2. Check that rustls TLS implementation works correctly
+3. Ensure TLS is properly excluded in minimal builds

@@ -49,7 +49,9 @@ A clear and concise description of what actually happened.
 
 ```bash
 # How did you build gold_digger?
-cargo build --release --no-default-features --features "ssl-rustls"
+cargo build --release  # Standard build with TLS
+# OR
+cargo build --no-default-features --features "json csv"  # Minimal build
 ```
 
 ## Error Output

@@ -1,7 +1,7 @@
 use gold_digger::rows_to_strings;
 use mysql::prelude::Queryable;
 use std::time::Instant;
-use testcontainers_modules::{mysql::Mysql, testcontainers::runners::SyncRunner};
+use testcontainers_modules::{mariadb::Mariadb, testcontainers::runners::SyncRunner};
 
 /// Check if running in CI environment
 fn is_ci() -> bool {
@@ -16,9 +16,9 @@ fn test_type_conversion_safety_with_real_database() {
     if is_ci() {
         return;
     }
-    // Start a MySQL container for testing
-    let mysql_container = Mysql::default().start().expect("Failed to start MySQL container");
-    let host_port = mysql_container
+    // Start a MariaDB container for testing
+    let mariadb_container = Mariadb::default().start().expect("Failed to start MariaDB container");
+    let host_port = mariadb_container
         .get_host_port_ipv4(3306)
         .expect("Failed to get host port");
 
@@ -135,8 +135,8 @@ fn test_special_characters_and_unicode() {
     if is_ci() {
         return;
     }
-    let mysql_container = Mysql::default().start().expect("Failed to start MySQL container");
-    let host_port = mysql_container
+    let mariadb_container = Mariadb::default().start().expect("Failed to start MariaDB container");
+    let host_port = mariadb_container
         .get_host_port_ipv4(3306)
         .expect("Failed to get host port");
 
@@ -202,8 +202,8 @@ fn test_large_numbers_and_precision() {
     if is_ci() {
         return;
     }
-    let mysql_container = Mysql::default().start().expect("Failed to start MySQL container");
-    let host_port = mysql_container
+    let mariadb_container = Mariadb::default().start().expect("Failed to start MariaDB container");
+    let host_port = mariadb_container
         .get_host_port_ipv4(3306)
         .expect("Failed to get host port");
 
@@ -269,8 +269,8 @@ fn test_empty_result_set() {
     if is_ci() {
         return;
     }
-    let mysql_container = Mysql::default().start().expect("Failed to start MySQL container");
-    let host_port = mysql_container
+    let mariadb_container = Mariadb::default().start().expect("Failed to start MariaDB container");
+    let host_port = mariadb_container
         .get_host_port_ipv4(3306)
         .expect("Failed to get host port");
 
@@ -294,8 +294,8 @@ fn test_single_row_result() {
     if is_ci() {
         return;
     }
-    let mysql_container = Mysql::default().start().expect("Failed to start MySQL container");
-    let host_port = mysql_container
+    let mariadb_container = Mariadb::default().start().expect("Failed to start MariaDB container");
+    let host_port = mariadb_container
         .get_host_port_ipv4(3306)
         .expect("Failed to get host port");
 
@@ -320,8 +320,8 @@ fn test_null_and_type_conversion_safety() {
     if is_ci() {
         return;
     }
-    let mysql_container = Mysql::default().start().expect("Failed to start MySQL container");
-    let host_port = mysql_container
+    let mariadb_container = Mariadb::default().start().expect("Failed to start MariaDB container");
+    let host_port = mariadb_container
         .get_host_port_ipv4(3306)
         .expect("Failed to get host port");
 
@@ -417,8 +417,8 @@ fn test_memory_efficiency_with_large_dataset() {
     if is_ci() {
         return;
     }
-    let mysql_container = Mysql::default().start().expect("Failed to start MySQL container");
-    let host_port = mysql_container
+    let mariadb_container = Mariadb::default().start().expect("Failed to start MariaDB container");
+    let host_port = mariadb_container
         .get_host_port_ipv4(3306)
         .expect("Failed to get host port");
 
@@ -472,8 +472,8 @@ fn test_indexed_access_safety_fix() {
     if is_ci() {
         return;
     }
-    let mysql_container = Mysql::default().start().expect("Failed to start MySQL container");
-    let host_port = mysql_container
+    let mariadb_container = Mariadb::default().start().expect("Failed to start MariaDB container");
+    let host_port = mariadb_container
         .get_host_port_ipv4(3306)
         .expect("Failed to get host port");
 
@@ -559,8 +559,8 @@ fn test_error_handling_edge_cases() {
     if is_ci() {
         return;
     }
-    let mysql_container = Mysql::default().start().expect("Failed to start MySQL container");
-    let host_port = mysql_container
+    let mariadb_container = Mariadb::default().start().expect("Failed to start MariaDB container");
+    let host_port = mariadb_container
         .get_host_port_ipv4(3306)
         .expect("Failed to get host port");
 

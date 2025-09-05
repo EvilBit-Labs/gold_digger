@@ -106,67 +106,59 @@ Invalid database URL format: Invalid URL scheme. URL: ***REDACTED***
 mysql://username:password@hostname:port/database
 ```
 
-## TLS/SSL Connection Issues
+## TLS Connection Issues (rustls-only implementation)
 
-### TLS Feature Not Enabled (Exit Code 2)
+Gold Digger uses rustls for all TLS connections with enhanced security controls and better error messages.
 
-**Error Message:**
+### TLS Handshake and Connection Issues (Exit Code 3)
+
+**Common Error Messages:**
 
 ```text
-TLS feature not enabled. Recompile with --features ssl to enable TLS support
+TLS handshake failed: protocol version mismatch
+Certificate validation failed: unable to get local issuer certificate
+Certificate validation failed: self signed certificate in certificate chain
+Hostname verification failed for 192.168.1.100: certificate is for db.company.com
 ```
 
-**Solution:**
+**Causes & Solutions:**
+
+- **Certificate validation failures**:
+  - **Self-signed certificates**: Use `--allow-invalid-certificate` (testing only) or `--tls-ca-file /path/to/ca.pem`
+  - **Expired certificates**: Use `--allow-invalid-certificate` (testing only)
+  - **Internal CA certificates**: Use `--tls-ca-file /path/to/internal-ca.pem`
+  - **Missing CA certificates**: Install system CA certificates or use custom CA file
+- **Hostname verification failures**:
+  - **IP address connections**: Use `--insecure-skip-hostname-verify` for development
+  - **Certificate hostname mismatch**: Use `--insecure-skip-hostname-verify` or fix certificate
+- **TLS version/cipher issues**: Ensure server supports TLS 1.2+ with compatible cipher suites
+
+**Gold Digger TLS CLI Flags:**
 
 ```bash
-# Rebuild with TLS support
-cargo build --release --features ssl
+# Use custom CA certificate (recommended for internal infrastructure)
+gold_digger --tls-ca-file /etc/ssl/certs/internal-ca.pem --db-url "mysql://..." --query "..." --output results.json
+
+# Skip hostname verification (development environments)
+gold_digger --insecure-skip-hostname-verify --db-url "mysql://user:pass@192.168.1.100:3306/db" --query "..." --output results.json
+
+# Accept invalid certificates (testing only - DANGEROUS)
+gold_digger --allow-invalid-certificate --db-url "mysql://..." --query "..." --output results.json
 ```
 
-### Certificate Validation Failed (Exit Code 3)
+**Diagnostic Steps:**
 
-**Error Message:**
+```bash
+# Check server TLS configuration
+SHOW VARIABLES LIKE 'tls_version';
+SHOW VARIABLES LIKE 'ssl_cipher';
 
-```text
-Certificate validation failed: unable to get local issuer certificate.
-Check certificate chain, expiration, and CA configuration
+# Verify certificate chain
+openssl s_client -connect hostname:3306 -servername hostname
+
+# Test with Gold Digger verbose mode
+gold_digger -v --db-url "mysql://..." --query "SELECT 1" --output test.json
 ```
-
-**Causes & Solutions:**
-
-- **Missing CA certificates**: Install system CA certificates
-- **Self-signed certificates**: Add CA to system trust store
-- **Expired certificates**: Renew server certificates
-- **Certificate chain issues**: Verify complete certificate chain
-- **Testing environments**: Use `ssl-mode=preferred` or `ssl-mode=disabled` in connection URL (not recommended for production)
-
-### TLS Handshake Failed (Exit Code 3)
-
-**Error Message:**
-
-```text
-TLS handshake failed: protocol version mismatch.
-Check server TLS configuration and certificate validity
-```
-
-**Causes & Solutions:**
-
-- **TLS version mismatch**: Ensure server supports TLS 1.2+
-- **Cipher suite incompatibility**: Update server TLS configuration
-- **Certificate issues**: Verify certificate validity and chain
-
-### Unsupported TLS Version (Exit Code 3)
-
-**Error Message:**
-
-```text
-Unsupported TLS version: 1.0. Only TLS 1.2 and 1.3 are supported
-```
-
-**Solution:**
-
-- Upgrade database server to support TLS 1.2 or 1.3
-- Update server TLS configuration
 
 ## Network Troubleshooting
 

@@ -149,7 +149,7 @@ platform_guidance:
       - "Visual Studio Build Tools missing"
       - "Path length limitations"
     solutions:
-      - "Use ssl-rustls instead of ssl"
+      - "Use standard rustls TLS build"
       - "Install Visual Studio Build Tools"
       - "Use short paths or enable long path support"
 
@@ -160,7 +160,7 @@ platform_guidance:
       - "Apple Silicon compatibility"
     solutions:
       - "Install Xcode command line tools"
-      - "Use Homebrew OpenSSL or ssl-rustls"
+      - "Use standard rustls TLS build"
       - "Use universal binaries for compatibility"
 
   linux:

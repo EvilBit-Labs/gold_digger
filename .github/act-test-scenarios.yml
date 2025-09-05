@@ -18,7 +18,7 @@ scenarios:
         payload:
           ref: "refs/heads/main"
           repository:
-            full_name: "UncleSp1d3r/gold_digger"
+            full_name: "EvilBit-Labs/gold_digger"
       - name: "Pull request"
         event: pull_request
         payload:
@@ -26,7 +26,7 @@ scenarios:
           pull_request:
             head:
               repo:
-                full_name: "UncleSp1d3r/gold_digger"
+                full_name: "EvilBit-Labs/gold_digger"
 
   # Security Workflow Testing
   security_testing:
@@ -91,7 +91,7 @@ scenarios:
                 full_name: "fork-user/gold_digger"
             base:
               repo:
-                full_name: "UncleSp1d3r/gold_digger"
+                full_name: "EvilBit-Labs/gold_digger"
 
   # Error Scenario Testing
   error_scenarios:
@@ -191,10 +191,8 @@ matrix:
 
   # Feature combinations
   features:
-    - name: "ssl"
-      flags: "--no-default-features --features json,csv,ssl,additional_mysql_types,verbose"
-    - name: "ssl-rustls"
-      flags: "--no-default-features --features json,csv,ssl-rustls,additional_mysql_types,verbose"
+    - name: "default"
+      flags: "--release"
     - name: "minimal"
       flags: "--no-default-features --features json,csv,additional_mysql_types,verbose"
 

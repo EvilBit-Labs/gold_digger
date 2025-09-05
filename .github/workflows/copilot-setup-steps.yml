@@ -31,18 +31,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          # Use the exact version specified in rust-toolchain.toml
-          toolchain: 1.89.0
           components: rustfmt, clippy
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          # Cache key includes the rust-toolchain file for proper invalidation
-          cache-on-failure: true
 
       - name: Install just task runner
         uses: taiki-e/install-action@v2
@@ -54,40 +45,15 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install cargo-nextest
+      - name: Install cargo tools
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-nextest
+          tool: cargo-nextest,cargo-llvm-cov,cargo-audit,cargo-deny,cargo-dist, mdbook
 
-      - name: Install cargo-llvm-cov
+      - name: Install mdbook plugins
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-llvm-cov
-
-      - name: Install cargo-audit
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-audit
-
-      - name: Install cargo-deny
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-deny
-
-      - name: Install cargo-dist
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-dist
-
-      - name: Install mdBook
-        uses: taiki-e/install-action@v2
-        with:
-          tool: mdbook
-
-      - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@main
-        with:
-          tool: mdbook-admonish mdbook-mermaid mdbook-linkcheck mdbook-toc mdbook-open-on-gh mdbook-tabs mdbook-i18n-helpers
+          tool: mdbook-admonish,mdbook-mermaid,mdbook-linkcheck,mdbook-toc,mdbook-open-on-gh,mdbook-tabs,mdbook-i18n-helpers
 
       - name: Run just install
         run: |
@@ -106,24 +72,3 @@ jobs:
           echo "  - cargo-audit: $(cargo audit --version)"
           echo "  - cargo-deny: $(cargo deny --version)"
           echo "  - cargo-dist: $(cargo dist --version)"
-          echo ""
-          echo "GitHub Actions used:"
-          echo "  - dtolnay/rust-toolchain@stable (Rust setup)"
-          echo "  - Swatinem/rust-cache@v2 (dependency caching)"
-          echo "  - taiki-e/install-action@v2 (just, cargo tools, mdbook)"
-          echo "  - pre-commit/action@v3.0.1 (pre-commit hooks)"
-          echo "  - actions/setup-python@v4 (Python for pre-commit)"
-          echo ""
-          echo "Project features validated:"
-          echo "  - Default features (native TLS)"
-          echo "  - Pure Rust TLS (rustls)"
-          echo "  - Minimal build (no TLS)"
-          echo ""
-          echo "Quality checks passed:"
-          echo "  - Pre-commit hooks (pre-commit/action)"
-          echo "  - Code formatting (just fmt-check)"
-          echo "  - Clippy linting (just lint)"
-          echo "  - Unit tests (just test-no-docker)"
-          echo "  - Security audit (just audit)"
-          echo "  - License validation (just deny)"
-          echo "  - TLS dependency validation (just validate-deps)"

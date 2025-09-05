@@ -10,11 +10,9 @@ use gold_digger::cli::{Cli, Commands, OutputFormat, Shell};
 use gold_digger::exit::{exit_no_rows, exit_success, exit_with_error};
 use gold_digger::rows_to_strings;
 
-#[cfg(feature = "ssl")]
 use gold_digger::tls::{TlsConfig, create_tls_connection};
 
 /// Redacts sensitive information from SQL error messages
-#[cfg(feature = "verbose")]
 fn redact_sql_error(message: &str) -> String {
     // Simple redaction using string replacement for common sensitive patterns
     let mut redacted = message.to_string();
@@ -78,7 +76,7 @@ fn main() {
         Err(e) => exit_with_error(e, Some("Output file resolution failed")),
     };
 
-    let pool = match create_database_connection(&database_url) {
+    let pool = match create_database_connection(&database_url, &cli) {
         Ok(pool) => pool,
         Err(e) => exit_with_error(anyhow::anyhow!("Database connection pool creation failed: {}", e), None),
     };
@@ -122,19 +120,10 @@ fn main() {
             };
 
             // Create error message with appropriate level of detail
-            let error_message = {
-                #[cfg(feature = "verbose")]
-                {
-                    if cli.verbose > 0 && _should_show_details {
-                        format!("{}: {}", context, redact_sql_error(&e.to_string()))
-                    } else {
-                        context.to_string()
-                    }
-                }
-                #[cfg(not(feature = "verbose"))]
-                {
-                    context.to_string()
-                }
+            let error_message = if cli.verbose > 0 && _should_show_details {
+                format!("{}: {}", context, redact_sql_error(&e.to_string()))
+            } else {
+                context.to_string()
             };
 
             exit_with_error(anyhow::anyhow!("{}", error_message), Some("Database query failed"));
@@ -182,42 +171,66 @@ fn main() {
     exit_success(None);
 }
 
-/// Creates a database connection pool with optional TLS configuration
-fn create_database_connection(database_url: &str) -> Result<Pool> {
-    #[cfg(feature = "ssl")]
+/// Creates a database connection pool with rustls-only TLS configuration from CLI
+fn create_database_connection(database_url: &str, cli: &Cli) -> Result<Pool> {
+    // Create TLS configuration from CLI options
+    let tls_config = if cli.tls_options.tls_ca_file.is_some()
+        || cli.tls_options.insecure_skip_hostname_verify
+        || cli.tls_options.allow_invalid_certificate
     {
-        // Parse TLS configuration from URL (placeholder for future enhancement)
-        let tls_config = parse_tls_config_from_url(database_url)?;
+        let config = TlsConfig::from_tls_options(&cli.tls_options)
+            .map_err(|e| anyhow::anyhow!("TLS configuration error: {}", e))?;
 
-        // Use TLS-aware connection creation
-        create_tls_connection(database_url, tls_config)
-    }
+        // Display security warnings for insecure modes
+        config.display_security_warnings();
 
-    #[cfg(not(feature = "ssl"))]
-    {
-        // Fallback to direct Pool creation when SSL feature is disabled
-        Pool::new(database_url).map_err(|e| anyhow::anyhow!("Database connection failed: {}", e))
-    }
-}
+        Some(config)
+    } else {
+        // Use default TLS behavior when no explicit TLS flags are provided
+        // This will use platform certificate store with rustls
+        None
+    };
 
-/// Parses TLS configuration from database URL
-/// Currently returns None as the mysql crate doesn't support URL-based SSL configuration
-/// This function provides a foundation for future TLS URL parameter support
-#[cfg(feature = "ssl")]
-fn parse_tls_config_from_url(_database_url: &str) -> Result<Option<TlsConfig>> {
-    // The mysql crate doesn't support URL-based SSL configuration like ssl-mode, ssl-ca, etc.
-    // For now, we return None to use default TLS behavior when the ssl feature is enabled
-    // Future enhancement: Parse URL parameters and create appropriate TlsConfig
-
-    // Example of what this could look like in the future:
-    // if database_url.contains("ssl-mode=required") {
-    //     return Ok(Some(TlsConfig::new()));
-    // }
-    // if database_url.contains("ssl-ca=") {
-    //     // Extract CA path and create config
-    // }
-
-    Ok(None)
+    // Use rustls-only TLS connection creation with enhanced error handling
+    create_tls_connection(database_url, tls_config, cli.verbose > 0).map_err(|tls_error| {
+        // Convert TLS errors to anyhow errors with appropriate context
+        match &tls_error {
+            gold_digger::tls::TlsError::CertificateValidationFailed { .. }
+            | gold_digger::tls::TlsError::CertificateTimeInvalid { .. }
+            | gold_digger::tls::TlsError::InvalidSignature { .. }
+            | gold_digger::tls::TlsError::UnknownCertificateAuthority { .. }
+            | gold_digger::tls::TlsError::InvalidCertificatePurpose { .. }
+            | gold_digger::tls::TlsError::CertificateChainInvalid { .. }
+            | gold_digger::tls::TlsError::CertificateRevoked { .. } => {
+                // Certificate validation errors - suggest appropriate CLI flag
+                if let Some(suggestion) = tls_error.suggest_cli_flag() {
+                    anyhow::anyhow!("{}. Suggestion: {}", tls_error, suggestion)
+                } else {
+                    anyhow::anyhow!("{}", tls_error)
+                }
+            },
+            gold_digger::tls::TlsError::HostnameVerificationFailed { .. } => {
+                // Hostname verification errors - suggest skip hostname flag
+                anyhow::anyhow!(
+                    "{}. Suggestion: {}",
+                    tls_error,
+                    tls_error
+                        .suggest_cli_flag()
+                        .unwrap_or("--insecure-skip-hostname-verify")
+                )
+            },
+            gold_digger::tls::TlsError::CaFileNotFound { .. }
+            | gold_digger::tls::TlsError::InvalidCaFormat { .. }
+            | gold_digger::tls::TlsError::MutuallyExclusiveFlags { .. } => {
+                // Client configuration errors - no additional context needed
+                anyhow::anyhow!("{}", tls_error)
+            },
+            _ => {
+                // Other TLS errors (handshake, connection, server issues)
+                anyhow::anyhow!("Database connection failed: {}", tls_error)
+            },
+        }
+    })
 }
 
 /// Resolves the database URL from CLI arguments or environment variables
@@ -322,12 +335,11 @@ fn dump_configuration(cli: &Cli) -> Result<()> {
         "pretty": cli.pretty,
         "allow_empty": cli.allow_empty,
         "features": {
-            "ssl": cfg!(feature = "ssl"),
-            "ssl_rustls": cfg!(feature = "ssl-rustls"),
             "json": cfg!(feature = "json"),
             "csv": cfg!(feature = "csv"),
             "verbose": cfg!(feature = "verbose"),
-            "additional_mysql_types": cfg!(feature = "additional_mysql_types")
+            "additional_mysql_types": cfg!(feature = "additional_mysql_types"),
+            "tls": true  // TLS is always available (rustls-only implementation)
         }
     });
 
@@ -338,42 +350,61 @@ fn dump_configuration(cli: &Cli) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::NamedTempFile;
+
+    /// Creates a CLI instance with common test arguments
+    fn build_test_cli() -> Cli {
+        Cli::parse_from([
+            "gold_digger",
+            "--db-url",
+            "mysql://test",
+            "--query",
+            "SELECT 1",
+            "--output",
+            "test.json",
+        ])
+    }
+
+    /// Creates a CLI instance with TLS options for testing
+    fn build_test_cli_with_tls() -> Cli {
+        Cli::parse_from([
+            "gold_digger",
+            "--db-url",
+            "mysql://test",
+            "--query",
+            "SELECT 1",
+            "--output",
+            "test.json",
+            "--insecure-skip-hostname-verify",
+        ])
+    }
 
     #[test]
     fn test_create_database_connection_invalid_url() {
         // Test with invalid URL to ensure error handling works
-        let result = create_database_connection("invalid://url");
+        let cli = build_test_cli();
+        let result = create_database_connection("invalid://url", &cli);
         assert!(result.is_err());
     }
 
-    #[cfg(feature = "ssl")]
     #[test]
-    fn test_parse_tls_config_from_url() {
-        // Test the TLS config parsing function
-        let result = parse_tls_config_from_url("mysql://user:pass@localhost:3306/db");
-        assert!(result.is_ok());
-        assert!(result.unwrap().is_none()); // Currently returns None as documented
-    }
-
-    #[cfg(feature = "ssl")]
-    #[test]
-    fn test_create_database_connection_with_ssl_feature() {
-        // Test that the function exists and handles errors properly when ssl feature is enabled
-        let result = create_database_connection("mysql://invalid:invalid@nonexistent:3306/test");
+    fn test_create_database_connection() {
+        // Test that the function exists and handles errors properly
+        let cli = build_test_cli();
+        let result = create_database_connection("mysql://invalid:invalid@nonexistent:3306/test", &cli);
         // Should fail due to invalid connection details, but not panic
         assert!(result.is_err());
     }
 
-    #[cfg(not(feature = "ssl"))]
     #[test]
-    fn test_create_database_connection_without_ssl_feature() {
-        // Test that the function works without ssl feature
-        let result = create_database_connection("mysql://invalid:invalid@nonexistent:3306/test");
-        // Should fail due to invalid connection details, but not panic
+    fn test_create_database_connection_with_tls_options() {
+        // Test TLS configuration path
+        let cli = build_test_cli_with_tls();
+        let result = create_database_connection("mysql://invalid:invalid@nonexistent:3306/test", &cli);
+        // Should fail due to invalid connection details, but TLS config should be processed
         assert!(result.is_err());
     }
 
-    #[cfg(feature = "verbose")]
     #[test]
     fn test_redact_sql_error() {
         // Test that sensitive information is redacted from error messages
@@ -387,8 +418,226 @@ mod tests {
         assert!(redacted.contains("***REDACTED***"));
         assert!(!redacted.contains("identified by"));
 
+        let error_with_token = "Error: Invalid token abc123";
+        let redacted = redact_sql_error(error_with_token);
+        assert!(redacted.contains("***REDACTED***"));
+        assert!(!redacted.contains("token"));
+
+        let error_with_secret = "Error: Invalid secret key";
+        let redacted = redact_sql_error(error_with_secret);
+        assert!(redacted.contains("***REDACTED***"));
+        assert!(!redacted.contains("secret"));
+
+        let error_with_key = "Error: api_key=sensitive_value";
+        let redacted = redact_sql_error(error_with_key);
+        assert!(redacted.contains("***REDACTED***"));
+        assert!(!redacted.contains("key"));
+
         let normal_error = "Error: Table 'test.users' doesn't exist";
         let redacted = redact_sql_error(normal_error);
         assert_eq!(redacted, normal_error); // Should be unchanged
+    }
+
+    #[test]
+    fn test_resolve_database_url_from_cli() {
+        let cli = build_test_cli();
+        let result = resolve_database_url(&cli);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "mysql://test");
+    }
+
+    #[test]
+    fn test_resolve_database_url_from_env() {
+        let cli = Cli::parse_from(["gold_digger", "--query", "SELECT 1", "--output", "test.json"]);
+
+        // Set environment variable using temp_env
+        temp_env::with_var("DATABASE_URL", Some("mysql://env_test"), || {
+            let result = resolve_database_url(&cli);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), "mysql://env_test");
+        });
+    }
+
+    #[test]
+    fn test_resolve_database_url_missing() {
+        let cli = Cli::parse_from(["gold_digger", "--query", "SELECT 1", "--output", "test.json"]);
+
+        // Ensure env var is not set using temp_env
+        temp_env::with_var("DATABASE_URL", None::<&str>, || {
+            let result = resolve_database_url(&cli);
+            assert!(result.is_err());
+            assert!(result.unwrap_err().to_string().contains("Missing database URL"));
+        });
+    }
+
+    #[test]
+    fn test_resolve_database_query_from_cli() {
+        let cli = build_test_cli();
+        let result = resolve_database_query(&cli);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "SELECT 1");
+    }
+
+    #[test]
+    fn test_resolve_database_query_from_file() -> anyhow::Result<()> {
+        let mut temp_file = NamedTempFile::new()?;
+        std::io::Write::write_all(&mut temp_file, b"SELECT * FROM users")?;
+
+        let cli = Cli::parse_from([
+            "gold_digger",
+            "--db-url",
+            "mysql://test",
+            "--query-file",
+            temp_file.path().to_str().unwrap(),
+            "--output",
+            "test.json",
+        ]);
+
+        let result = resolve_database_query(&cli);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "SELECT * FROM users");
+        Ok(())
+    }
+
+    #[test]
+    fn test_resolve_database_query_from_env() {
+        let cli = Cli::parse_from(["gold_digger", "--db-url", "mysql://test", "--output", "test.json"]);
+
+        // Set environment variable using temp_env
+        temp_env::with_var("DATABASE_QUERY", Some("SELECT * FROM env_table"), || {
+            let result = resolve_database_query(&cli);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), "SELECT * FROM env_table");
+        });
+    }
+
+    #[test]
+    fn test_resolve_database_query_missing() {
+        let cli = Cli::parse_from(["gold_digger", "--db-url", "mysql://test", "--output", "test.json"]);
+
+        // Ensure env var is not set using temp_env
+        temp_env::with_var("DATABASE_QUERY", None::<&str>, || {
+            let result = resolve_database_query(&cli);
+            assert!(result.is_err());
+            assert!(result.unwrap_err().to_string().contains("Missing database query"));
+        });
+    }
+
+    #[test]
+    fn test_resolve_database_query_invalid_file() {
+        let cli = Cli::parse_from([
+            "gold_digger",
+            "--db-url",
+            "mysql://test",
+            "--query-file",
+            "/nonexistent/file.sql",
+            "--output",
+            "test.json",
+        ]);
+
+        let result = resolve_database_query(&cli);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Failed to read query file"));
+    }
+
+    #[test]
+    fn test_resolve_output_file_from_cli() {
+        let cli = build_test_cli();
+        let result = resolve_output_file(&cli);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), PathBuf::from("test.json"));
+    }
+
+    #[test]
+    fn test_resolve_output_file_from_env() {
+        let cli = Cli::parse_from(["gold_digger", "--db-url", "mysql://test", "--query", "SELECT 1"]);
+
+        // Set environment variable using temp_env
+        temp_env::with_var("OUTPUT_FILE", Some("/tmp/env_output.csv"), || {
+            let result = resolve_output_file(&cli);
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), PathBuf::from("/tmp/env_output.csv"));
+        });
+    }
+
+    #[test]
+    fn test_resolve_output_file_missing() {
+        let cli = Cli::parse_from(["gold_digger", "--db-url", "mysql://test", "--query", "SELECT 1"]);
+
+        // Ensure env var is not set using temp_env
+        temp_env::with_var("OUTPUT_FILE", None::<&str>, || {
+            let result = resolve_output_file(&cli);
+            assert!(result.is_err());
+            assert!(result.unwrap_err().to_string().contains("Missing output file"));
+        });
+    }
+
+    #[test]
+    fn test_dump_configuration() -> anyhow::Result<()> {
+        let cli = build_test_cli();
+
+        // This should not panic and should return Ok
+        let result = dump_configuration(&cli);
+        assert!(result.is_ok());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_dump_configuration_with_sensitive_query() -> anyhow::Result<()> {
+        let cli = Cli::parse_from([
+            "gold_digger",
+            "--db-url",
+            "mysql://test",
+            "--query",
+            "CREATE USER 'test' IDENTIFIED BY 'secret123'",
+            "--output",
+            "test.json",
+        ]);
+
+        // This should redact the sensitive query
+        let result = dump_configuration(&cli);
+        assert!(result.is_ok());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_dump_configuration_with_env_query() -> anyhow::Result<()> {
+        temp_env::with_var("DATABASE_QUERY", Some("SELECT password FROM users"), || {
+            let cli = Cli::parse_from(["gold_digger", "--db-url", "mysql://test", "--output", "test.json"]);
+
+            let result = dump_configuration(&cli);
+            assert!(result.is_ok());
+        });
+
+        Ok(())
+    }
+    #[test]
+    fn test_generate_completion_bash() {
+        use gold_digger::cli::Shell;
+        // This should not panic
+        generate_completion(Shell::Bash);
+    }
+
+    #[test]
+    fn test_generate_completion_zsh() {
+        use gold_digger::cli::Shell;
+        // This should not panic
+        generate_completion(Shell::Zsh);
+    }
+
+    #[test]
+    fn test_generate_completion_fish() {
+        use gold_digger::cli::Shell;
+        // This should not panic
+        generate_completion(Shell::Fish);
+    }
+
+    #[test]
+    fn test_generate_completion_powershell() {
+        use gold_digger::cli::Shell;
+        // This should not panic
+        generate_completion(Shell::PowerShell);
     }
 }
