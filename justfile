@@ -41,9 +41,8 @@ format: fmt
 # Format code
 fmt:
     cd {{justfile_dir()}}
-    pre-commit run -a || true
+    just pre-commit-run || true
     cargo fmt
-    prettier --write "**/*.{yml,yaml,js,jsx,ts,tsx}" 2>/dev/null || echo "prettier not installed - run 'npm install -g prettier'"
 
 # Check formatting
 fmt-check:
@@ -55,6 +54,11 @@ lint:
     cd {{justfile_dir()}}
     cargo clippy --all-targets --release -- -D warnings
     cargo clippy --all-targets --no-default-features --features "json csv additional_mysql_types verbose" -- -D warnings
+
+# Run MegaLinter with Rust flavor
+megalinter:
+    cd {{justfile_dir()}}
+    npx mega-linter-runner --flavor rust
 
 # Lint SQL files with sqlfluff
 lint-sql:
@@ -83,10 +87,16 @@ fix:
     cargo clippy --fix --allow-dirty --allow-staged
 
 # Quick development check
-check:
-    pre-commit run -a
+check: pre-commit-run
     just lint
     just test-no-docker
+
+pre-commit-run:
+    pre-commit run -a
+
+# Format a single file (for pre-commit hooks)
+format-files +FILES:
+    npx prettier --write --config .prettierrc.json {{FILES}}
 
 # Quality gates (CI equivalent)
 ci-check: check fmt-check lint-sql test validate-deps deny-check
@@ -675,6 +685,7 @@ help:
     @echo "  fmt-check     Check formatting"
     @echo "  lint          Run clippy linting"
     @echo "  lint-sql      Lint SQL files with sqlfluff"
+    @echo "  megalinter    Run MegaLinter with Rust flavor (comprehensive linting)"
     @echo "  fix           Run clippy with automatic fixes"
     @echo "  fix-sql       Fix SQL formatting with sqlfluff"
     @echo "  check         Quick development checks"

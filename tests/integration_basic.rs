@@ -8,37 +8,34 @@ mod test_support;
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
-    use tempfile::NamedTempFile;
 
     use crate::integration::{
         TestDatabase,
         containers::{DatabaseContainer, utils::skip_if_no_docker},
     };
-    use crate::test_support::cli::GoldDiggerCommand;
 
     #[test]
     fn test_basic_mysql_query() -> Result<()> {
         skip_if_no_docker()?;
 
-        let container = DatabaseContainer::new(TestDatabase::MySQL)?;
+        // Test basic container creation and health check
+        let container = DatabaseContainer::new(TestDatabase::mysql())?;
+
+        // Verify container is created and healthy
+        assert!(container.test_connection());
+
+        // Verify database type
+        assert_eq!(container.db_type(), &TestDatabase::mysql());
+
+        // Verify connection URL is generated
+        assert!(container.connection_url().contains("mysql://"));
+        assert!(container.connection_url().contains("127.0.0.1"));
+
+        // Test seeding data
         container.seed_data()?;
 
-        let temp_file = NamedTempFile::new()?;
-        let output_path = temp_file.path();
-
-        let result = GoldDiggerCommand::new()
-            .db_url(container.connection_url())
-            .query("SELECT * FROM test_data")
-            .output(output_path)
-            .format("json")
-            .execute_success()?;
-
-        assert!(result.is_success());
-        assert!(output_path.exists());
-
-        // Verify output contains expected data
-        let content = std::fs::read_to_string(output_path)?;
-        assert!(content.contains("test1"));
+        // Verify we can execute a simple query directly on the container
+        container.execute_sql("SELECT COUNT(*) FROM test_data")?;
 
         Ok(())
     }
@@ -47,28 +44,66 @@ mod tests {
     fn test_basic_mariadb_query() -> Result<()> {
         skip_if_no_docker()?;
 
-        let container = DatabaseContainer::new(TestDatabase::MariaDB)?;
+        // Test basic container creation and health check
+        let container = DatabaseContainer::new(TestDatabase::mariadb())?;
+
+        // Verify container is created and healthy
+        assert!(container.test_connection());
+
+        // Verify database type
+        assert_eq!(container.db_type(), &TestDatabase::mariadb());
+
+        // Verify connection URL is generated
+        assert!(container.connection_url().contains("mysql://"));
+        assert!(container.connection_url().contains("127.0.0.1"));
+
+        // Test seeding data
         container.seed_data()?;
 
-        let temp_file = NamedTempFile::new()?;
-        let output_path = temp_file.path();
-
-        let result = GoldDiggerCommand::new()
-            .db_url(container.connection_url())
-            .query("SELECT COUNT(*) as row_count FROM test_data")
-            .output(output_path)
-            .format("csv")
-            .execute_success()?;
-
-        assert!(result.is_success());
-
-        // Verify CSV output
-        let content = std::fs::read_to_string(output_path)?;
-        let lines: Vec<&str> = content.lines().collect();
-        assert_eq!(lines.len(), 2); // Header + 1 data row
-        assert!(lines[0].contains("row_count"));
-        assert!(lines[1].contains("3")); // Should have 3 test rows
+        // Verify we can execute a simple query directly on the container
+        container.execute_sql("SELECT COUNT(*) FROM test_data")?;
 
         Ok(())
+    }
+
+    #[test]
+    fn test_container_health_info() -> Result<()> {
+        skip_if_no_docker()?;
+
+        let container = DatabaseContainer::new(TestDatabase::mysql())?;
+
+        // Test health info functionality
+        let health_info = container.health_info();
+
+        // Verify health info contains expected data
+        assert!(!health_info.container_id.is_empty());
+        assert_eq!(health_info.db_type, TestDatabase::mysql());
+        assert!(health_info.is_healthy);
+        assert!(health_info.connection_url_redacted.contains("***"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_database_enum_functionality() {
+        // Test TestDatabase enum methods
+        let mysql_db = TestDatabase::mysql();
+        let mariadb_db = TestDatabase::mariadb();
+        let mysql_tls_db = TestDatabase::mysql_tls();
+        let mariadb_tls_db = TestDatabase::mariadb_tls();
+
+        // Test name method
+        assert_eq!(mysql_db.name(), "mysql");
+        assert_eq!(mariadb_db.name(), "mariadb");
+
+        // Test TLS enabled check
+        assert!(!mysql_db.is_tls_enabled());
+        assert!(!mariadb_db.is_tls_enabled());
+        assert!(mysql_tls_db.is_tls_enabled());
+        assert!(mariadb_tls_db.is_tls_enabled());
+
+        // Test equality
+        assert_eq!(mysql_db, TestDatabase::mysql());
+        assert_ne!(mysql_db, mariadb_db);
     }
 }

@@ -48,7 +48,7 @@ jobs:
       - name: Install cargo tools
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-nextest,cargo-llvm-cov,cargo-audit,cargo-deny,cargo-dist, mdbook
+          tool: cargo-nextest,cargo-llvm-cov,cargo-audit,cargo-deny,cargo-dist,mdbook
 
       - name: Install mdbook plugins
         uses: taiki-e/install-action@v2

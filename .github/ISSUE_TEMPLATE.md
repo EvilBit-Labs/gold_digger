@@ -12,7 +12,9 @@ A clear and concise description of the issue.
    export DATABASE_QUERY="..."
    ```
 
-   ⚠️ Security Note: Before posting this issue, please redact or obfuscate any sensitive credentials in your DATABASE_URL. Replace usernames, passwords, and hostnames with `[REDACTED]` or use a sanitized example like mysql://user:pass@host:3306/db.
+   ⚠️ Security Note: Before posting this issue, please redact or obfuscate any sensitive credentials
+   in your DATABASE_URL. Replace usernames, passwords, and hostnames with `[REDACTED]` or use a
+   sanitized example like mysql://user:pass@host:3306/db.
 
 2. Run the command:
 
@@ -51,4 +53,5 @@ Please select the appropriate template for your issue:
 
 ---
 
-**Note**: This is a single-maintainer project. Please be patient with response times and provide as much detail as possible to help with issue resolution.
+**Note**: This is a single-maintainer project. Please be patient with response times and provide as
+much detail as possible to help with issue resolution.

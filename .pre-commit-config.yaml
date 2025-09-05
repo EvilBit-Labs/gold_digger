@@ -41,14 +41,14 @@ repos:
         always_run: true
         types: [rust]
 
-  # 📄 YAML formatting
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v4.0.0-alpha.8
+  # 📄 Code formatting and linting
+  - repo: local
     hooks:
-      - id: prettier
-        types: [yaml]
-        args: [--prose-wrap=never]
-        exclude: ^.github/workflows/release.yml$
+      - id: format-files
+        name: format-files
+        entry: just format-files
+        language: system
+        files: \.(yml|yaml|json|jsonc|md)$
 
   # 🧪 GitHub Actions validation
   - repo: https://github.com/rhysd/actionlint
@@ -77,7 +77,7 @@ repos:
     hooks:
       - id: cargo-machete
 
-    # 📝 Markdown formatting and linting (temporarily disabled in CI due to path issues)
+  # 📝 Markdown formatting and linting (temporarily disabled in CI due to path issues)
   - repo: https://github.com/hukkin/mdformat
     rev: 0.7.22
     hooks:
@@ -96,11 +96,6 @@ repos:
           - mdformat-gfm-alerts
           - mdformat-rustfmt
           - mdformat-toc
-  # - repo: https://github.com/DavidAnson/markdownlint-cli2
-  #   rev: v0.18.1
-  #   hooks:
-  #     - id: markdownlint-cli2
-  #       args: ["-c", ".markdownlint-cli2.jsonc"]
 
   # 🔒 Security audit for Rust dependencies (moved to CI)
   - repo: local
