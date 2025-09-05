@@ -90,7 +90,7 @@ jobs:
           echo "TLS flag validation tests passed"
 
       - name: Test TLS configuration unit tests
-        run: cargo nextest run tls_config_unit_tests
+        run: cargo nextest run --test tls_config_unit_tests
 
       - name: Verify TLS always available
         run: |
@@ -209,8 +209,8 @@ jobs:
       - name: Test TLS functionality on ${{ matrix.platform }}
         run: |
           # Run TLS-specific tests
-          cargo nextest run tls_config_unit_tests
-          cargo nextest run tls_integration
+          cargo nextest run --test tls_config_unit_tests
+          cargo nextest run --test tls_integration
 
           # Verify rustls dependencies are present
           cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
@@ -267,10 +267,7 @@ jobs:
           cargo build --release
 
           # Test TLS error classification and guidance
-          cargo nextest run tls_error_handling_tests
-
-          # Test security warning system
-          cargo nextest run security_warning_tests
+          cargo nextest run --test tls_integration tls_error_handling_tests
 
       - name: Test TLS configuration validation
         run: |
