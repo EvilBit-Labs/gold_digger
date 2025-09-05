@@ -25,6 +25,7 @@
 
 - [Common Issues](troubleshooting/README.md)
 - [Connection Problems](troubleshooting/connection-issues.md)
+- [Integration Testing](troubleshooting/integration-testing.md)
 - [Type Safety](troubleshooting/type-safety.md)
 - [Type Errors](troubleshooting/type-errors.md)
 - [Performance](troubleshooting/performance.md)
@@ -33,6 +34,7 @@
 
 - [Development Setup](development/setup.md)
 - [Contributing](development/contributing.md)
+- [Integration Testing](development/integration-testing.md)
 - [Architecture](development/architecture.md)
 - [API Reference](development/api-reference.md)
 - [Release Runbook](development/release-runbook.md)

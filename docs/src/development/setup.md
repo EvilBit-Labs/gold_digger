@@ -274,6 +274,12 @@ just coverage
 
 # Run specific test
 cargo test test_name
+
+# Integration testing (requires Docker)
+just test-integration
+
+# All tests including integration tests
+just test-all
 ````
 
 ### 4. Building
@@ -344,7 +350,26 @@ cargo test --no-default-features
 
 ## Database Setup for Testing
 
-### Local MySQL/MariaDB
+### Integration Test Framework
+
+Gold Digger uses testcontainers for automated database testing, eliminating the need for manual database setup:
+
+```bash
+# Integration tests automatically manage database containers
+just test-integration
+
+# No manual database setup required - testcontainers handles:
+# - MySQL 8.0/8.1 container startup and configuration
+# - MariaDB 10.11+ container with TLS certificates
+# - Test schema creation and data seeding
+# - Container cleanup after tests complete
+```
+
+### Manual Database Setup (Optional)
+
+For local development and debugging, you can set up databases manually:
+
+#### Local MySQL/MariaDB
 
 ```bash
 # Install MySQL (macOS)
@@ -362,10 +387,10 @@ CREATE USER 'test_user'@'localhost' IDENTIFIED BY 'test_password';
 GRANT ALL PRIVILEGES ON gold_digger_test.* TO 'test_user'@'localhost';
 ```
 
-### Docker Setup
+#### Docker Setup
 
 ```bash
-# Start MySQL container
+# Start MySQL container for manual testing
 docker run --name gold-digger-mysql \
   -e MYSQL_ROOT_PASSWORD=rootpass \
   -e MYSQL_DATABASE=gold_digger_test \
@@ -380,6 +405,17 @@ export DATABASE_QUERY="SELECT 1 as test"
 export OUTPUT_FILE="test.json"
 cargo run
 ```
+
+### Integration Test Database Features
+
+The comprehensive integration testing framework includes:
+
+- **Multi-Database Support**: Both MySQL and MariaDB containers
+- **TLS Configuration**: Both secure and standard connection testing
+- **Comprehensive Schema**: All MySQL/MariaDB data types with edge cases
+- **Test Data Seeding**: Unicode content, NULL values, large datasets
+- **Health Checks**: Container readiness validation with CI-compatible timeouts
+- **Automatic Cleanup**: No manual container management required
 
 ## Code Style Guidelines
 
