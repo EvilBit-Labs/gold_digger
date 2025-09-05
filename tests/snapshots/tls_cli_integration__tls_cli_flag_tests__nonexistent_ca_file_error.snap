@@ -1,0 +1,5 @@
+---
+source: tests/tls_cli_integration.rs
+expression: stderr
+---
+Database connection pool creation failed: TLS configuration error: CA certificate file not found: /nonexistent/cert.pem. Ensure the file exists and is readable

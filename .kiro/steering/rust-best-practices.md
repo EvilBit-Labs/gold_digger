@@ -22,6 +22,28 @@ inclusion: always
 - Avoid panics in production code; prefer returning errors. Only use `panic!` for unrecoverable, truly exceptional cases (e.g., missing header row in [`json.rs`](mdc:src/json.rs)).
 - Use `?` for error propagation.
 
+### Database Type Safety (CRITICAL)
+
+```rust
+// DANGEROUS - causes runtime panics on NULL/non-string values
+from_value::<String>(row[column.name_str().as_ref()])
+
+// SAFE - use Row's safe getters with explicit NULL handling
+row.get_opt::<String, _>(column.name_str().as_ref())
+    .map(|opt_val| match opt_val {
+        Some(val) => val,
+        None => "".to_string(),
+    })
+    .unwrap_or_else(|_| {
+        // Fallback for non-string types: convert to string representation
+        match row.get::<mysql::Value, _>(column.name_str().as_ref()) {
+            Ok(mysql::Value::NULL) => "".to_string(),
+            Ok(val) => format!("{:?}", val),
+            Err(_) => "".to_string(), // Handle column access errors gracefully
+        }
+    })
+```
+
 ## Code Style
 
 - Follow [Rustfmt](https://github.com/rust-lang/rustfmt) conventions for formatting. Run `cargo fmt` before committing.
@@ -38,7 +60,8 @@ inclusion: always
 ## Dependency Management
 
 - Pin dependency versions in [`Cargo.toml`](mdc:Cargo.toml) and use minimal required features for each crate.
-- Use optional dependencies and features for extensibility (e.g., SSL, additional MySQL types).
+- Use optional dependencies and Cargo features with `default = false` for expensive or heavy-weight features (e.g., additional MySQL types, output formats) to keep minimal builds lean.
+- Document which features are default-off and why in feature descriptions and project documentation.
 
 ## Testing and Safety
 

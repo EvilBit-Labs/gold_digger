@@ -4,7 +4,7 @@ Install Gold Digger on Windows systems.
 
 ## Pre-built Binaries (Recommended)
 
-1. Visit the [GitHub Releases](https://github.com/UncleSp1d3r/gold_digger/releases) page
+1. Visit the [GitHub Releases](https://github.com/EvilBit-Labs/gold_digger/releases) page
 2. Download the latest `gold_digger-windows.exe` file
 3. Move the executable to a directory in your PATH
 4. Open Command Prompt or PowerShell and verify: `gold_digger --version`
@@ -38,7 +38,7 @@ cargo install gold_digger
 
 ```powershell
 # Clone the repository
-git clone https://github.com/UncleSp1d3r/gold_digger.git
+git clone https://github.com/EvilBit-Labs/gold_digger.git
 cd gold_digger
 
 # Build release version
@@ -52,7 +52,11 @@ cargo build --release
 Windows builds use the native SChannel TLS implementation by default. For pure Rust TLS:
 
 ```powershell
-cargo install gold_digger --no-default-features --features "json,csv,ssl-rustls,additional_mysql_types,verbose"
+# Standard installation with TLS support
+cargo install gold_digger
+
+# Or minimal installation without TLS
+cargo install gold_digger --no-default-features --features "json,csv,additional_mysql_types,verbose"
 ```
 
 ## Verification
@@ -76,4 +80,4 @@ gold_digger --help
 If you encounter issues:
 
 1. Check the [Troubleshooting Guide](../troubleshooting/README.md)
-2. Visit the [GitHub Issues](https://github.com/UncleSp1d3r/gold_digger/issues) page
+2. Visit the [GitHub Issues](https://github.com/EvilBit-Labs/gold_digger/issues) page

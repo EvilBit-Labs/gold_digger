@@ -104,8 +104,7 @@ error: lock file is out of date
 **Error Pattern:**
 
 ```
-error: feature `ssl` and `ssl-rustls` cannot be used together
-error: multiple TLS implementations detected
+error: TLS connection failed: certificate validation error
 ```
 
 **Solutions:**
@@ -116,33 +115,33 @@ error: multiple TLS implementations detected
    # Check TLS dependency conflicts
    just validate-deps
 
-   # Show TLS-related dependencies
-   cargo tree --format "{p} {f}" | grep -E "(ssl|tls)"
+   # Show TLS-related dependencies (always included)
+   cargo tree --format "{p} {f}" | grep -E "rustls"
    ```
 
-2. **Choose Single TLS Backend:**
+2. **Build with TLS Support:**
 
    ```bash
-   # Use native TLS (platform-specific)
-   cargo build --no-default-features --features "json csv ssl additional_mysql_types verbose"
+   # Standard build with TLS support (always included)
+   cargo build --release
 
-   # Use rustls (pure Rust)
-   cargo build --no-default-features --features "json csv ssl-rustls additional_mysql_types verbose"
-
-   # No TLS (testing only)
+   # Minimal build (TLS still available)
    cargo build --no-default-features --features "json csv additional_mysql_types verbose"
    ```
 
-3. **Fix Feature Configuration:**
+3. **Verify TLS Dependencies:**
 
    ```toml
-   # In Cargo.toml - ensure mutually exclusive features
-   [features]
-   default = ["json", "csv", "ssl", "additional_mysql_types", "verbose"]
-   ssl = ["mysql/native-tls"]
-   ssl-rustls = ["mysql/rustls-tls"]
+   # In Cargo.toml - rustls is always available
+   [dependencies]
+   mysql = { version = "26.0.1", features = [
+     "rustls-tls",
+   ], default-features = false }
+   rustls = "0.23.31"
+   rustls-native-certs = "0.8.1"
+   rustls-pemfile = "2.2.0"
 
-   # Don't enable both ssl and ssl-rustls simultaneously
+   # TLS is built-in, no feature toggling required
    ```
 
 ### Missing Feature Dependencies
@@ -169,24 +168,23 @@ error: Package does not have feature `missing_feature`
 2. **Add Missing Features:**
 
    ```toml
-   # In Cargo.toml - native TLS configuration
+   # In Cargo.toml - rustls configuration (always available)
    [dependencies]
-   mysql = { version = "24.0", features = ["native-tls"] }
+   mysql = { version = "26.0.1", default-features = false, features = [
+     "rustls-tls",
+   ] }
+   rustls = "0.23.31"
+   rustls-native-certs = "0.8.1"
+   rustls-pemfile = "2.2.0"
    serde = { version = "1.0", features = ["derive"] }
    ```
 
-   ```toml
-   # In Cargo.toml - rustls configuration
-   [dependencies]
-   mysql = { version = "24.0", features = ["rustls-tls"] }
-   serde = { version = "1.0", features = ["derive"] }
-   ```
+   **Note:** Gold Digger uses rustls exclusively for TLS support. TLS is always available and does not require feature toggling.
 
-3. **Conditional Feature Compilation:**
+3. **TLS Configuration:**
 
    ```rust
-   // In source code
-   #[cfg(feature = "ssl")]
+   // In source code - TLS is always available
    use mysql::SslOpts;
 
    #[cfg(feature = "json")]
@@ -299,21 +297,25 @@ error: unable to get packages from source
 
 **Common Issues:**
 
-- OpenSSL compilation failures
 - MSVC vs GNU toolchain conflicts
 - Windows-specific system libraries
+- Missing Visual Studio Build Tools
 
 **Solutions:**
 
-1. **Use rustls Instead of OpenSSL:**
+1. **Gold Digger uses rustls exclusively:**
 
    ```toml
-   # In Cargo.toml
+   # In Cargo.toml - rustls is always available
    [dependencies]
-   mysql = { version = "24.0", features = [
+   mysql = { version = "26.0.1", features = [
      "rustls-tls",
    ], default-features = false }
+   rustls = "0.23.31"
+   rustls-native-certs = "0.8.1"
    ```
+
+   **Note:** Gold Digger uses rustls exclusively. No OpenSSL dependencies are required.
 
 2. **Install Windows Build Tools:**
 
@@ -321,9 +323,7 @@ error: unable to get packages from source
    # Install Visual Studio Build Tools
    # Download from: https://visualstudio.microsoft.com/downloads/
 
-   # Or use vcpkg for OpenSSL
-   vcpkg install openssl:x64-windows-static
-   set VCPKG_ROOT=C:\vcpkg
+   # No additional TLS libraries needed - rustls is pure Rust
    ```
 
 3. **Configure Windows-Specific Dependencies:**
@@ -347,11 +347,8 @@ error: unable to get packages from source
 1. **Install Homebrew Dependencies:**
 
    ```bash
-   # Install OpenSSL via Homebrew
-   brew install openssl
-   export OPENSSL_DIR=$(brew --prefix openssl)
-
-   # Install pkg-config
+   # Gold Digger uses rustls - no OpenSSL needed
+   # Install pkg-config for other dependencies
    brew install pkg-config
    ```
 
@@ -389,16 +386,18 @@ error: unable to get packages from source
 
    ```bash
    # Ubuntu/Debian
-   sudo apt-get install build-essential pkg-config libssl-dev
+   sudo apt-get install build-essential pkg-config
 
    # CentOS/RHEL
    sudo yum groupinstall "Development Tools"
-   sudo yum install openssl-devel pkg-config
+   sudo yum install pkg-config
 
    # Fedora
    sudo dnf groupinstall "Development Tools"
-   sudo dnf install openssl-devel pkg-config
+   sudo dnf install pkg-config
    ```
+
+   **Note:** Gold Digger uses rustls exclusively - no OpenSSL development packages required.
 
 2. **Configure Linux-Specific Dependencies:**
 
@@ -614,12 +613,17 @@ Edit the generated `deny.toml` to customize license policies, vulnerability chec
 1. **TLS Configuration:**
 
    ```toml
-   # Choose one TLS backend
+   # Gold Digger uses rustls exclusively
    [dependencies]
-   mysql = { version = "24.0", features = ["native-tls"] }
-   # OR
-   mysql = { version = "24.0", features = ["rustls-tls"] }
+   mysql = { version = "26.0.1", features = [
+     "rustls-tls",
+   ], default-features = false }
+   rustls = "0.23.31"
+   rustls-native-certs = "0.8.1"
+   rustls-pemfile = "2.2.0"
    ```
+
+   **Note:** Gold Digger no longer supports native-tls. All builds use rustls for TLS connections.
 
 2. **Feature Conflicts:**
 

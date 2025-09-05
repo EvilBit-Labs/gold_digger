@@ -12,19 +12,20 @@ Gold Digger is a MySQL/MariaDB query tool that exports structured data to CSV/JS
 **Design Philosophy**: Offline-first, environment-driven, structured output\
 **Target Users**: DevOps engineers, data analysts, automation scripts
 
-## 🚨 Critical Safety Requirements
-
-### Database Safety (PANIC PREVENTION)
-
-- **NEVER** use unsafe MySQL value conversion - causes runtime panics on NULL/mixed types
-- **ALWAYS** handle NULL values explicitly in all database operations
-- **ALWAYS** recommend SQL type casting for safety: `CAST(column AS CHAR)`
+## Critical Safety Requirements
 
 ### Security (NON-NEGOTIABLE)
 
 - **NEVER** log credentials or connection strings - implement automatic redaction
 - **NEVER** make external network calls at runtime (offline-first design)
 - **ALWAYS** validate and sanitize all user inputs
+
+### Airgap Compatibility
+
+- **Allowed**: Direct TCP egress to configured database host:port pairs (MySQL/MariaDB only)
+- **Prohibited**: All other outbound connections including DNS queries to external resolvers, HTTP/HTTPS, telemetry/call-home, package registries, NTP, and any other non-DB ports/hosts
+- **Runtime**: No external dependencies during execution
+- **Configuration**: Product must be configurable to restrict egress to specific host:port entries; any attempt to reach other endpoints must be denied or fail
 
 ## Product Architecture
 

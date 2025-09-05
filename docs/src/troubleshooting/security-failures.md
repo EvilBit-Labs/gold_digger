@@ -472,10 +472,8 @@ deny = [
   "AGPL-3.0",
 ]
 
-# License exceptions for specific crates
-[[licenses.exceptions]]
-allow = ["OpenSSL"]
-name = "openssl"
+# License exceptions for specific crates (if needed)
+# Note: Gold Digger uses rustls exclusively - no OpenSSL dependencies
 
 [bans]
 multiple-versions = "warn"
@@ -483,7 +481,7 @@ wildcards = "allow"
 
 # Banned crates (security or policy reasons)
 deny = [
-  { name = "openssl-sys", version = "<0.9.80" }, # Known vulnerabilities
+  # Note: Gold Digger uses rustls exclusively - no OpenSSL dependencies
 ]
 
 # Skip certain crates from bans

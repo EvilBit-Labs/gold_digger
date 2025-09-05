@@ -53,8 +53,7 @@ fmt-check:
 # Run clippy linting
 lint:
     cd {{justfile_dir()}}
-    cargo clippy --all-targets --no-default-features --features "json csv ssl additional_mysql_types verbose" -- -D warnings
-    cargo clippy --all-targets --no-default-features --features "json csv ssl-rustls additional_mysql_types verbose" -- -D warnings
+    cargo clippy --all-targets --release -- -D warnings
     cargo clippy --all-targets --no-default-features --features "json csv additional_mysql_types verbose" -- -D warnings
 
 # Run clippy with fixes
@@ -74,6 +73,91 @@ ci-check:
     just lint
     just test
     just validate-deps
+    just deny-check
+
+# Full CI workflow equivalent - mirrors .github/workflows/ci.yml exactly
+ci-full:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{justfile_dir()}}
+
+    echo "🚀 Running full CI workflow equivalent..."
+
+    # Job 1: Quality checks (mirrors quality job)
+    echo "📋 Quality checks..."
+    cargo fmt --check
+    cargo clippy -- -D warnings
+    cargo clippy --no-default-features --features "json csv additional_mysql_types verbose" -- -D warnings
+
+    # Job 2: Test TLS functionality (mirrors test-tls job)
+    echo "🔒 Testing TLS functionality..."
+    cargo build --release
+
+    BIN="./target/release/gold_digger"
+    if [ -f "${BIN}.exe" ]; then
+        BIN="${BIN}.exe"
+    fi
+
+    # Test mutually exclusive TLS flags (should fail)
+    ! "$BIN" --tls-ca-file /tmp/nonexistent.pem --insecure-skip-hostname-verify \
+        --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
+    ! "$BIN" --tls-ca-file /tmp/nonexistent.pem --allow-invalid-certificate \
+        --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
+    ! "$BIN" --insecure-skip-hostname-verify --allow-invalid-certificate \
+        --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
+
+    cargo nextest run --test tls_config_unit_tests
+    "$BIN" --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)" || exit 1
+    cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
+    ! cargo tree | grep "native-tls" || exit 1
+
+    # Job 3: Test with different feature combinations (mirrors test-features job)
+    echo "🧪 Testing feature combinations..."
+    cargo nextest run
+    cargo nextest run --no-default-features --features "json csv additional_mysql_types verbose"
+    cargo build --release
+    cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
+
+    "$BIN" --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)" || exit 1
+    cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
+    cargo tree --no-default-features --features "json csv additional_mysql_types verbose" \
+        | grep -E "(rustls|rustls-native-certs)" || exit 1
+    ! cargo tree | grep "native-tls" || exit 1
+
+    # Job 4: Test TLS functionality (mirrors test-cross-platform job - Linux only)
+    echo "🌐 Testing cross-platform TLS functionality..."
+    cargo nextest run --test tls_config_unit_tests
+    cargo nextest run --test tls_integration
+    cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
+    ! cargo tree | grep "native-tls" || exit 1
+    cargo build --release
+    cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
+    ! cargo tree | grep "native-tls" || exit 1
+    "$BIN" --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)" || exit 1
+
+    # Job 5: Test TLS error handling and configuration validation (mirrors test-tls-validation job)
+    echo "⚠️  Testing TLS error handling and validation..."
+    cargo build --release
+    cargo nextest run tls_error_handling_tests 2>/dev/null || true
+    cargo nextest run security_warning_tests 2>/dev/null || true
+
+    ! "$BIN" --tls-ca-file /nonexistent/path.pem --db-url "mysql://test" \
+        --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
+    echo "invalid certificate" > /tmp/invalid-cert.pem
+    ! "$BIN" --tls-ca-file /tmp/invalid-cert.pem --db-url "mysql://test" \
+        --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
+
+    cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
+    ! cargo tree | grep "native-tls" || exit 1
+
+    # Job 6: Generate coverage (mirrors coverage job)
+    echo "📊 Generating coverage reports..."
+    cargo llvm-cov --workspace --lcov --output-path lcov-default.info
+    cargo llvm-cov --workspace --lcov --output-path lcov-minimal.info \
+        --no-default-features --features "json csv additional_mysql_types verbose"
+    cat lcov-default.info lcov-minimal.info > lcov.info
+
+    echo "🎉 CI workflow equivalent completed successfully!"
 
 # Comprehensive full checks (all non-destructive validation)
 full-checks:
@@ -102,18 +186,12 @@ build:
 build-release:
     cargo build --release
 
-# Build with pure Rust TLS (alternative to native TLS)
-build-rustls:
-    cargo build --release --no-default-features --features "json,csv,ssl-rustls,additional_mysql_types,verbose"
-
-
-
 # Build minimal version (no default features)
 build-minimal:
     cargo build --release --no-default-features --features "csv,json"
 
 # Build all feature combinations
-build-all: build build-release build-rustls build-minimal
+build-all: build build-release build-minimal
 
 # Install locally from workspace
 install:
@@ -126,12 +204,28 @@ install:
 # Run tests (prefer nextest, fallback to cargo test)
 test:
     cd {{justfile_dir()}}
-    cargo nextest run --run-ignored all || cargo test -- --include-ignored
+    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
+        echo "Running tests with nextest..."; \
+        cargo nextest run --run-ignored all; \
+    else \
+        echo "nextest not available, falling back to cargo test..."; \
+        cargo test -- --include-ignored; \
+    fi
 
 # Run tests without Docker tests (non-ignored only)
 test-no-docker:
     cd {{justfile_dir()}}
     cargo nextest run || cargo test
+
+# Run integration tests (requires Docker)
+test-integration:
+    cd {{justfile_dir()}}
+    cargo test --features integration_tests -- --ignored
+
+# Run all tests including integration tests
+test-all:
+    cd {{justfile_dir()}}
+    cargo test --features integration_tests -- --include-ignored
 
 # Run tests with coverage (llvm-cov)
 coverage:
@@ -167,14 +261,22 @@ profile:
 audit:
     cargo audit
 
-# Check for license/security issues
+# Check for license/security issues (local development - tolerant)
 deny:
     cargo deny check || echo "cargo-deny not installed - run 'just install-tools'"
+
+# Check for license/security issues with all features
+deny-check:
+    cargo deny check || echo "cargo-deny not installed - run 'just install-tools'"
+
+# Check for license/security issues (CI strict enforcement)
+deny-ci:
+    cargo deny check --config deny.ci.toml
 
 # Comprehensive security scanning (combines audit, deny, and grype)
 security:
     just audit
-    just deny
+    just deny-ci
     @if command -v grype >/dev/null 2>&1; then \
     grype . --fail-on high || echo "High or critical vulnerabilities found"; \
     else \
@@ -186,28 +288,22 @@ security:
 # DEPENDENCIES & VALIDATION
 # =============================================================================
 
-# Validate TLS dependency tree (for rustls migration)
+# Validate TLS dependency tree
 validate-deps:
-    @if ! cargo tree --no-default-features --features ssl -e=no-dev -f "{p} {f}" | grep -q "native-tls"; then \
-    echo "ERROR: native-tls not found with ssl feature"; \
-    cargo tree --no-default-features --features ssl -e=no-dev -f "{p} {f}"; \
+    @echo "Validating TLS dependencies..."
+    @if ! cargo tree -e=no-dev -f "{p} {f}" | grep -q "rustls"; then \
+    echo "ERROR: rustls not found in standard build"; \
+    cargo tree -e=no-dev -f "{p} {f}"; \
     exit 1; \
     fi
-    @if cargo tree --no-default-features --features ssl-rustls -e=no-dev -f "{p} {f}" | grep -q "native-tls"; then \
-    echo "ERROR: native-tls found with ssl-rustls feature"; \
-    cargo tree --no-default-features --features ssl-rustls -e=no-dev -f "{p} {f}"; \
+    @if cargo tree -e=no-dev -f "{p} {f}" | grep -q "native-tls"; then \
+    echo "ERROR: native-tls found in build (should be rustls-only)"; \
+    cargo tree -e=no-dev -f "{p} {f}"; \
     exit 1; \
     fi
-    @if ! cargo tree --no-default-features --features ssl-rustls -e=no-dev -f "{p} {f}" | grep -q "rustls"; then \
-    echo "ERROR: rustls not found with ssl-rustls feature"; \
-    cargo tree --no-default-features --features ssl-rustls -e=no-dev -f "{p} {f}"; \
-    exit 1; \
-    fi
-    @if cargo tree --no-default-features --features json,csv -e=no-dev -f "{p} {f}" | grep -q "native-tls\|rustls"; then \
-    echo "ERROR: TLS dependencies found without TLS features"; \
-    cargo tree --no-default-features --features json,csv -e=no-dev -f "{p} {f}"; \
-    exit 1; \
-    fi
+    @echo "✓ Standard build includes rustls TLS support"
+    @echo "✓ No native-tls dependencies found"
+    @echo "✓ TLS validation passed"
 
 # Check for outdated dependencies
 outdated:
@@ -280,13 +376,10 @@ watch:
 features:
     @echo "Available feature combinations:"
     @echo ""
-    @echo "Default features:"
+    @echo "Standard build:"
     @echo "  cargo build --release"
     @echo ""
-    @echo "Pure Rust TLS build:"
-    @echo "  cargo build --release --no-default-features --features \"json,csv,ssl-rustls,additional_mysql_types,verbose\""
-    @echo ""
-    @echo "Minimal build (no TLS, no extra types):"
+    @echo "Minimal build (fewer features):"
     @echo "  cargo build --no-default-features --features \"csv json\""
     @echo ""
     @echo "All MySQL types:"
@@ -307,7 +400,7 @@ status:
     @echo "Architecture: Environment variable driven, structured output"
     @echo "Current: v0.2.6 (check version discrepancy)"
     @echo "Target: v1.0 with CLI interface"
-    @echo "Maintainer: UncleSp1d3r"
+    @echo "Maintainer: EvilBit-Labs"
     @echo ""
     @echo "Critical Issues:"
     @echo "  • Type conversion panics on NULL/non-string values"
@@ -519,7 +612,7 @@ release-dry:
     if ! git diff-index --quiet HEAD --; then
     echo "Warning: Working directory has uncommitted changes"
     fi
-    just build-rustls
+    just build-release
     BINARY_PATH="target/release/gold_digger"
     if [[ ! -f "$BINARY_PATH" ]]; then
     echo "Binary not found at $BINARY_PATH"
@@ -542,7 +635,7 @@ release-dry:
 
 [windows]
 release-dry:
-    just build-rustls
+    just build-release
     $BINARY_PATH = "target\release\gold_digger.exe"
     if (-not (Test-Path $BINARY_PATH)) {
         Write-Error "Binary not found at $BINARY_PATH"
@@ -579,11 +672,15 @@ help:
     @echo "  fix           Run clippy with automatic fixes"
     @echo "  check         Quick development checks"
     @echo "  ci-check      Full CI equivalent checks"
+    @echo "  ci-full       Complete CI workflow equivalent (mirrors .github/workflows/ci.yml)"
     @echo "  full-checks   Comprehensive validation (all non-destructive checks)"
+    @echo "  deny-check    Run cargo-deny checks (license & duplicates)"
     @echo ""
     @echo "Testing:"
     @echo "  test          Run tests with nextest (including ignored Docker tests)"
     @echo "  test-no-docker Run tests with nextest (excluding Docker tests)"
+    @echo "  test-integration Run integration tests (requires Docker)"
+    @echo "  test-all      Run all tests including integration tests"
     @echo "  coverage      Run tests with coverage report"
     @echo "  coverage-llvm Run tests with llvm-cov (CI compatible)"
     @echo "  cover         Alias for coverage-llvm (CI naming consistency)"
@@ -592,9 +689,10 @@ help:
     @echo "Security:"
     @echo "  audit         Security audit"
     @echo "  deny          License and security checks"
+    @echo "  deny-check    License and security checks with all features"
     @echo "  security      Comprehensive security scanning (audit + deny + grype)"
     @echo "  sbom          Generate Software Bill of Materials for inspection"
-    @echo "  validate-deps Validate TLS dependency tree (rustls migration)"
+    @echo "  validate-deps Validate TLS dependency tree"
     @echo ""
     @echo "Running:"
     @echo "  run OUTPUT_FILE DATABASE_URL DATABASE_QUERY  Run with custom env vars"

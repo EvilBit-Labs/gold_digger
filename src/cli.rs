@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 /// MySQL/MariaDB query tool with structured output
@@ -47,6 +47,10 @@ pub struct Cli {
     #[arg(long)]
     pub dump_config: bool,
 
+    /// TLS configuration options
+    #[command(flatten)]
+    pub tls_options: TlsOptions,
+
     #[command(subcommand)]
     pub command: Option<Commands>,
 }
@@ -66,6 +70,23 @@ pub enum Shell {
     Zsh,
     Fish,
     PowerShell,
+}
+
+/// TLS configuration options (mutually exclusive)
+#[derive(Args, Debug, Clone)]
+#[group(id = "tls_mode", multiple = false)]
+pub struct TlsOptions {
+    /// Path to CA certificate file for trust anchor pinning
+    #[arg(long, group = "tls_mode")]
+    pub tls_ca_file: Option<PathBuf>,
+
+    /// Skip hostname verification (keeps chain and time validation)
+    #[arg(long, group = "tls_mode")]
+    pub insecure_skip_hostname_verify: bool,
+
+    /// Disable certificate validation entirely (DANGEROUS)
+    #[arg(long, group = "tls_mode")]
+    pub allow_invalid_certificate: bool,
 }
 
 #[derive(ValueEnum, Clone, Debug)]

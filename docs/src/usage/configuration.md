@@ -123,6 +123,72 @@ gold_digger \
   --format json  # Forces JSON despite .txt extension
 ```
 
+## TLS/SSL Configuration
+
+### TLS Security Modes
+
+Gold Digger provides four mutually exclusive TLS security modes:
+
+| Flag                              | Description                                                  | Use Case                  |
+| --------------------------------- | ------------------------------------------------------------ | ------------------------- |
+| (none)                            | Platform certificate store validation (default)              | Production environments   |
+| `--tls-ca-file <FILE>`            | Custom CA certificate file for trust anchor pinning          | Internal infrastructure   |
+| `--insecure-skip-hostname-verify` | Skip hostname verification (keeps chain and time validation) | Development environments  |
+| `--allow-invalid-certificate`     | Disable certificate validation entirely (DANGEROUS)          | Testing only (never prod) |
+
+### TLS Examples
+
+**Production (default):**
+
+```bash
+gold_digger \
+  --db-url "mysql://user:pass@prod.db.example.com:3306/mydb" \
+  --query "SELECT * FROM users" \
+  --output users.json
+```
+
+**Internal infrastructure:**
+
+```bash
+gold_digger \
+  --db-url "mysql://user:pass@internal.db:3306/mydb" \
+  --tls-ca-file /etc/ssl/certs/internal-ca.pem \
+  --query "SELECT * FROM data" \
+  --output data.csv
+```
+
+**Development:**
+
+```bash
+gold_digger \
+  --db-url "mysql://dev:devpass@192.168.1.100:3306/dev" \
+  --insecure-skip-hostname-verify \
+  --query "SELECT * FROM test_data" \
+  --output dev_data.json
+```
+
+**Testing only (DANGEROUS):**
+
+```bash
+gold_digger \
+  --db-url "mysql://test:test@test.db:3306/test" \
+  --allow-invalid-certificate \
+  --query "SELECT COUNT(*) FROM test_table" \
+  --output count.json
+```
+
+### TLS Error Handling
+
+Gold Digger provides intelligent error messages with specific CLI flag suggestions:
+
+```text
+Error: Certificate validation failed: certificate has expired
+Suggestion: Use --allow-invalid-certificate for testing environments
+
+Error: Hostname verification failed for 192.168.1.100: certificate is for db.company.com
+Suggestion: Use --insecure-skip-hostname-verify to bypass hostname checks
+```
+
 ## Security Configuration
 
 ### Credential Protection
@@ -181,7 +247,6 @@ gold_digger --db-url "mysql://user:pass@host:3306/db" \
   "allow_empty": false,
   "features": {
     "ssl": true,
-    "ssl_rustls": false,
     "json": true,
     "csv": true,
     "verbose": true,

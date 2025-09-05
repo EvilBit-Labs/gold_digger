@@ -287,6 +287,53 @@ gold_digger \
   --output recent_active_users.json
 ```
 
+## TLS/SSL Connections
+
+### Secure Connection (Default)
+
+```bash
+# Uses platform certificate store for validation
+gold_digger \
+  --db-url "mysql://user:pass@secure-db.example.com:3306/mydb" \
+  --query "SELECT id, name FROM users LIMIT 10" \
+  --output secure_users.json
+```
+
+### Custom CA Certificate
+
+```bash
+# Use custom CA certificate for internal infrastructure
+gold_digger \
+  --db-url "mysql://user:pass@internal-db.company.com:3306/mydb" \
+  --tls-ca-file /etc/ssl/certs/company-ca.pem \
+  --query "SELECT * FROM sensitive_data" \
+  --output internal_data.csv
+```
+
+### Development Environment
+
+```bash
+# Skip hostname verification for development servers
+gold_digger \
+  --db-url "mysql://dev:devpass@192.168.1.100:3306/dev_db" \
+  --insecure-skip-hostname-verify \
+  --query "SELECT * FROM test_data" \
+  --output dev_data.json
+```
+
+### Testing Environment (DANGEROUS)
+
+```bash
+# Accept invalid certificates for testing only
+gold_digger \
+  --db-url "mysql://test:test@test-db:3306/test" \
+  --allow-invalid-certificate \
+  --query "SELECT COUNT(*) as total FROM test_table" \
+  --output test_count.json
+```
+
+**⚠️ Security Warning**: Never use `--allow-invalid-certificate` in production environments.
+
 ## Shell Completion
 
 ### Setup Completion

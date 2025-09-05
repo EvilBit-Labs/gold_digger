@@ -34,8 +34,8 @@ Each binary has a corresponding `.sha256` file:
 
 ```bash
 # Download both the binary and its checksum file
-wget https://github.com/UncleSp1d3r/gold_digger/releases/download/v1.0.0/gold_digger-x86_64-unknown-linux-gnu.tar.gz
-wget https://github.com/UncleSp1d3r/gold_digger/releases/download/v1.0.0/gold_digger-x86_64-unknown-linux-gnu.tar.gz.sha256
+wget https://github.com/EvilBit-Labs/gold_digger/releases/download/v1.0.0/gold_digger-x86_64-unknown-linux-gnu.tar.gz
+wget https://github.com/EvilBit-Labs/gold_digger/releases/download/v1.0.0/gold_digger-x86_64-unknown-linux-gnu.tar.gz.sha256
 
 # Verify the checksum
 sha256sum -c gold_digger-x86_64-unknown-linux-gnu.tar.gz.sha256
@@ -68,15 +68,15 @@ Each binary has corresponding `.sig` (signature) and `.crt` (certificate) files:
 
 ```bash
 # Download the binary and its signature files
-wget https://github.com/UncleSp1d3r/gold_digger/releases/download/v1.0.0/gold_digger-x86_64-unknown-linux-gnu.tar.gz
-wget https://github.com/UncleSp1d3r/gold_digger/releases/download/v1.0.0/gold_digger-x86_64-unknown-linux-gnu.tar.gz.sig
-wget https://github.com/UncleSp1d3r/gold_digger/releases/download/v1.0.0/gold_digger-x86_64-unknown-linux-gnu.tar.gz.crt
+wget https://github.com/EvilBit-Labs/gold_digger/releases/download/v1.0.0/gold_digger-x86_64-unknown-linux-gnu.tar.gz
+wget https://github.com/EvilBit-Labs/gold_digger/releases/download/v1.0.0/gold_digger-x86_64-unknown-linux-gnu.tar.gz.sig
+wget https://github.com/EvilBit-Labs/gold_digger/releases/download/v1.0.0/gold_digger-x86_64-unknown-linux-gnu.tar.gz.crt
 
 # Verify the signature
 cosign verify-blob \
   --certificate gold_digger-x86_64-unknown-linux-gnu.tar.gz.crt \
   --signature gold_digger-x86_64-unknown-linux-gnu.tar.gz.sig \
-  --certificate-identity-regexp "^https://github\.com/UncleSp1d3r/gold_digger/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$" \
+  --certificate-identity-regexp "^https://github\.com/EvilBit-Labs/gold_digger/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$" \
   --certificate-oidc-issuer-regexp "^https://token\.actions\.githubusercontent\.com$" \
   gold_digger-x86_64-unknown-linux-gnu.tar.gz
 ```
@@ -109,7 +109,7 @@ openssl x509 -in gold_digger-x86_64-unknown-linux-gnu.tar.gz.crt -text -noout | 
 ```
 
 The certificate identity should match the pattern:
-`https://github.com/UncleSp1d3r/gold_digger/.github/workflows/release.yml@refs/tags/v1.0.0`
+`https://github.com/EvilBit-Labs/gold_digger/.github/workflows/release.yml@refs/tags/v1.0.0`
 
 The OIDC issuer should be:
 `https://token.actions.githubusercontent.com`
@@ -134,7 +134,7 @@ curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh 
 
 ```bash
 # Download the SBOM file
-wget https://github.com/UncleSp1d3r/gold_digger/releases/download/v1.0.0/gold_digger-x86_64-unknown-linux-gnu.tar.gz.sbom.cdx.json
+wget https://github.com/EvilBit-Labs/gold_digger/releases/download/v1.0.0/gold_digger-x86_64-unknown-linux-gnu.tar.gz.sbom.cdx.json
 
 # View SBOM in human-readable format
 syft packages file:gold_digger-x86_64-unknown-linux-gnu.tar.gz.sbom.cdx.json -o table
@@ -165,7 +165,7 @@ set -euo pipefail
 
 RELEASE_TAG="v1.0.0"
 ARTIFACT_NAME="gold_digger-x86_64-unknown-linux-gnu.tar.gz"
-BASE_URL="https://github.com/UncleSp1d3r/gold_digger/releases/download/${RELEASE_TAG}"
+BASE_URL="https://github.com/EvilBit-Labs/gold_digger/releases/download/${RELEASE_TAG}"
 
 echo "🔍 Verifying Gold Digger release artifact: ${ARTIFACT_NAME}"
 
@@ -191,7 +191,7 @@ echo "🔏 Verifying signature..."
 if cosign verify-blob \
     --certificate "${ARTIFACT_NAME}.crt" \
     --signature "${ARTIFACT_NAME}.sig" \
-    --certificate-identity "https://github.com/UncleSp1d3r/gold_digger/.github/workflows/release.yml@refs/tags/${RELEASE_TAG}" \
+    --certificate-identity "https://github.com/EvilBit-Labs/gold_digger/.github/workflows/release.yml@refs/tags/${RELEASE_TAG}" \
     --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
     "${ARTIFACT_NAME}"; then
     echo "✅ Signature verification passed"
@@ -264,7 +264,7 @@ If Cosign is available in the airgap environment:
 cosign verify-blob \
   --certificate gold_digger-x86_64-unknown-linux-gnu.tar.gz.crt \
   --signature gold_digger-x86_64-unknown-linux-gnu.tar.gz.sig \
-  --certificate-identity-regexp "^https://github\.com/UncleSp1d3r/gold_digger/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$" \
+  --certificate-identity-regexp "^https://github\.com/EvilBit-Labs/gold_digger/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$" \
   --certificate-oidc-issuer-regexp "^https://token\.actions\.githubusercontent\.com$" \
   gold_digger-x86_64-unknown-linux-gnu.tar.gz
 ```

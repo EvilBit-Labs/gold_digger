@@ -93,6 +93,8 @@ target/sbom*
 lcov.info
 coverage/
 target/tarpaulin/
+lcov-default.info
+lcov-minimal.info
 *.profraw
 *.profdata
 tarpaulin-report/

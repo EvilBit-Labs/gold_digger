@@ -98,7 +98,7 @@ graph TD
 
 ```toml
 [book]
-authors = ["UncleSp1d3r"]
+authors = ["EvilBit-Labs"]
 language = "en"
 multilingual = false
 src = "src"
@@ -112,8 +112,8 @@ create-missing = true
 [output.html]
 default-theme = "navy"
 preferred-dark-theme = "navy"
-git-repository-url = "https://github.com/UncleSp1d3r/gold_digger"
-edit-url-template = "https://github.com/UncleSp1d3r/gold_digger/edit/main/docs/src/{path}"
+git-repository-url = "https://github.com/EvilBit-Labs/gold_digger"
+edit-url-template = "https://github.com/EvilBit-Labs/gold_digger/edit/main/docs/src/{path}"
 
 [output.html.fold]
 enable = true

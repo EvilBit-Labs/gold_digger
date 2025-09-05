@@ -156,18 +156,18 @@ println!("Connecting to database...");
 ### Feature Flags
 
 ```toml
-default = ["json", "csv", "ssl", "additional_mysql_types", "verbose"]
-ssl = ["mysql/native-tls"]                 # Platform native TLS (default)
-ssl-rustls = ["mysql/rustls-tls"]         # Pure Rust TLS (alternative)
+default = ["json", "csv", "additional_mysql_types", "verbose"]
+json = []                                  # JSON output format
+csv = []                                   # CSV output format
 additional_mysql_types = [...]             # BigDecimal, Decimal, etc.
 verbose = []                               # Conditional logging
 ```
 
 **TLS Implementation Notes:**
 
-- `ssl` and `ssl-rustls` are mutually exclusive
-- The deprecated `vendored` feature has been removed
-- Default uses platform-native TLS libraries for better OS integration
+- TLS support is always available using rustls (no feature flags required)
+- The `ssl` and `ssl-rustls` feature flags have been removed
+- All builds include rustls-based TLS with platform certificate store integration
 
 ## Development Commands
 
@@ -186,8 +186,8 @@ cargo nextest run           # Parallel test execution
 # Standard build with native TLS
 cargo build --release
 
-# Pure Rust TLS build
-cargo build --release --no-default-features --features "json csv ssl-rustls additional_mysql_types verbose"
+# Standard build (TLS always available)
+cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
 
 # Minimal build
 cargo build --no-default-features --features "csv json"

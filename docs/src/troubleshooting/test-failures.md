@@ -122,11 +122,11 @@ Error: Database connection failed: Access denied for user 'test'@'localhost'
        use testcontainers::*;
 
        #[test]
-       fn test_with_real_mysql() {
+       fn test_with_real_mariadb() {
            let docker = clients::Cli::default();
-           let mysql = docker.run(images::mysql::Mysql::default());
-           let connection_string = format!("mysql://root@127.0.0.1:{}/test", mysql.get_host_port_ipv4(3306));
-           // Test with real MySQL container
+           let mariadb = docker.run(images::mariadb::MariaDb::default());
+           let connection_string = format!("mysql://root@127.0.0.1:{}/test", mariadb.get_host_port_ipv4(3306));
+           // Test with real MariaDB container
        }
    }
    ```
@@ -135,7 +135,7 @@ Error: Database connection failed: Access denied for user 'test'@'localhost'
 
 **Error Pattern:**
 
-```
+```text
 Error: Environment variable DATABASE_URL not found
 ```
 
@@ -179,7 +179,7 @@ Error: Environment variable DATABASE_URL not found
 
 **Error Pattern:**
 
-```
+```text
 Error: Permission denied (os error 13)
 Error: No such file or directory (os error 2)
 ```
@@ -232,7 +232,7 @@ Error: No such file or directory (os error 2)
 
 **Error Pattern:**
 
-```
+```text
 Error: Resource busy or locked
 Error: Test failed due to race condition
 ```
@@ -274,7 +274,7 @@ Error: Test failed due to race condition
 
 **Error Pattern:**
 
-```
+```text
 Error: Command not found or execution failed
 ```
 
@@ -335,7 +335,7 @@ predicates = "3.0"
 
 **Error Pattern:**
 
-```
+```text
 Error: JSON parsing failed
 Error: CSV format validation failed
 ```
@@ -399,7 +399,7 @@ Error: CSV format validation failed
 
 **Error Pattern:**
 
-```
+```text
 Error: Test timed out after 60 seconds
 ```
 
@@ -451,7 +451,7 @@ Error: Test timed out after 60 seconds
 
 **Error Pattern:**
 
-```
+```text
 Error: Out of memory
 Error: Stack overflow
 ```

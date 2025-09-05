@@ -1,0 +1,7 @@
+---
+source: tests/tls_cli_integration.rs
+expression: "tls_help.join(\"\\n\")"
+---
+      --tls-ca-file <TLS_CA_FILE>      Path to CA certificate file for trust anchor pinning
+      --insecure-skip-hostname-verify  Skip hostname verification (keeps chain and time validation)
+      --allow-invalid-certificate      Disable certificate validation entirely (DANGEROUS)
