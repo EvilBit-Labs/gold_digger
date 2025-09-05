@@ -1,6 +1,7 @@
 # Gold Digger Integration Tests
 
-This directory contains comprehensive integration tests for Gold Digger's MySQL/MariaDB functionality, including TLS support, data type handling, and output format validation.
+This directory contains comprehensive integration tests for Gold Digger's MySQL/MariaDB
+functionality, including TLS support, data type handling, and output format validation.
 
 ## Test Structure
 
@@ -117,8 +118,10 @@ cargo test --features "integration_tests additional_mysql_types" -- --include-ig
 
 #### Current Test Categories
 
-1. **Unit Tests** (`tls_unit_tests`): Test TLS configuration and validation without external dependencies
-2. **TLS Integration Tests** (`tls_integration`): Test actual TLS connections and certificate validation (require Docker)
+1. **Unit Tests** (`tls_unit_tests`): Test TLS configuration and validation without external
+   dependencies
+2. **TLS Integration Tests** (`tls_integration`): Test actual TLS connections and certificate
+   validation (require Docker)
 3. **Type Safety Tests** (`type_safety`): Test MySQL data type conversion and NULL value handling
 4. **Exit Code Tests** (`exit_codes`): Test proper exit code mapping for different error scenarios
 

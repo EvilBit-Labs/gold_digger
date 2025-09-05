@@ -1,7 +1,16 @@
-use std::{env, ffi::OsStr, path::Path};
+use std::{env, ffi::OsStr, path::Path, sync::Once};
 
 use anyhow::{Context, Result};
 use mysql::Row;
+
+static INIT: Once = Once::new();
+
+/// Initialize crypto provider for rustls
+pub fn init_crypto_provider() {
+    INIT.call_once(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+}
 
 /// CLI interface module.
 pub mod cli;

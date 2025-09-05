@@ -42,6 +42,9 @@ fn redact_sql_error(message: &str) -> String {
 ///
 /// Parses CLI arguments and environment variables, executes a database query, and writes the output in the specified format.
 fn main() {
+    // Initialize crypto provider for rustls
+    gold_digger::init_crypto_provider();
+
     let cli = Cli::parse();
 
     // Handle subcommands first

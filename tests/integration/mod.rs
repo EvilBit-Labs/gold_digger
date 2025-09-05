@@ -23,19 +23,68 @@ pub use containers::*;
 #[derive(Debug, Clone, PartialEq)]
 #[allow(dead_code)]
 pub enum TestDatabase {
-    /// MySQL container instance
-    MySQL,
-    /// MariaDB container instance
-    MariaDB,
+    /// MySQL container instance with optional TLS configuration
+    MySQL { tls_enabled: bool },
+    /// MariaDB container instance with optional TLS configuration
+    MariaDB { tls_enabled: bool },
 }
 
 impl TestDatabase {
+    /// Create a new MySQL instance without TLS
+    pub fn mysql() -> Self {
+        Self::MySQL { tls_enabled: false }
+    }
+
+    /// Create a new MySQL instance with TLS
+    #[allow(dead_code)]
+    pub fn mysql_tls() -> Self {
+        Self::MySQL { tls_enabled: true }
+    }
+
+    /// Create a new MariaDB instance without TLS
+    #[allow(dead_code)]
+    pub fn mariadb() -> Self {
+        Self::MariaDB { tls_enabled: false }
+    }
+
+    /// Create a new MariaDB instance with TLS
+    #[allow(dead_code)]
+    pub fn mariadb_tls() -> Self {
+        Self::MariaDB { tls_enabled: true }
+    }
+
     /// Get the database type name as a string
     #[allow(dead_code)]
     pub fn name(&self) -> &'static str {
         match self {
-            TestDatabase::MySQL => "mysql",
-            TestDatabase::MariaDB => "mariadb",
+            TestDatabase::MySQL { .. } => "mysql",
+            TestDatabase::MariaDB { .. } => "mariadb",
+        }
+    }
+
+    /// Check if TLS is enabled for this database
+    pub fn is_tls_enabled(&self) -> bool {
+        match self {
+            TestDatabase::MySQL { tls_enabled } => *tls_enabled,
+            TestDatabase::MariaDB { tls_enabled } => *tls_enabled,
+        }
+    }
+
+    /// Get the default port for this database type
+    #[allow(dead_code)]
+    pub fn default_port(&self) -> u16 {
+        match self {
+            TestDatabase::MySQL { .. } => 3306,
+            TestDatabase::MariaDB { .. } => 3306,
+        }
+    }
+
+    /// Get the container image name for this database type
+    #[allow(dead_code)]
+    pub fn image_name(&self) -> &'static str {
+        match self {
+            TestDatabase::MySQL { .. } => "mysql:8.0",
+            TestDatabase::MariaDB { .. } => "mariadb:10.6",
         }
     }
 }

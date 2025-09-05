@@ -1,15 +1,15 @@
 -- Basic test data
 INSERT INTO test_basic (item_name, table_value)
-VALUES ('test1', 100)
-ON DUPLICATE KEY UPDATE table_value = VALUES (table_value);
+VALUES ('test1', 100) AS new
+ON DUPLICATE KEY UPDATE table_value = new.table_value;
 
 INSERT INTO test_basic (item_name, table_value)
-VALUES ('test2', 200)
-ON DUPLICATE KEY UPDATE table_value = VALUES (table_value);
+VALUES ('test2', 200) AS new
+ON DUPLICATE KEY UPDATE table_value = new.table_value;
 
 INSERT INTO test_basic (item_name, table_value)
-VALUES ('test3', 300)
-ON DUPLICATE KEY UPDATE table_value = VALUES (table_value);
+VALUES ('test3', 300) AS new
+ON DUPLICATE KEY UPDATE table_value = new.table_value;
 
 -- Comprehensive data types test data
 INSERT INTO test_data_types (
@@ -53,8 +53,27 @@ VALUES (
     'medium',
     'red,blue',
     TRUE
-)
-ON DUPLICATE KEY UPDATE varchar_col = VALUES (varchar_col);
+) AS new
+ON DUPLICATE KEY UPDATE
+    varchar_col = new.varchar_col,
+    text_col = new.text_col,
+    int_col = new.int_col,
+    bigint_col = new.bigint_col,
+    decimal_col = new.decimal_col,
+    float_col = new.float_col,
+    double_col = new.double_col,
+    date_col = new.date_col,
+    datetime_col = new.datetime_col,
+    timestamp_col = new.timestamp_col,
+    time_col = new.time_col,
+    year_col = new.year_col,
+    binary_col = new.binary_col,
+    varbinary_col = new.varbinary_col,
+    blob_col = new.blob_col,
+    json_col = new.json_col,
+    enum_col = new.enum_col,
+    set_col = new.set_col,
+    bool_col = new.bool_col;
 
 -- Edge cases test data
 INSERT INTO test_edge_cases (
@@ -78,10 +97,10 @@ VALUES (
     '12345',
     0,
     -42
-)
-ON DUPLICATE KEY UPDATE unicode_text = VALUES (unicode_text);
+) AS new
+ON DUPLICATE KEY UPDATE unicode_text = new.unicode_text;
 
-INSERT INTO test_edge_cases (
+INSERT INTO test_edge_cases AS new (
     id,
     null_varchar,
     empty_string,
@@ -103,4 +122,4 @@ VALUES (
     0,
     -100
 )
-ON DUPLICATE KEY UPDATE unicode_text = VALUES (unicode_text);
+ON DUPLICATE KEY UPDATE unicode_text = new.unicode_text;

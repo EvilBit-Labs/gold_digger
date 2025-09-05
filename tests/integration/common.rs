@@ -328,7 +328,7 @@ impl TestEnvironment {
         // Store original value for restoration
         self.original_env.insert(key.to_string(), std::env::var(key).ok());
 
-        // Set new value
+        // Set new value - std::env::set_var is safe in single-threaded tests
         unsafe {
             std::env::set_var(key, value);
         }
@@ -339,7 +339,7 @@ impl TestEnvironment {
         // Store original value for restoration
         self.original_env.insert(key.to_string(), std::env::var(key).ok());
 
-        // Remove variable
+        // Remove variable - std::env::remove_var is safe in single-threaded tests
         unsafe {
             std::env::remove_var(key);
         }
@@ -356,13 +356,11 @@ impl Drop for TestEnvironment {
     /// Restore original environment variables when dropped
     fn drop(&mut self) {
         for (key, original_value) in &self.original_env {
-            match original_value {
-                Some(value) => unsafe {
-                    std::env::set_var(key, value);
-                },
-                None => unsafe {
-                    std::env::remove_var(key);
-                },
+            unsafe {
+                match original_value {
+                    Some(value) => std::env::set_var(key, value),
+                    None => std::env::remove_var(key),
+                }
             }
         }
     }

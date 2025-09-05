@@ -19,13 +19,13 @@ impl TestContainerFactory {
     /// Create a MySQL container for testing
     pub fn mysql() -> Result<DatabaseContainer> {
         Self::check_docker_available()?;
-        DatabaseContainer::new(TestDatabase::MySQL)
+        DatabaseContainer::new(TestDatabase::mysql())
     }
 
     /// Create a MariaDB container for testing
     pub fn mariadb() -> Result<DatabaseContainer> {
         Self::check_docker_available()?;
-        DatabaseContainer::new(TestDatabase::MariaDB)
+        DatabaseContainer::new(TestDatabase::mariadb())
     }
 
     /// Create a container of the specified type
