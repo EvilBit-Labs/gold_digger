@@ -75,6 +75,90 @@ ci-check:
     just validate-deps
     just deny-check
 
+# Full CI workflow equivalent - mirrors .github/workflows/ci.yml exactly
+ci-full:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{justfile_dir()}}
+
+    echo "🚀 Running full CI workflow equivalent..."
+
+    # Job 1: Quality checks (mirrors quality job)
+    echo "📋 Quality checks..."
+    cargo fmt --check
+    cargo clippy -- -D warnings
+    cargo clippy --no-default-features --features "json csv additional_mysql_types verbose" -- -D warnings
+
+    # Job 2: Test TLS functionality (mirrors test-tls job)
+    echo "🔒 Testing TLS functionality..."
+    cargo build --release
+
+    BIN="./target/release/gold_digger"
+    if [ -f "${BIN}.exe" ]; then
+        BIN="${BIN}.exe"
+    fi
+
+    # Test mutually exclusive TLS flags (should fail)
+    ! "$BIN" --tls-ca-file /tmp/nonexistent.pem --insecure-skip-hostname-verify \
+        --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
+    ! "$BIN" --tls-ca-file /tmp/nonexistent.pem --allow-invalid-certificate \
+        --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
+    ! "$BIN" --insecure-skip-hostname-verify --allow-invalid-certificate \
+        --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
+
+    cargo nextest run --test tls_config_unit_tests
+    "$BIN" --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)" || exit 1
+    cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
+    ! cargo tree | grep "native-tls" || exit 1
+
+    # Job 3: Test with different feature combinations (mirrors test-features job)
+    echo "🧪 Testing feature combinations..."
+    cargo nextest run
+    cargo nextest run --no-default-features --features "json csv additional_mysql_types verbose"
+    cargo build --release
+    cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
+
+    "$BIN" --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)" || exit 1
+    cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
+    cargo tree --no-default-features --features "json csv additional_mysql_types verbose" \
+        | grep -E "(rustls|rustls-native-certs)" || exit 1
+    ! cargo tree | grep "native-tls" || exit 1
+
+    # Job 4: Test TLS functionality (mirrors test-cross-platform job - Linux only)
+    echo "🌐 Testing cross-platform TLS functionality..."
+    cargo nextest run --test tls_config_unit_tests
+    cargo nextest run --test tls_integration
+    cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
+    ! cargo tree | grep "native-tls" || exit 1
+    cargo build --release
+    cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
+    ! cargo tree | grep "native-tls" || exit 1
+    "$BIN" --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)" || exit 1
+
+    # Job 5: Test TLS error handling and configuration validation (mirrors test-tls-validation job)
+    echo "⚠️  Testing TLS error handling and validation..."
+    cargo build --release
+    cargo nextest run tls_error_handling_tests 2>/dev/null || true
+    cargo nextest run security_warning_tests 2>/dev/null || true
+
+    ! "$BIN" --tls-ca-file /nonexistent/path.pem --db-url "mysql://test" \
+        --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
+    echo "invalid certificate" > /tmp/invalid-cert.pem
+    ! "$BIN" --tls-ca-file /tmp/invalid-cert.pem --db-url "mysql://test" \
+        --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
+
+    cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
+    ! cargo tree | grep "native-tls" || exit 1
+
+    # Job 6: Generate coverage (mirrors coverage job)
+    echo "📊 Generating coverage reports..."
+    cargo llvm-cov --workspace --lcov --output-path lcov-default.info
+    cargo llvm-cov --workspace --lcov --output-path lcov-minimal.info \
+        --no-default-features --features "json csv additional_mysql_types verbose"
+    cat lcov-default.info lcov-minimal.info > lcov.info
+
+    echo "🎉 CI workflow equivalent completed successfully!"
+
 # Comprehensive full checks (all non-destructive validation)
 full-checks:
     cd {{justfile_dir()}}
@@ -588,6 +672,7 @@ help:
     @echo "  fix           Run clippy with automatic fixes"
     @echo "  check         Quick development checks"
     @echo "  ci-check      Full CI equivalent checks"
+    @echo "  ci-full       Complete CI workflow equivalent (mirrors .github/workflows/ci.yml)"
     @echo "  full-checks   Comprehensive validation (all non-destructive checks)"
     @echo "  deny-check    Run cargo-deny checks (license & duplicates)"
     @echo ""
