@@ -91,7 +91,8 @@ After verification, check the included SBOM and SHA256 files for complete integr
 
 ## 📋 Changelog
 
-For a complete list of changes, see the [CHANGELOG.md](https://github.com/EvilBit-Labs/gold_digger/blob/main/CHANGELOG.md).
+For a complete list of changes, see the
+[CHANGELOG.md](https://github.com/EvilBit-Labs/gold_digger/blob/main/CHANGELOG.md).
 
 ## 🐛 Known Issues
 
@@ -124,7 +125,8 @@ Thanks to all contributors who made this release possible:
 
 ## 📄 License
 
-Gold Digger is released under the MIT License. See [LICENSE](https://github.com/EvilBit-Labs/gold_digger/blob/main/LICENSE) for details.
+Gold Digger is released under the MIT License. See
+[LICENSE](https://github.com/EvilBit-Labs/gold_digger/blob/main/LICENSE) for details.
 
 ````markdown
 
@@ -191,4 +193,5 @@ When using cargo-dist, the release notes can be:
 
 ## Example Completed Release Notes
 
-See the [GitHub Releases](https://github.com/EvilBit-Labs/gold_digger/releases) page for examples of completed release notes for previous versions.
+See the [GitHub Releases](https://github.com/EvilBit-Labs/gold_digger/releases) page for examples of
+completed release notes for previous versions.

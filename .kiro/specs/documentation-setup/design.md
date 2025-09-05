@@ -2,13 +2,19 @@
 
 ## Overview
 
-This design establishes a comprehensive documentation system for Gold Digger that combines user-focused guides (mdBook) with API documentation (rustdoc) in a unified GitHub Pages site. The system will provide a seamless experience for both end users learning to use the tool and developers contributing to the codebase.
+This design establishes a comprehensive documentation system for Gold Digger that combines
+user-focused guides (mdBook) with API documentation (rustdoc) in a unified GitHub Pages site. The
+system will provide a seamless experience for both end users learning to use the tool and developers
+contributing to the codebase.
 
 The documentation architecture follows a dual-purpose approach:
 
-- **User Documentation**: mdBook-powered guides covering installation, usage, configuration, and troubleshooting
-- **Developer Documentation**: rustdoc-generated API documentation with cross-references to user guides
-- **Unified Deployment**: Single GitHub Pages site serving both documentation types with consistent navigation
+- **User Documentation**: mdBook-powered guides covering installation, usage, configuration, and
+  troubleshooting
+- **Developer Documentation**: rustdoc-generated API documentation with cross-references to user
+  guides
+- **Unified Deployment**: Single GitHub Pages site serving both documentation types with consistent
+  navigation
 
 ## Architecture
 
@@ -60,7 +66,8 @@ The mdBook setup will include seven key plugins:
 
 **Core Plugins (Required):**
 
-1. **mdbook-admonish**: Provides styled callout boxes for notes, warnings, tips, and important information
+1. **mdbook-admonish**: Provides styled callout boxes for notes, warnings, tips, and important
+   information
 2. **mdbook-mermaid**: Enables diagram rendering for architecture and flow diagrams
 3. **mdbook-linkcheck**: Validates all internal and external links during build
 4. **mdbook-toc**: Automatically generates table of contents for long pages
@@ -291,7 +298,8 @@ graph TD
 
 ### Content Types and Templates
 
-1. **Installation Pages**: Step-by-step platform-specific instructions with tabbed content for different platforms
+1. **Installation Pages**: Step-by-step platform-specific instructions with tabbed content for
+   different platforms
 2. **Usage Pages**: Practical examples with input/output samples and admonitions for important notes
 3. **Security Pages**: Warning admonitions with best practices and security checklists
 4. **API Pages**: Cross-references between mdBook and rustdoc with "Edit on GitHub" links
@@ -404,4 +412,5 @@ Add documentation checks to `.pre-commit-config.yaml`:
         pass_filenames: false
 ```
 
-This design provides a comprehensive documentation system that serves both users and developers while integrating seamlessly with Gold Digger's existing development workflow and quality standards.
+This design provides a comprehensive documentation system that serves both users and developers
+while integrating seamlessly with Gold Digger's existing development workflow and quality standards.

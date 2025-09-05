@@ -309,4 +309,5 @@ If you encounter issues not covered here:
 4. **CI reproduction**: Use `act` to reproduce CI failures locally
 5. **Create an issue**: Report bugs with detailed error messages and environment information
 
-For more information, see the [Integration Testing Framework](../development/integration-testing.md) documentation.
+For more information, see the [Integration Testing Framework](../development/integration-testing.md)
+documentation.

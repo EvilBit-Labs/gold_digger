@@ -1,10 +1,7 @@
 # Requirements Document: Gold Digger
 
-**Version**: 1.0
-**Status**: Draft
-**Author(s)**: EvilBit-Labs
-**Date Created**: 2025-01-15
-**Last Modified**: 2025-01-15
+**Version**: 1.0 **Status**: Draft **Author(s)**: EvilBit-Labs **Date Created**: 2025-01-15 **Last
+Modified**: 2025-01-15
 
 ---
 
@@ -18,8 +15,10 @@
 
 ### Project Overview
 
-- **Project Description and Purpose**
-  Gold Digger is a Rust-based command-line tool that executes MySQL and MariaDB database queries and exports results to structured data files. The tool is designed for headless operation, making it ideal for automated database reporting, monitoring, and data extraction workflows.
+- **Project Description and Purpose** Gold Digger is a Rust-based command-line tool that executes
+  MySQL and MariaDB database queries and exports results to structured data files. The tool is
+  designed for headless operation, making it ideal for automated database reporting, monitoring, and
+  data extraction workflows.
 
 - **Project Goals and Objectives**
 
@@ -39,11 +38,11 @@
   - **Machine Learning Engineers**: Data extraction for ML training pipelines and model validation
   - **System Administrators**: Monitoring queries and health checks
   - **Security Analysts**: Data collection for compliance and audit workflows
-  - **Container Engineers**: Docker-based database query automation with environment variable configuration
+  - **Container Engineers**: Docker-based database query automation with environment variable
+    configuration
   - **Pipeline Architects**: Integration into complex data processing and automation systems
 
-- **Project Boundaries and Limitations**
-  Gold Digger will *not* provide:
+- **Project Boundaries and Limitations** Gold Digger will *not* provide:
 
   - Interactive database client functionality
   - Query composition or SQL generation features
@@ -86,7 +85,8 @@
   - **Compliance**: FOSSA license scanning passes; SBOM and provenance attached to releases
   - **Cross-platform**: CI passes on Ubuntu, Windows, and macOS
   - **Documentation**: Complete installation, usage, and verification guides
-  - **Integration**: Successfully integrates with common data processing tools and pipeline frameworks
+  - **Integration**: Successfully integrates with common data processing tools and pipeline
+    frameworks
 
 - **Timeline and Milestones**
 
@@ -96,11 +96,15 @@
 
 ### Context and Background
 
-- **Business Context and Justification**
-  Database query automation is a critical need across development, data engineering, and various automation workflows. Existing solutions often require heavy runtime dependencies, complex configuration, or lack offline-first design principles essential for lightweight, self-contained deployments. This tool is designed to be a reliable, composable component that can be easily integrated into larger data processing pipelines, ETL workflows, and automation systems.
+- **Business Context and Justification** Database query automation is a critical need across
+  development, data engineering, and various automation workflows. Existing solutions often require
+  heavy runtime dependencies, complex configuration, or lack offline-first design principles
+  essential for lightweight, self-contained deployments. This tool is designed to be a reliable,
+  composable component that can be easily integrated into larger data processing pipelines, ETL
+  workflows, and automation systems.
 
-- **Previous Work and Dependencies**
-  Current implementation (v0.2.5) provides basic functionality with:
+- **Previous Work and Dependencies** Current implementation (v0.2.5) provides basic functionality
+  with:
 
   - Environment variable configuration (DATABASE_URL, DATABASE_QUERY, OUTPUT_FILE)
   - Modular output format writers (CSV, JSON, TSV)
@@ -127,33 +131,48 @@
 
 ### Core Features
 
-- **F001**: Accept database URL via environment variable DATABASE_URL and CLI flag --db-url (flag overrides environment)
+- **F001**: Accept database URL via environment variable DATABASE_URL and CLI flag --db-url (flag
+  overrides environment)
 
-- **F002**: Accept SQL query via environment variable DATABASE_QUERY or CLI flags --query/--query-file (mutually exclusive; flag overrides environment)
+- **F002**: Accept SQL query via environment variable DATABASE_QUERY or CLI flags
+  --query/--query-file (mutually exclusive; flag overrides environment)
 
-- **F003**: Determine output format by OUTPUT_FILE extension; support .csv, .json, .tsv file extensions; allow --format flag override
+- **F003**: Determine output format by OUTPUT_FILE extension; support .csv, .json, .tsv file
+  extensions; allow --format flag override
 
 - **F004**: Write header row with column names; preserve column order as returned from database
 
-- **F005**: Provide standardized exit codes: 0 (success), 1 (no rows found), 2 (usage/config error), 3 (connection/auth error), 4 (query execution error), 5 (file I/O error)
+- **F005**: Provide standardized exit codes: 0 (success), 1 (no rows found), 2 (usage/config error),
+  3 (connection/auth error), 4 (query execution error), 5 (file I/O error)
 
-- **F006**: Support TLS/SSL connections via MySQL rustls features; TLS/SSL must be configurable programmatically via the crate's rustls-tls features using `SslOpts` and `OptsBuilder::ssl_opts()`; URL-based ssl-mode parameters are not supported by the chosen mysql crate (see [mysql crate SSL documentation](https://docs.rs/mysql/26.0.1/mysql/struct.SslOpts.html) for programmatic TLS setup examples); TLS is always available without feature flags
+- **F006**: Support TLS/SSL connections via MySQL rustls features; TLS/SSL must be configurable
+  programmatically via the crate's rustls-tls features using `SslOpts` and
+  `OptsBuilder::ssl_opts()`; URL-based ssl-mode parameters are not supported by the chosen mysql
+  crate (see [mysql crate SSL documentation](https://docs.rs/mysql/26.0.1/mysql/struct.SslOpts.html)
+  for programmatic TLS setup examples); TLS is always available without feature flags
 
-- **F007**: Implement streaming export mode for large result sets to avoid loading all rows into memory simultaneously
+- **F007**: Implement streaming export mode for large result sets to avoid loading all rows into
+  memory simultaneously
 
-- **F008**: Provide structured logging via --verbose flag using tracing crate; never log credentials; redact connection URLs by default
+- **F008**: Provide structured logging via --verbose flag using tracing crate; never log
+  credentials; redact connection URLs by default
 
 - **F009**: Generate shell completion scripts for common shells (bash, zsh, fish) via clap_complete
 
-- **F010**: Produce deterministic JSON output with optional pretty printing (--pretty flag; disabled by default for consistency)
+- **F010**: Produce deterministic JSON output with optional pretty printing (--pretty flag; disabled
+  by default for consistency)
 
-- **F011**: Implement configuration precedence: CLI flags > environment variables > defaults; document precedence clearly
+- **F011**: Implement configuration precedence: CLI flags > environment variables > defaults;
+  document precedence clearly
 
-- **F012**: Provide --version, --help, and machine-readable --dump-config (JSON format) for operational auditability
+- **F012**: Provide --version, --help, and machine-readable --dump-config (JSON format) for
+  operational auditability
 
-- **F013**: Return nonzero exit code on empty result set (current behavior); add --allow-empty flag to return success on empty results
+- **F013**: Return nonzero exit code on empty result set (current behavior); add --allow-empty flag
+  to return success on empty results
 
-- **F014**: Support additional MySQL data types via existing feature flags; ensure safe string conversion and null value handling
+- **F014**: Support additional MySQL data types via existing feature flags; ensure safe string
+  conversion and null value handling
 
 ### User Stories and Use Cases
 
@@ -274,7 +293,8 @@ fi
 
 #### Use Case 6: Containerized Database Automation
 
-**Scenario**: Docker-based deployment with environment variable configuration for easy container orchestration.
+**Scenario**: Docker-based deployment with environment variable configuration for easy container
+orchestration.
 
 ```bash
 # CI pipeline step
@@ -296,7 +316,8 @@ fi
 
 #### Use Case 7: Containerized Database Automation
 
-**Scenario**: Docker-based deployment with environment variable configuration for easy container orchestration.
+**Scenario**: Docker-based deployment with environment variable configuration for easy container
+orchestration.
 
 ```bash
 # Docker run with shell expansion for dynamic filenames
@@ -339,10 +360,14 @@ DATABASE_QUERY=SELECT user_id, action, timestamp FROM audit_log WHERE DATE(times
 
 ### Performance Requirements
 
-- **CLI Startup**: Tool initialization and argument parsing under 250ms on typical development hardware
-- **File Size Limits**: Verified operation with output files up to 2GB (document OS filesystem constraints)
-- **Time-to-Completion**: Tool overhead less than 5% of total query runtime when using streaming writers
-- **Memory Usage**: O(row_width) steady-state memory when streaming enabled; avoid `Vec<Row>` accumulation for large result sets
+- **CLI Startup**: Tool initialization and argument parsing under 250ms on typical development
+  hardware
+- **File Size Limits**: Verified operation with output files up to 2GB (document OS filesystem
+  constraints)
+- **Time-to-Completion**: Tool overhead less than 5% of total query runtime when using streaming
+  writers
+- **Memory Usage**: O(row_width) steady-state memory when streaming enabled; avoid `Vec<Row>`
+  accumulation for large result sets
 
 ---
 
@@ -462,7 +487,9 @@ docs-build:     # Build documentation for verification
 #### GitHub Actions Workflows
 
 - **ci.yml**: PR and push checks (lint, test, security, coverage)
-- **dist-workspace.toml** or **Cargo.toml [workspace.metadata.dist]**: Configuration for cargo-dist (artifact/distribution settings, workspace level). This repository uses one of these locations for cargo-dist configuration.
+- **dist-workspace.toml** or **Cargo.toml [workspace.metadata.dist]**: Configuration for cargo-dist
+  (artifact/distribution settings, workspace level). This repository uses one of these locations for
+  cargo-dist configuration.
 - **release.yml**: Release artifact construction and publishing
 
 #### Quality Gates
@@ -579,7 +606,8 @@ graph LR
 
 - **Binary Distribution**: GitHub Releases with cross-platform archives
 - **Package Management**: Optional Homebrew tap for macOS users
-- **Container Support**: Provide minimal container image for containerized deployments with environment variable configuration
+- **Container Support**: Provide minimal container image for containerized deployments with
+  environment variable configuration
 - **Verification**: Complete offline verification workflow with checksums and signatures
 
 ### Error Handling Architecture
@@ -669,10 +697,16 @@ pub enum GoldDiggerError {
 
 ## Guidance Notes
 
-- **Version Discrepancy**: Current codebase shows v0.2.5 in Cargo.toml but CHANGELOG.md references v0.2.6. Recommend resolving this discrepancy in next release.
+- **Version Discrepancy**: Current codebase shows v0.2.5 in Cargo.toml but CHANGELOG.md references
+  v0.2.6. Recommend resolving this discrepancy in next release.
 - **License Retention**: Maintain MIT license for open source compatibility.
-- **Single Maintainer**: Configure branch protection rules appropriate for single-maintainer workflow.
-- **Milestone Naming**: Use version numbers (v0.3.0, v0.4.0, v1.0.0) with descriptive context in milestone descriptions.
-- **Code Review**: Enable CodeRabbit.ai for automated PR reviews; disable GitHub Copilot automatic reviews per user preference.
-- **Testing Framework**: Emphasize criterion for benchmarking and insta for snapshot testing per user preference.
-- **General Purpose**: Ensure output formats are compatible with common data processing tools and workflows.
+- **Single Maintainer**: Configure branch protection rules appropriate for single-maintainer
+  workflow.
+- **Milestone Naming**: Use version numbers (v0.3.0, v0.4.0, v1.0.0) with descriptive context in
+  milestone descriptions.
+- **Code Review**: Enable CodeRabbit.ai for automated PR reviews; disable GitHub Copilot automatic
+  reviews per user preference.
+- **Testing Framework**: Emphasize criterion for benchmarking and insta for snapshot testing per
+  user preference.
+- **General Purpose**: Ensure output formats are compatible with common data processing tools and
+  workflows.

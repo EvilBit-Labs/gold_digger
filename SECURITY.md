@@ -23,7 +23,9 @@ Gold Digger follows semantic versioning. Security updates are provided for the f
 ### Alternative Methods
 
 - **Email**: <support@evilbitlabs.io> (for urgent or highly sensitive issues)
-- **GitHub Issue**: Use the [Security Report template](https://github.com/EvilBit-Labs/gold_digger/issues/new?template=security_report.yml) (public disclosure - redact sensitive details)
+- **GitHub Issue**: Use the
+  [Security Report template](https://github.com/EvilBit-Labs/gold_digger/issues/new?template=security_report.yml)
+  (public disclosure - redact sensitive details)
 
 ### What to Include
 
@@ -72,7 +74,8 @@ Security issues are prioritized over feature development.
 
 ### For Users
 
-1. **Use Environment Variables**: Store database credentials in environment variables, not in scripts
+1. **Use Environment Variables**: Store database credentials in environment variables, not in
+   scripts
 2. **Enable TLS**: Use `mysql://` URLs with SSL parameters for encrypted connections
 3. **Limit Permissions**: Use database users with minimal required permissions
 4. **Secure Output**: Store output files in secure locations with appropriate permissions
@@ -132,7 +135,8 @@ This is a single-maintainer project. All security issues are handled by the prim
 
 ## Security Acknowledgments
 
-We appreciate security researchers who responsibly disclose vulnerabilities. Contributors to security improvements will be acknowledged in:
+We appreciate security researchers who responsibly disclose vulnerabilities. Contributors to
+security improvements will be acknowledged in:
 
 - Release notes
 - Security advisories

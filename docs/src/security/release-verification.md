@@ -1,6 +1,7 @@
 # Release Artifact Verification
 
-This document provides instructions for verifying the integrity and authenticity of Gold Digger release artifacts.
+This document provides instructions for verifying the integrity and authenticity of Gold Digger
+release artifacts.
 
 ## Overview
 
@@ -43,7 +44,8 @@ sha256sum -c gold_digger-x86_64-unknown-linux-gnu.tar.gz.sha256
 
 ## Signature Verification
 
-Gold Digger releases are signed using [Cosign](https://github.com/sigstore/cosign) with keyless OIDC authentication.
+Gold Digger releases are signed using [Cosign](https://github.com/sigstore/cosign) with keyless OIDC
+authentication.
 
 ### Install Cosign
 
@@ -111,14 +113,16 @@ openssl x509 -in gold_digger-x86_64-unknown-linux-gnu.tar.gz.crt -text -noout | 
 The certificate identity should match the pattern:
 `https://github.com/EvilBit-Labs/gold_digger/.github/workflows/release.yml@refs/tags/v1.0.0`
 
-The OIDC issuer should be:
-`https://token.actions.githubusercontent.com`
+The OIDC issuer should be: `https://token.actions.githubusercontent.com`
 
-**Security Note**: The verification commands in this documentation use exact regex patterns anchored to these specific values to prevent signature forgery attacks. Never use wildcard patterns like `.*` in production verification.
+**Security Note**: The verification commands in this documentation use exact regex patterns anchored
+to these specific values to prevent signature forgery attacks. Never use wildcard patterns like `.*`
+in production verification.
 
 ## SBOM Inspection
 
-Software Bill of Materials (SBOM) files provide detailed information about dependencies and components.
+Software Bill of Materials (SBOM) files provide detailed information about dependencies and
+components.
 
 ### Install SBOM Tools
 
@@ -231,7 +235,8 @@ On a connected machine, download:
 
 ### 2. Transfer to Airgap Environment
 
-Transfer all files to the airgap environment using approved methods (USB, secure file transfer, etc.).
+Transfer all files to the airgap environment using approved methods (USB, secure file transfer,
+etc.).
 
 ### 3. Verify in Airgap Environment
 
@@ -300,9 +305,9 @@ For CI/CD pipelines, consider automating verification:
 
 ### Common Issues
 
-**Checksum mismatch**: Re-download the file, check for network issues
-**Signature verification fails**: Ensure you have the correct certificate and signature files
-**SBOM parsing errors**: Verify the SBOM file wasn't corrupted during download
+**Checksum mismatch**: Re-download the file, check for network issues **Signature verification
+fails**: Ensure you have the correct certificate and signature files **SBOM parsing errors**: Verify
+the SBOM file wasn't corrupted during download
 
 ### Getting Help
 

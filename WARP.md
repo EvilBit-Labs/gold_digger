@@ -4,7 +4,9 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 ## Purpose and Quick Start
 
-Gold Digger is a Rust-based MySQL/MariaDB query tool that outputs results in CSV, JSON, or TSV formats. It's designed for headless operation via environment variables, making it ideal for database automation workflows.
+Gold Digger is a Rust-based MySQL/MariaDB query tool that outputs results in CSV, JSON, or TSV
+formats. It's designed for headless operation via environment variables, making it ideal for
+database automation workflows.
 
 **Basic usage:**
 
@@ -15,7 +17,8 @@ export DATABASE_QUERY="SELECT id, name FROM users LIMIT 10"
 cargo run --release
 ```
 
-The output format is determined by file extension: `.csv`, `.json`, or anything else defaults to TSV.
+The output format is determined by file extension: `.csv`, `.json`, or anything else defaults to
+TSV.
 
 ## Essential Development Commands
 
@@ -81,7 +84,8 @@ $env:DATABASE_QUERY="SELECT 1 as x"
 cargo run --release
 ```
 
-**⚠️ Important:** Despite README mentions, there is NO dotenv support in the code. Use exported environment variables or an external env loader.
+**⚠️ Important:** Despite README mentions, there is NO dotenv support in the code. Use exported
+environment variables or an external env loader.
 
 ## Architecture and Data Flow
 
@@ -91,7 +95,8 @@ cargo run --release
 
 - Uses CLI-first configuration with environment variable fallbacks
 - Configuration resolution pattern: CLI flags override environment variables
-- Reads required config: `--db-url`/`DATABASE_URL`, `--query`/`DATABASE_QUERY`, `--output`/`OUTPUT_FILE`
+- Reads required config: `--db-url`/`DATABASE_URL`, `--query`/`DATABASE_QUERY`,
+  `--output`/`OUTPUT_FILE`
 - Exits with code 255 (due to `exit(-1)`) if any are missing
 - Creates MySQL connection pool and fetches ALL rows into memory (`Vec<Row>`)
 - Exits with code 1 if result set is empty
@@ -113,9 +118,11 @@ fn resolve_config_value(cli: &Cli) -> anyhow::Result<String> {
 
 **Core Library (`src/lib.rs`):**
 
-- `rows_to_strings()`: Converts `Vec<Row>` to `Vec<Vec<String>>`, building header from first row metadata
+- `rows_to_strings()`: Converts `Vec<Row>` to `Vec<Vec<String>>`, building header from first row
+  metadata
 - `get_extension_from_filename()`: Simple extension parsing
-- **⚠️ Critical:** Uses `mysql::from_value::<String>()` which **WILL PANIC** on NULL or non-string values
+- **⚠️ Critical:** Uses `mysql::from_value::<String>()` which **WILL PANIC** on NULL or non-string
+  values
 
 **Output Writers:**
 
@@ -132,8 +139,10 @@ fn resolve_config_value(cli: &Cli) -> anyhow::Result<String> {
 ### Feature Flags (Cargo.toml)
 
 - `default`: `["json", "csv", "ssl", "additional_mysql_types", "verbose"]`
-- `ssl`: Enables MySQL native TLS support using platform-native TLS libraries (native-tls). On Linux, this commonly links to the system OpenSSL library (not vendored OpenSSL)
-- `ssl-rustls`: Enables pure Rust TLS implementation (rustls) as an alternative to platform-native TLS
+- `ssl`: Enables MySQL native TLS support using platform-native TLS libraries (native-tls). On
+  Linux, this commonly links to the system OpenSSL library (not vendored OpenSSL)
+- `ssl-rustls`: Enables pure Rust TLS implementation (rustls) as an alternative to platform-native
+  TLS
 - `additional_mysql_types`: Support for BigDecimal, Decimal, Time, Frunk
 - `verbose`: Conditional logging via println!/eprintln!
 
@@ -152,7 +161,10 @@ match get_extension_from_filename(&output_file) {
 }
 ```
 
-**Note:** The original code used the incorrect pattern `Some(&_)` which was a historical bug. The correct pattern is `Some(_)` to match any string value that isn't "csv" or "json". The `&_` pattern incorrectly tried to destructure a reference, which doesn't work for string literals in this context.
+**Note:** The original code used the incorrect pattern `Some(&_)` which was a historical bug. The
+correct pattern is `Some(_)` to match any string value that isn't "csv" or "json". The `&_` pattern
+incorrectly tried to destructure a reference, which doesn't work for string literals in this
+context.
 
 ### Known Issues
 
@@ -204,9 +216,12 @@ fn mysql_value_to_json(mysql_value: &mysql::Value) -> serde_json::Value {
 
 - **NEVER** log `DATABASE_URL` or credentials - always redact
 - **NEVER** make external service calls at runtime (offline-first)
-- ⚠️ **WARNING**: `CAST(column AS CHAR)` can corrupt binary data or produce mojibake for text in lossy encodings. Use safer alternatives:
-  - **BLOB/BINARY columns**: Use `HEX(column)` or `TO_BASE64(column)` for lossless binary representation
-  - **Text columns**: Use `CAST(column AS CHAR CHARACTER SET utf8mb4)` or `CONVERT(column USING utf8mb4)` to specify explicit encoding
+- ⚠️ **WARNING**: `CAST(column AS CHAR)` can corrupt binary data or produce mojibake for text in
+  lossy encodings. Use safer alternatives:
+  - **BLOB/BINARY columns**: Use `HEX(column)` or `TO_BASE64(column)` for lossless binary
+    representation
+  - **Text columns**: Use `CAST(column AS CHAR CHARACTER SET utf8mb4)` or
+    `CONVERT(column USING utf8mb4)` to specify explicit encoding
   - **Numeric/Date columns**: `CAST(column AS CHAR)` is generally safe for these types
 
 ## Critical Gotchas and Invariants
@@ -268,8 +283,7 @@ Based on `project_spec/requirements.md`, major missing features:
 - **.pre-commit-config.yaml**: Git hook configuration for quality gates
 - **CHANGELOG.md**: Auto-generated version history (conventional commits)
 
-**Documentation Standards:**
-All public functions require doc comments with examples:
+**Documentation Standards:** All public functions require doc comments with examples:
 
 ````rust
 /// Converts MySQL rows to string vectors for output formatting.
@@ -384,7 +398,8 @@ testcontainers = "0.15"                                      # For real MySQL/Ma
 
 ### TLS Configuration
 
-Gold Digger supports two TLS implementations to eliminate OpenSSL dependencies while maintaining secure database connections:
+Gold Digger supports two TLS implementations to eliminate OpenSSL dependencies while maintaining
+secure database connections:
 
 #### Default: Native TLS (Recommended)
 
@@ -417,7 +432,8 @@ cargo build --release --no-default-features --features "json csv additional_mysq
 
 #### Programmatic TLS Configuration
 
-**TLS configuration is programmatic only** - URL-based SSL parameters are not supported by the mysql crate:
+**TLS configuration is programmatic only** - URL-based SSL parameters are not supported by the mysql
+crate:
 
 ```rust
 use mysql::{OptsBuilder, SslOpts};
@@ -438,13 +454,15 @@ let opts = OptsBuilder::new()
 
 #### Migration from OpenSSL (Breaking Change)
 
-**v0.2.7+**: The `vendored` feature flag has been **removed**. Gold Digger has eliminated vendored OpenSSL dependencies:
+**v0.2.7+**: The `vendored` feature flag has been **removed**. Gold Digger has eliminated vendored
+OpenSSL dependencies:
 
 - **Before**: Required OpenSSL system libraries or `--features vendored` for static linking
 - **After**: Uses platform-native TLS (`ssl`) or pure Rust implementation (`ssl-rustls`)
 - **Breaking Change**: Remove `vendored` from build scripts and CI configurations
 - **Benefits**: Simplified builds, reduced attack surface, better cross-platform compatibility
-- **Note**: Platform TLS libraries receive OS security updates. The `ssl` feature uses native-tls which on Linux commonly links to the system OpenSSL library (not vendored OpenSSL)
+- **Note**: Platform TLS libraries receive OS security updates. The `ssl` feature uses native-tls
+  which on Linux commonly links to the system OpenSSL library (not vendored OpenSSL)
 
 **Migration Steps**:
 
@@ -454,7 +472,9 @@ let opts = OptsBuilder::new()
 
 ## GitHub Interactions
 
-**⚠️ Important:** When directed to interact with GitHub (issues, pull requests, repositories, etc.), prioritize using the `gh` CLI tool if available. The `gh` tool provides comprehensive GitHub functionality including:
+**⚠️ Important:** When directed to interact with GitHub (issues, pull requests, repositories, etc.),
+prioritize using the `gh` CLI tool if available. The `gh` tool provides comprehensive GitHub
+functionality including:
 
 - Creating and managing issues and pull requests
 - Repository operations (cloning, forking, etc.)
@@ -475,7 +495,8 @@ gh repo view UncleSp1d3r/gold_digger
 gh workflow list
 ```
 
-Fall back to other GitHub integration methods only if `gh` is not available or doesn't support the required functionality.
+Fall back to other GitHub integration methods only if `gh` is not available or doesn't support the
+required functionality.
 
 ## First PR Checklist for AI Agents
 
@@ -520,4 +541,6 @@ cargo build --release --no-default-features --features "json csv additional_mysq
 
 ---
 
-**Note:** This project is under active development toward v1.0. Refer to `project_spec/requirements.md` for the complete roadmap. Maintainer handle: `UncleSp1d3r`. Single-maintainer workflow with CodeRabbit.ai reviews.
+**Note:** This project is under active development toward v1.0. Refer to
+`project_spec/requirements.md` for the complete roadmap. Maintainer handle: `UncleSp1d3r`.
+Single-maintainer workflow with CodeRabbit.ai reviews.

@@ -1,6 +1,7 @@
 # Security Failure Troubleshooting
 
-This guide provides comprehensive solutions for security scanning failures, vulnerability issues, and license compliance problems in the Gold Digger project.
+This guide provides comprehensive solutions for security scanning failures, vulnerability issues,
+and license compliance problems in the Gold Digger project.
 
 ## Quick Reference
 
@@ -132,7 +133,9 @@ error: failed to fetch advisory database
    grype db update
    ```
 
-   **Security Note:** The above install command uses an unpinned script URL. For production environments and CI reproducibility, pin to a specific grype release and verify checksums/signatures where available:
+   **Security Note:** The above install command uses an unpinned script URL. For production
+   environments and CI reproducibility, pin to a specific grype release and verify
+   checksums/signatures where available:
 
    ```bash
    # Preferred: Pin to specific release (example: v0.78.0)

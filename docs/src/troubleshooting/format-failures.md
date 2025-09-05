@@ -1,6 +1,7 @@
 # Format and Linting Failure Troubleshooting
 
-This guide provides comprehensive solutions for code formatting violations, linting warnings, and style issues in the Gold Digger project.
+This guide provides comprehensive solutions for code formatting violations, linting warnings, and
+style issues in the Gold Digger project.
 
 ## Quick Reference
 
@@ -774,7 +775,8 @@ cargo clippy -- -D warnings -W clippy::pedantic -W clippy::nursery
 **CI vs Local Differences:**
 
 - **Local (just lint):** `cargo clippy -- -D warnings` (standard warnings only)
-- **CI (recommended):** `cargo clippy -- -D warnings -W clippy::pedantic -W clippy::nursery` (comprehensive)
+- **CI (recommended):** `cargo clippy -- -D warnings -W clippy::pedantic -W clippy::nursery`
+  (comprehensive)
 
 **Handling Noisy Pedantic/Nursery Lints:**
 

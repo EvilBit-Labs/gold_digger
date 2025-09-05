@@ -1,6 +1,8 @@
 # Gold Digger
 
-Gold Digger is a Rust-based MySQL/MariaDB query tool that exports results to structured data files (CSV, JSON, TSV). Designed for headless operation and automation workflows, it provides CLI-first configuration with environment variable fallbacks.
+Gold Digger is a Rust-based MySQL/MariaDB query tool that exports results to structured data files
+(CSV, JSON, TSV). Designed for headless operation and automation workflows, it provides CLI-first
+configuration with environment variable fallbacks.
 
 [![CI](https://github.com/EvilBit-Labs/gold_digger/actions/workflows/ci.yml/badge.svg)](https://github.com/EvilBit-Labs/gold_digger/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/EvilBit-Labs/gold_digger/actions/workflows/codeql.yml/badge.svg)](https://github.com/EvilBit-Labs/gold_digger/actions/workflows/codeql.yml)
@@ -15,9 +17,11 @@ Gold Digger is a Rust-based MySQL/MariaDB query tool that exports results to str
 
 - **CLI-first design** with environment variable fallbacks and comprehensive command-line interface
 - **Multiple output formats**: CSV (RFC 4180), JSON with pretty-printing, TSV
-- **Safe type handling**: Graceful NULL and type conversion without panics, with intelligent JSON type inference
+- **Safe type handling**: Graceful NULL and type conversion without panics, with intelligent JSON
+  type inference
 - **Secure TLS support**: Built-in rustls implementation with detailed error handling
-- **Comprehensive error handling**: Structured exit codes, intelligent error categorization, and actionable error messages
+- **Comprehensive error handling**: Structured exit codes, intelligent error categorization, and
+  actionable error messages
 - **Shell completion**: Support for Bash, Zsh, Fish, and PowerShell with easy generation
 - **Configuration debugging**: JSON config dump with automatic credential redaction
 - **Query flexibility**: Support for inline queries or external query files
@@ -27,13 +31,17 @@ Gold Digger is a Rust-based MySQL/MariaDB query tool that exports results to str
 
 ### Why "Gold Digger"?
 
-The name "Gold Digger" refers to the tool's ability to extract valuable data from databases - just as gold miners dig through earth to find precious metal, this tool digs through database tables to extract valuable information and insights. It's designed to help you discover the "golden" data hidden within your database systems.
+The name "Gold Digger" refers to the tool's ability to extract valuable data from databases - just
+as gold miners dig through earth to find precious metal, this tool digs through database tables to
+extract valuable information and insights. It's designed to help you discover the "golden" data
+hidden within your database systems.
 
 ## Installation
 
 ### Pre-built Binaries (Recommended)
 
-Download pre-built binaries from the [GitHub Releases](https://github.com/EvilBit-Labs/gold_digger/releases) page, which include:
+Download pre-built binaries from the
+[GitHub Releases](https://github.com/EvilBit-Labs/gold_digger/releases) page, which include:
 
 - **Cross-platform binaries** for Linux (x86_64, ARM64), macOS (Intel, Apple Silicon), and Windows
 - **Automated installers** for easy setup
@@ -85,15 +93,19 @@ cargo build --release --no-default-features --features "json csv"
 
 Gold Digger includes built-in secure database connections with rustls implementation:
 
-- **Pure Rust TLS**: Consistent cross-platform behavior using rustls with platform certificate store integration
-- **Platform Certificate Store**: Automatic integration with system certificate stores (Windows/macOS/Linux)
-- **Flexible Security Controls**: Four distinct TLS validation modes via mutually exclusive CLI flags
+- **Pure Rust TLS**: Consistent cross-platform behavior using rustls with platform certificate store
+  integration
+- **Platform Certificate Store**: Automatic integration with system certificate stores
+  (Windows/macOS/Linux)
+- **Flexible Security Controls**: Four distinct TLS validation modes via mutually exclusive CLI
+  flags
 - **Enhanced Error Messages**: Intelligent error classification with specific CLI flag suggestions
 - **Security Warnings**: Prominent warnings for insecure TLS modes with clear guidance
 
 ## Usage
 
-Gold Digger supports CLI-first configuration with environment variable fallbacks. CLI flags take precedence over environment variables.
+Gold Digger supports CLI-first configuration with environment variable fallbacks. CLI flags take
+precedence over environment variables.
 
 ### CLI Usage
 
@@ -190,7 +202,8 @@ Supported shells for completion generation:
 
 When CLI flags are not provided, Gold Digger falls back to environment variables:
 
-- `DATABASE_URL`: MySQL/MariaDB connection URL in standard format: `mysql://username:password@host:port/database`
+- `DATABASE_URL`: MySQL/MariaDB connection URL in standard format:
+  `mysql://username:password@host:port/database`
 - `DATABASE_QUERY`: SQL query to execute
 - `OUTPUT_FILE`: Path to output file. Extension determines format:
   - `.csv` → CSV output with RFC 4180 formatting
@@ -222,16 +235,21 @@ Gold Digger uses structured exit codes for better automation and error handling:
 
 - **0**: Success with results (or empty with `--allow-empty`)
 - **1**: Success but no rows returned (use `--allow-empty` to get exit code 0)
-- **2**: Configuration error (missing/invalid parameters, mutually exclusive flags, TLS configuration issues)
-- **3**: Database connection/authentication failure (access denied, connection refused, TLS handshake failures)
+- **2**: Configuration error (missing/invalid parameters, mutually exclusive flags, TLS
+  configuration issues)
+- **3**: Database connection/authentication failure (access denied, connection refused, TLS
+  handshake failures)
 - **4**: Query execution failure (SQL syntax errors, type conversion errors, database-level errors)
-- **5**: File I/O operation failure (cannot read query file, cannot write output file, permission errors)
+- **5**: File I/O operation failure (cannot read query file, cannot write output file, permission
+  errors)
 
-The exit code mapping includes intelligent error detection based on error message patterns, providing consistent behavior across different failure scenarios.
+The exit code mapping includes intelligent error detection based on error message patterns,
+providing consistent behavior across different failure scenarios.
 
 ## Testing
 
-Gold Digger includes comprehensive test suites to ensure reliability and correctness across multiple database systems and configurations:
+Gold Digger includes comprehensive test suites to ensure reliability and correctness across multiple
+database systems and configurations:
 
 ### Unit Tests
 
@@ -250,7 +268,8 @@ just test-no-docker
 
 ### Integration Tests
 
-Gold Digger features a comprehensive integration testing framework that validates functionality against real MySQL and MariaDB databases:
+Gold Digger features a comprehensive integration testing framework that validates functionality
+against real MySQL and MariaDB databases:
 
 ```bash
 # Run integration tests (requires Docker)
@@ -331,8 +350,10 @@ Gold Digger maintains high security and quality standards for all releases:
 
 - **Signed Artifacts:** All release binaries are cryptographically signed using GitHub attestation
 - **Supply Chain Security:** Automated security scanning of all dependencies
-- **Software Bill of Materials (SBOM):** Complete dependency information in CycloneDX format included with each release
-- **Cross-Platform Distribution:** 6 target platforms (ARM64 & x86_64 for macOS/Linux/Windows) via cargo-dist
+- **Software Bill of Materials (SBOM):** Complete dependency information in CycloneDX format
+  included with each release
+- **Cross-Platform Distribution:** 6 target platforms (ARM64 & x86_64 for macOS/Linux/Windows) via
+  cargo-dist
 
 ### Quality Standards
 
@@ -347,11 +368,15 @@ Gold Digger is authored by [@unclesp1d3r](https://www.github.com/EvilBit-Labs)
 
 ## Contributing and Feedback
 
-We welcome your feedback and suggestions for Gold Digger! If you have any ideas for new features, encounter any bugs or issues, or have any other comments, please reach out to us by creating an issue on our [GitHub repository](https://github.com/EvilBit-Labs/gold_digger/issues).
+We welcome your feedback and suggestions for Gold Digger! If you have any ideas for new features,
+encounter any bugs or issues, or have any other comments, please reach out to us by creating an
+issue on our [GitHub repository](https://github.com/EvilBit-Labs/gold_digger/issues).
 
-If you're interested in contributing to Gold Digger, we encourage you to submit a pull request. Please see our `CONTRIBUTING.md` for more information on how to get started.
+If you're interested in contributing to Gold Digger, we encourage you to submit a pull request.
+Please see our `CONTRIBUTING.md` for more information on how to get started.
 
-Our team is committed to providing a welcoming and inclusive environment for all contributors. Please adhere to our `CODE_OF_CONDUCT.md` when contributing to the project.
+Our team is committed to providing a welcoming and inclusive environment for all contributors.
+Please adhere to our `CODE_OF_CONDUCT.md` when contributing to the project.
 
 Thank you for your interest in Gold Digger, and we look forward to hearing from you!
 

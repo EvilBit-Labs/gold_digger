@@ -4,14 +4,17 @@ Links to detailed API documentation and developer resources.
 
 ## Rustdoc Documentation
 
-The complete API documentation is available in the [rustdoc section](../api/gold_digger/index.html) of this site.
+The complete API documentation is available in the [rustdoc section](../api/gold_digger/index.html)
+of this site.
 
 ## Public API Overview
 
 ### Core Functions
 
-- [`rows_to_strings()`](../api/gold_digger/fn.rows_to_strings.html) - Convert database rows to string vectors
-- [`get_extension_from_filename()`](../api/gold_digger/fn.get_extension_from_filename.html) - Extract file extensions for format detection
+- [`rows_to_strings()`](../api/gold_digger/fn.rows_to_strings.html) - Convert database rows to
+  string vectors
+- [`get_extension_from_filename()`](../api/gold_digger/fn.get_extension_from_filename.html) -
+  Extract file extensions for format detection
 
 ### Output Modules
 

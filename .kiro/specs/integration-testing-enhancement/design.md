@@ -2,9 +2,14 @@
 
 ## Overview
 
-This design outlines a comprehensive integration testing framework for Gold Digger that uses testcontainers to create isolated MySQL environments with seeded test data. The framework will validate the complete query-to-output pipeline, ensuring robust operation across different data scenarios, output formats, and error conditions.
+This design outlines a comprehensive integration testing framework for Gold Digger that uses
+testcontainers to create isolated MySQL environments with seeded test data. The framework will
+validate the complete query-to-output pipeline, ensuring robust operation across different data
+scenarios, output formats, and error conditions.
 
-The integration tests will complement the existing TLS-focused tests by providing end-to-end validation of Gold Digger's core functionality using real MySQL instances rather than mocked components.
+The integration tests will complement the existing TLS-focused tests by providing end-to-end
+validation of Gold Digger's core functionality using real MySQL instances rather than mocked
+components.
 
 ## Architecture
 

@@ -556,7 +556,9 @@ Error: Stack overflow
    }
    ```
 
-   **Note:** When testing CLI output, always normalize line endings on both the expected and actual output strings, or use predicates that handle line ending differences. This ensures tests pass consistently across Windows (CRLF), Unix (LF), and macOS (historically CR) platforms.
+   **Note:** When testing CLI output, always normalize line endings on both the expected and actual
+   output strings, or use predicates that handle line ending differences. This ensures tests pass
+   consistently across Windows (CRLF), Unix (LF), and macOS (historically CR) platforms.
 
 ### 2. macOS-Specific Issues
 

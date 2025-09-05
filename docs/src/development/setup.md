@@ -225,7 +225,8 @@ just deny
 
 ### 3. Cargo-deny Configuration
 
-Gold Digger uses a dual cargo-deny configuration to balance local development flexibility with CI security enforcement:
+Gold Digger uses a dual cargo-deny configuration to balance local development flexibility with CI
+security enforcement:
 
 #### Local Development (Tolerant)
 
@@ -256,7 +257,8 @@ just deny-ci
 
 - `deny.toml` - Local development configuration with tolerant settings
 - `deny.ci.toml` - CI-specific configuration with strict enforcement
-- Both files maintain the same license and security policies, differing only in yanked crate handling
+- Both files maintain the same license and security policies, differing only in yanked crate
+  handling
 
 ````
 
@@ -352,7 +354,19 @@ cargo test --no-default-features
 
 ### Integration Test Framework
 
-Gold Digger uses testcontainers for automated database testing, eliminating the need for manual database setup:
+Gold Digger uses testcontainers for automated database testing, eliminating the need for manual
+database setup.
+
+**Prerequisites:**
+
+- Docker daemon must be installed and running on the host system
+- Minimum Docker version 20.10+ (testcontainers requirement)
+- Docker Compose 2.0+ recommended for enhanced container orchestration
+- See [Docker installation documentation](https://docs.docker.com/get-docker/) for setup
+  instructions
+
+**Note:** No local database installation is required - testcontainers automatically spins up
+isolated database containers for testing.
 
 ```bash
 # Integration tests automatically manage database containers

@@ -2,8 +2,10 @@
 
 - [ ] 1. Set up workspace structure and core LTSV-RS crate foundation
 
-  - Update root Cargo.toml to define workspace with `[workspace]` section and `members = [".", "crates/ltsv-rs"]`
-  - Create `crates/ltsv-rs/Cargo.toml` with proper package metadata, edition = "2021", and minimal dependencies
+  - Update root Cargo.toml to define workspace with `[workspace]` section and
+    `members = [".", "crates/ltsv-rs"]`
+  - Create `crates/ltsv-rs/Cargo.toml` with proper package metadata, edition = "2021", and minimal
+    dependencies
   - Set up `crates/ltsv-rs/src/lib.rs` with module declarations and basic crate-level documentation
   - Create module files (error.rs, writer.rs, reader.rs, escape.rs) with placeholder implementations
   - _Requirements: 6.1, 6.9_

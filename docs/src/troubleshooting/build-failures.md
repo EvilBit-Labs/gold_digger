@@ -1,6 +1,7 @@
 # Build Failure Troubleshooting
 
-This guide provides comprehensive solutions for Rust compilation and build issues in the Gold Digger project.
+This guide provides comprehensive solutions for Rust compilation and build issues in the Gold Digger
+project.
 
 ## Quick Reference
 
@@ -429,7 +430,8 @@ error: could not find native static library `library_name`
    cargo build -j 4
    ```
 
-   You can persist this setting by adding `build.jobs = N` under the `[build]` table in `.cargo/config.toml`.
+   You can persist this setting by adding `build.jobs = N` under the `[build]` table in
+   `.cargo/config.toml`.
 
 3. **Enable Incremental Compilation:**
 

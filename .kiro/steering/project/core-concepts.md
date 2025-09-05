@@ -4,7 +4,8 @@ inclusion: always
 
 # Gold Digger Core Concepts
 
-This document defines the essential architecture patterns, safety requirements, and development constraints for the Gold Digger MySQL/MariaDB query tool.
+This document defines the essential architecture patterns, safety requirements, and development
+constraints for the Gold Digger MySQL/MariaDB query tool.
 
 ## Project Identity
 
@@ -104,7 +105,9 @@ verbose = [] # Conditional println!/eprintln!
 # TLS is always enabled with rustls - no feature flags needed
 ```
 
-**Note**: TLS support is always enabled using rustls. There are no TLS feature flags - secure TLS is mandatory and transparent. The mysql dependency includes `rustls-tls` by default, ensuring consistent, secure behavior across all platforms.
+**Note**: TLS support is always enabled using rustls. There are no TLS feature flags - secure TLS is
+mandatory and transparent. The mysql dependency includes `rustls-tls` by default, ensuring
+consistent, secure behavior across all platforms.
 
 ## Code Quality Standards (REQUIRED Before Commits)
 
@@ -203,7 +206,8 @@ just build        # Build release artifacts
 
 Current v0.2.6 → Target v1.0:
 
-- **CLI present (clap-based)**: Clap-based interface exists; finalize config precedence and UX polish (F001–F003)
+- **CLI present (clap-based)**: Clap-based interface exists; finalize config precedence and UX
+  polish (F001–F003)
 - **Exit code standards**: Proper error taxonomy implemented in src/exit.rs (F005 ✓)
 - **Memory efficiency**: Implement streaming for large result sets (F007)
 - **Streaming**: Memory-efficient large result processing (F007)

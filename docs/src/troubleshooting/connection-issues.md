@@ -108,7 +108,8 @@ mysql://username:password@hostname:port/database
 
 ## TLS Connection Issues (rustls-only implementation)
 
-Gold Digger uses rustls for all TLS connections with enhanced security controls and better error messages.
+Gold Digger uses rustls for all TLS connections with enhanced security controls and better error
+messages.
 
 ### TLS Handshake and Connection Issues (Exit Code 3)
 
@@ -124,7 +125,8 @@ Hostname verification failed for 192.168.1.100: certificate is for db.company.co
 **Causes & Solutions:**
 
 - **Certificate validation failures**:
-  - **Self-signed certificates**: Use `--allow-invalid-certificate` (testing only) or `--tls-ca-file /path/to/ca.pem`
+  - **Self-signed certificates**: Use `--allow-invalid-certificate` (testing only) or
+    `--tls-ca-file /path/to/ca.pem`
   - **Expired certificates**: Use `--allow-invalid-certificate` (testing only)
   - **Internal CA certificates**: Use `--tls-ca-file /path/to/internal-ca.pem`
   - **Missing CA certificates**: Install system CA certificates or use custom CA file
