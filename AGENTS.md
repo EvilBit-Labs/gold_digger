@@ -144,13 +144,12 @@ cargo run --release
 
 ### Feature Flags
 
-- `default`: `["json", "csv", "ssl", "additional_mysql_types", "verbose"]`
-- `ssl`: MySQL native TLS support using platform-native libraries (SChannel on Windows, SecureTransport on macOS, may use OpenSSL on Linux)
-- `ssl-rustls`: Pure Rust TLS implementation (alternative to native TLS)
+- `default`: `["json", "csv", "additional_mysql_types", "verbose"]`
+- TLS: Always enabled with rustls (no feature flags)
 - `additional_mysql_types`: Support for BigDecimal, Decimal, Time, Frunk
 - `verbose`: Conditional logging via println!/eprintln!
 
-**Important**: `ssl` and `ssl-rustls` are mutually exclusive features.
+**Important**: TLS is always enabled with rustls - no feature flags needed.
 
 ## Requirements Gap Analysis
 
@@ -216,7 +215,7 @@ pub fn rows_to_strings(rows: Vec<mysql::Row>) -> anyhow::Result<Vec<Vec<String>>
 - **Vulnerability policy:** Block releases with critical vulnerabilities
 - **Airgap compatibility:** No telemetry or external calls in production
 - **Configure TLS programmatically:** Use `mysql::OptsBuilder` and `SslOpts` instead of URL parameters
-- **TLS Implementation:** Supports both platform-native TLS via the `ssl` feature and pure Rust TLS via the `ssl-rustls` feature
+- **TLS Implementation:** Always enabled with rustls (no feature flags)
 
 #### Error Handling Patterns
 

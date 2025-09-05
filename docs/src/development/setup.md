@@ -315,7 +315,7 @@ Gold Digger uses Cargo features for conditional compilation:
 
 ```toml
 # Default features
-default = ["json", "csv", "additional_mysql_types", "verbose", "ssl-rustls"]
+default = ["json", "csv", "additional_mysql_types", "verbose"]
 
 # Individual features
 json = []  # Enable JSON output format
@@ -323,11 +323,7 @@ csv = []   # Enable CSV output format
 additional_mysql_types = ["mysql_common?/bigdecimal", ...]
 verbose = []  # Enable verbose logging
 
-# TLS implementation options
-ssl = ["native-tls", "mysql/native-tls"]  # Native TLS implementation (OpenSSL/SecureTransport)
-ssl-rustls = ["rustls", "rustls-native-certs", "rustls-pemfile", "mysql/rustls-tls"]  # Pure Rust TLS implementation
-
-# Note: TLS support is provided via optional ssl/ssl-rustls feature flags
+# TLS is always enabled with rustls - no feature flags needed
 ```
 
 ### Testing Feature Combinations

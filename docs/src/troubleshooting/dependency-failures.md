@@ -126,7 +126,7 @@ error: TLS connection failed: certificate validation error
    cargo build --release
 
    # Minimal build (TLS still available)
-   cargo build --no-default-features --features "json csv additional_mysql_types verbose ssl-rustls"
+   cargo build --no-default-features --features "json csv additional_mysql_types verbose"
    ```
 
 3. **Verify TLS Dependencies:**

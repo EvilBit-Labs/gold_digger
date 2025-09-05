@@ -90,7 +90,7 @@ pub fn write<W: Write>(rows: Vec<Vec<String>>, output: W) -> anyhow::Result<()>
 ## Feature Flags
 
 ```toml
-default = ["json", "csv", "additional_mysql_types", "verbose", "ssl-rustls"]
+default = ["json", "csv", "additional_mysql_types", "verbose"]
 json = [] # Enable JSON output format
 csv = [] # Enable CSV output format
 additional_mysql_types = [ # Extended MySQL type support
@@ -101,19 +101,10 @@ additional_mysql_types = [ # Extended MySQL type support
   "mysql_common?/frunk",
 ]
 verbose = [] # Conditional println!/eprintln!
-ssl = [
-  "native-tls",
-  "mysql/native-tls",
-] # Native TLS implementation (OpenSSL/SecureTransport)
-ssl-rustls = [
-  "rustls",
-  "rustls-native-certs",
-  "rustls-pemfile",
-  "mysql/rustls-tls",
-] # Pure Rust TLS implementation (default)
+# TLS is always enabled with rustls - no feature flags needed
 ```
 
-**Note**: TLS support is provided via feature flags with `ssl-rustls` enabled by default. The `ssl` feature provides native TLS implementation (OpenSSL/SecureTransport) while `ssl-rustls` provides pure Rust TLS implementation. Only one TLS implementation can be enabled at a time.
+**Note**: TLS support is always enabled using rustls. There are no TLS feature flags - secure TLS is mandatory and transparent. The mysql dependency includes `rustls-tls` by default, ensuring consistent, secure behavior across all platforms.
 
 ## Code Quality Standards (REQUIRED Before Commits)
 
