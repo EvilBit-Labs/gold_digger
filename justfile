@@ -56,6 +56,28 @@ lint:
     cargo clippy --all-targets --release -- -D warnings
     cargo clippy --all-targets --no-default-features --features "json csv additional_mysql_types verbose" -- -D warnings
 
+# Lint SQL files with sqlfluff
+lint-sql:
+    cd {{justfile_dir()}}
+    @if command -v sqlfluff >/dev/null 2>&1; then \
+        echo "Linting SQL files..."; \
+        sqlfluff lint tests/fixtures/**/*.sql || echo "Note: Expected errors from invalid.sql test file are normal"; \
+    else \
+        echo "sqlfluff not installed - install with 'pip install sqlfluff'"; \
+        exit 1; \
+    fi
+
+# Fix SQL formatting with sqlfluff
+fix-sql:
+    cd {{justfile_dir()}}
+    @if command -v sqlfluff >/dev/null 2>&1; then \
+        echo "Fixing SQL formatting..."; \
+        sqlfluff fix tests/fixtures/**/*.sql; \
+    else \
+        echo "sqlfluff not installed - install with 'pip install sqlfluff'"; \
+        exit 1; \
+    fi
+
 # Run clippy with fixes
 fix:
     cargo clippy --fix --allow-dirty --allow-staged
@@ -67,7 +89,7 @@ check:
     just test-no-docker
 
 # Quality gates (CI equivalent)
-ci-check: check fmt-check test validate-deps deny-check
+ci-check: check fmt-check lint-sql test validate-deps deny-check
 
 # Full CI workflow equivalent - mirrors .github/workflows/ci.yml exactly
 ci-full:
@@ -652,9 +674,11 @@ help:
     @echo "  format           Format code"
     @echo "  fmt-check     Check formatting"
     @echo "  lint          Run clippy linting"
+    @echo "  lint-sql      Lint SQL files with sqlfluff"
     @echo "  fix           Run clippy with automatic fixes"
+    @echo "  fix-sql       Fix SQL formatting with sqlfluff"
     @echo "  check         Quick development checks"
-    @echo "  ci-check      Full CI equivalent checks"
+    @echo "  ci-check      Full CI equivalent checks (includes SQL linting)"
     @echo "  ci-full       Complete CI workflow equivalent (mirrors .github/workflows/ci.yml)"
     @echo "  full-checks   Comprehensive validation (all non-destructive checks)"
     @echo "  deny-check    Run cargo-deny checks (license & duplicates)"

@@ -1132,6 +1132,7 @@ dependencies = [
  "insta",
  "mysql",
  "mysql_common",
+ "regex",
  "rustls",
  "rustls-native-certs",
  "rustls-pemfile",
