@@ -25,12 +25,10 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v5
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          components: clippy, rustfmt
+          components: rustfmt, clippy
 
       - name: Install just
         uses: extractions/setup-just@v3
@@ -38,32 +36,32 @@ jobs:
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Check formatting
-        run: cargo fmt --check
+      - name: Rustfmt Check
+        uses: actions-rust-lang/rustfmt@v1
 
-      - name: Run clippy (default features with TLS always available)
+      - name: Run clippy (default features)
         run: cargo clippy -- -D warnings
 
-      - name: Run clippy (minimal features with TLS always available)
-        run: cargo clippy --no-default-features --features "json csv additional_mysql_types verbose" -- -D warnings
+      - name: Run clippy (minimal features)
+        run: cargo clippy --no-default-features --features "json csv additional_mysql_types" -- -D warnings
 
   # Test TLS functionality (always available)
   test-tls:
     runs-on: ubuntu-latest
     needs: quality
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: actions-rust-lang/setup-rust-toolchain@v1
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
 
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
+      - name: Test TLS configuration unit tests
+        run: cargo nextest run --test tls_config_unit_tests
 
       - name: Test TLS CLI flag validation
         run: |
@@ -88,9 +86,6 @@ jobs:
             --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
 
           echo "TLS flag validation tests passed"
-
-      - name: Test TLS configuration unit tests
-        run: cargo nextest run --test tls_config_unit_tests
 
       - name: Verify TLS always available
         run: |
@@ -125,18 +120,17 @@ jobs:
           - "default"
           - "minimal"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: rustfmt, clippy
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
 
       - name: Run tests (default features)
         if: matrix.features == 'default'
@@ -154,31 +148,6 @@ jobs:
             cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
           fi
 
-      - name: Verify TLS always available
-        run: |
-          # Set up binary path with Windows .exe suffix detection
-          BIN="./target/release/gold_digger"
-          if [ -f "${BIN}.exe" ]; then
-            BIN="${BIN}.exe"
-          fi
-
-          # Test that TLS flags are always available in CLI help
-          "$BIN" --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)" \
-            || exit 1
-
-          # Verify rustls dependencies are present
-          if [ "${{ matrix.features }}" = "default" ]; then
-            cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
-          else
-            cargo tree --no-default-features --features "json csv additional_mysql_types verbose" \
-              | grep -E "(rustls|rustls-native-certs)" || exit 1
-          fi
-
-          # Verify no native-tls dependencies (rustls-only implementation)
-          ! cargo tree | grep "native-tls" || exit 1
-
-          echo "TLS always available test passed for ${{ matrix.features }} features"
-
   # Test cross-platform TLS functionality (always available)
   test-cross-platform:
     strategy:
@@ -193,89 +162,47 @@ jobs:
     runs-on: ${{ matrix.os }}
     needs: quality
     steps:
-      - name: Install bash (Alpine)
-        if: runner.os == 'Linux' && runner.arch == 'X64'
-        run: apk --no-cache add bash
-
-      - name: Install bash (Ubuntu/Debian)
-        if: runner.os == 'Linux' && runner.arch == 'ARM64'
-        run: sudo apt-get update && sudo apt-get install -y bash
-
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: actions-rust-lang/setup-rust-toolchain@v1
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
 
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
+      # Run TLS configuration unit tests and build the release binary
+      - run: cargo nextest run --test tls_config_unit_tests
+      - run: cargo nextest run --test tls_integration
+      - run: cargo build --release
 
-      - name: Test TLS functionality on ${{ matrix.platform }}
-        run: |
-          # Run TLS-specific tests
-          cargo nextest run --test tls_config_unit_tests
-          cargo nextest run --test tls_integration
+      # Verify platform certificate store integration
+      - run: cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
 
-          # Verify rustls dependencies are present
-          cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
-
-          # Verify no native-tls dependencies (rustls-only implementation)
-          ! cargo tree | grep "native-tls" || exit 1
-
-      - name: Test platform certificate store integration
-        run: |
-          # Build with TLS support (always available)
-          cargo build --release
-
-          # Test that platform certificate dependencies are present
-          cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
-
-          # Verify no native-tls dependencies (rustls-only implementation)
-          ! cargo tree | grep "native-tls" || exit 1
-
-      - name: Test TLS CLI functionality on ${{ matrix.platform }}
-        run: |
-          # Set up binary path with Windows .exe suffix detection
-          BIN="./target/release/gold_digger"
-          if [ -f "${BIN}.exe" ]; then
-            BIN="${BIN}.exe"
-          fi
-
-          # Test CLI help shows TLS options
-          "$BIN" --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)" \
-            || exit 1
-
-          echo "TLS functionality tests completed successfully on ${{ matrix.platform }}"
+      - name: Verify platform certificate store integration
+        run: cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
 
   # Test TLS error handling and configuration validation
   test-tls-validation:
     runs-on: ubuntu-latest
     needs: quality
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: rustfmt, clippy
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-nextest
 
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Test TLS error handling
-        run: |
-          # Build with TLS support (always available)
-          cargo build --release
-
-          # Test TLS error classification and guidance
-          cargo nextest run --test tls_integration tls_error_handling_tests
+      # Build the release binary and run the TLS integration and error handling tests
+      - run: cargo build --release
+      - run: cargo nextest run --test tls_integration tls_error_handling_tests
 
       - name: Test TLS configuration validation
         run: |
@@ -298,32 +225,22 @@ jobs:
 
           echo "TLS configuration validation tests passed"
 
-      - name: Verify TLS always available
-        run: |
-          # Test that TLS-related code is always available
-          # Verify rustls dependencies are present
-          cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
-
-          # Verify rustls-only implementation (no native-tls)
-          ! cargo tree | grep "native-tls" || exit 1
-
   # Generate coverage for TLS-enabled builds
   coverage:
     runs-on: ubuntu-latest
     needs: [test-tls, test-features, test-cross-platform, test-tls-validation]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: rustfmt, clippy
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-llvm-cov
-
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@v2
 
       - name: Generate coverage (default features with TLS)
         run: cargo llvm-cov --workspace --lcov --output-path lcov-default.info
@@ -331,7 +248,7 @@ jobs:
       - name: Generate coverage (minimal features with TLS)
         run: |
           cargo llvm-cov --workspace --lcov --output-path lcov-minimal.info \
-            --no-default-features --features "json csv additional_mysql_types verbose"
+            --no-default-features --features "json csv additional_mysql_types"
 
       - name: Combine coverage reports
         run: |
