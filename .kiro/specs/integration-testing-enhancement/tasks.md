@@ -21,6 +21,7 @@
   - Create `tests/integration/common.rs` with shared test utilities (CLI execution, output parsing)
   - Add `tests/integration/containers.rs` with container management and health checks
   - Define common test data structures and helper functions
+  - Create a `tests/test_support` module/crate exposing shared CLI, parsing, containers, and fixtures
   - _Requirements: 1.1, 1.2_
 
 - [ ] 1.2 Implement MySQL and MariaDB container setup with TLS and non-TLS configurations
@@ -33,6 +34,8 @@
   - Add container health check and readiness validation with timeout handling for CI environments
   - Implement connection URL generation for both TLS and non-TLS test containers with retry logic
   - Add Docker availability detection and graceful test skipping when Docker is unavailable
+  - Restrict container-based tests to Linux runners; skip on Windows/macOS
+  - Add explicit Docker preflight (daemon ping, disk space check, cgroup limits) with actionable skip messages
   - _Requirements: 1.1, 1.2, 1.3, 1.5, 9.3_
 
 - [ ] 1.2.1 Create TestDatabase enum and basic container management
@@ -45,11 +48,18 @@
 
 - [ ] 1.2.2 Add TLS and non-TLS container configurations
 
-  - Create TLS-enabled container configurations with SSL certificates
+  - Create TLS-enabled container configurations with ephemeral SSL certificates
+  - Generate per-run ephemeral CA and server/client certificates for each test execution
+  - Mount ephemeral certificates into containers with proper permissions (600/644)
   - Configure MySQL/MariaDB containers with `require_secure_transport=ON` for TLS tests
+  - Enforce minimum TLS version (TLS 1.2 or TLS 1.3) and disable older versions
+  - Apply strict cipher suite policy (e.g., `ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256`)
   - Create non-TLS container configurations for standard connection tests
-  - Implement certificate mounting and SSL configuration for containers
   - Add TLS connection validation and certificate verification tests
+  - Implement tests that validate ephemeral CA usage and reject lower TLS versions
+  - Add tests that verify disallowed cipher suites are rejected
+  - Validate certificate verification succeeds with per-run CA
+  - This may require creating a generic testcontainer for the TLS database server using Docker, in case the testcontainers-modules crate does not support it
 
 - [ ] 1.2.3 Implement container health checks and CI compatibility
 
@@ -98,11 +108,12 @@
 
 - [ ] 1.3.4 Implement database seeding and compatibility handling
 
-  - Implement `TestDatabase::seed_data()` method with transaction support
-  - Add idempotent schema creation (CREATE TABLE IF NOT EXISTS)
-  - Implement upsert-based data seeding (REPLACE INTO for idempotency)
-  - Add MySQL vs MariaDB compatibility handling for data type differences
+  - Implement `TestDatabase::seed_data()` method with separate DDL and DML execution phases
+  - Add idempotent schema creation (CREATE TABLE IF NOT EXISTS, ALTER TABLE ... IF NOT EXISTS) executed outside transactions
+  - Implement upsert-based data seeding (INSERT ... ON DUPLICATE KEY UPDATE for atomic upserts) inside explicit transactions
+  - Add MySQL vs MariaDB compatibility handling for data type differences (detect only if DB-specific type/feature tweaks needed)
   - Create database version detection and feature compatibility checks
+  - Note: DDL statements are auto-committed by MySQL/MariaDB and should not be wrapped in transactions; only DML operations benefit from transactional atomicity
 
 - [ ] 1.4 Implement TLS and non-TLS test database variants
 
@@ -128,31 +139,36 @@
   - Add utilities for capturing and parsing Gold Digger output and exit codes
   - ✓ CI environment detection exists in `tests/tls_integration.rs` (need to generalize)
   - Add test execution utilities that can handle both TLS and non-TLS database connections
+  - Integrate `cargo nextest` for parallel execution and flaky test quarantine
+  - Emit JUnit/XML reports for CI annotations and artifact uploads
+  - Provide justfile tasks for consistent local/CI invocation
   - _Requirements: 1.4, 1.5, 4.1, 4.2, 4.3, 4.4, 4.5_
 
-- [ ] 1.6.1 Create Gold Digger CLI execution utilities
+- [ ] 1.6.1 Implement CLI testing with assert_cmd and predicates
 
-  - Implement `GoldDiggerCli` struct for executing the binary with test parameters
-  - Add timeout handling and process management for CLI execution
-  - Create utilities for capturing stdout, stderr, and exit codes
-  - Implement parameter building for database URLs, queries, and output files
-  - Add environment variable management for test scenarios
+  - Replace bespoke `GoldDiggerCli` struct with `assert_cmd::Command::cargo_bin("gold_digger")`
+  - Use `assert_cmd::Command` API for setting environment variables and CLI arguments
+  - Leverage `assert_cmd`'s `.assert()` method with `predicates` for robust stdout/stderr/exit code validation
+  - Implement timeout handling using `process_control` crate alongside `assert_cmd` for process management
+  - Use `insta` snapshots for CLI output verification and regression testing
+  - Create helper functions that wrap `assert_cmd::Command` for common test scenarios (TLS, non-TLS, different formats)
 
-- [ ] 1.6.2 Implement output parsing and validation utilities
+- [ ] 1.6.2 Implement output validation with predicates and insta snapshots
 
-  - Create output file readers for CSV, JSON, and TSV formats
-  - Implement row count and column validation utilities
-  - Add content validation helpers for data type verification
-  - Create performance measurement utilities (execution time, memory usage)
-  - Implement output comparison utilities for cross-format consistency tests
+  - Use `predicates` crate for validating output file existence, content, and format
+  - Implement `insta` snapshot testing for CLI output regression testing and format validation
+  - Create `predicates` matchers for CSV/JSON/TSV content validation (row counts, column headers, data types)
+  - Use `assert_cmd`'s file output assertions combined with `predicates` for comprehensive validation
+  - Implement performance measurement using `assert_cmd`'s execution time tracking
+  - Create snapshot-based output comparison utilities for cross-format consistency tests
 
-- [ ] 1.6.3 Add temporary file and directory management
+- [ ] 1.6.3 Add temporary file and directory management with tempfile
 
-  - Implement CI-safe temporary directory creation and cleanup
-  - Create temporary file management for output files with automatic cleanup
-  - Add test isolation utilities to prevent test interference
-  - Implement cleanup-on-failure handling for robust test execution
-  - Create utilities for test artifact collection and debugging
+  - Use `tempfile` crate for CI-safe temporary directory creation and automatic cleanup
+  - Integrate `tempfile` with `assert_cmd::Command` for output file management in tests
+  - Implement test isolation using `tempfile::TempDir` to prevent test interference
+  - Use `tempfile`'s automatic cleanup-on-failure for robust test execution
+  - Create utilities for test artifact collection and debugging using `tempfile` paths
 
 - [ ] 2. Implement data type validation tests
 
@@ -176,6 +192,7 @@
   - Test string preservation across CSV, JSON, and TSV output formats
   - Validate special character handling and encoding in string types
   - Add tests for empty strings vs NULL value handling
+  - Include tests for multi-byte truncation at column limits and collation-specific ordering
 
 - [ ] 2.1.2 Implement numeric data type tests
 
@@ -198,6 +215,8 @@
   - Implement tests for DATE, DATETIME, TIMESTAMP, TIME data types
   - Create tests for BINARY, VARBINARY, BLOB data types
   - Validate date formatting consistency and binary data handling without panics
+  - For BLOB/VARBINARY, verify hex/base64 encodings and round-trip fidelity; avoid implicit UTF-8 decoding
+  - For TIMESTAMP/DATETIME, assert UTC normalization and documented formatting
   - _Requirements: 3.4, 3.5_
 
 - [ ] 2.3 Implement NULL value and JSON column type tests
@@ -213,6 +232,7 @@
   - Implement format-specific validators for CSV, JSON, and TSV outputs using real database results
   - Test format compliance and consistency across different data scenarios with actual Gold Digger output
   - Validate special character handling and encoding with real-world data
+  - Enforce CRLF line endings per RFC 4180 in CSV validator; assert `QuoteStyle::Necessary` semantics across platforms
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
 
 - [ ] 3.1 Implement CSV format validation
@@ -229,6 +249,7 @@
   - Create CSV parsing utilities using the csv crate for validation
   - Implement quoting behavior validation (QuoteStyle::Necessary)
   - Add line ending and delimiter validation
+  - Include tests for Excel interoperability (embedded commas, quotes, newlines) with CRLF enforcement
 
 - [ ] 3.1.2 Implement CSV content validation
 
@@ -245,6 +266,8 @@
   - Implement CSV output consistency tests across multiple runs
   - Create CSV format regression tests for edge cases
   - Add CSV memory usage validation for large result sets
+  - Gate performance tests behind `INTEGRATION_PERF=1` and use P95-based time thresholds
+  - Add CSV memory usage checks with coarse upper bounds; skip on constrained runners
 
 - [ ] 3.2 Implement JSON format validation
 
@@ -266,6 +289,8 @@
   - Create comprehensive error scenario tests with proper exit code validation using real Gold Digger CLI
   - Test database connection failures and authentication errors with actual containers
   - Validate file I/O error handling and meaningful error messages in real scenarios
+  - Assert that exit codes are surfaced on process status and messages emitted on stderr, not stdout
+  - Optionally emit/validate machine-readable error JSON for CI parsing
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
 
 - [ ] 4.1 Create error scenario test framework
@@ -362,6 +387,7 @@
   - Implement execution time measurement and performance thresholds
   - Create tests for result set processing without memory exhaustion
   - Add validation for consistent performance across multiple runs
+  - Seed a deterministic helper table (numbers) for 1k+ rows to avoid engine/version CTE differences
 
 - [ ] 6.1.2 Implement wide table performance tests
 
@@ -439,6 +465,7 @@
   - Add tests for connection strings with special characters in passwords for both TLS and non-TLS
   - ✓ Test verbose output credential redaction functionality (exists via `redact_url` function)
   - ✓ TLS configuration works with rustls-only implementation (no dual feature support needed)
+  - Add explicit tests for hostname mismatch, expired certs, and disabled cipher suites; assert precise error text
   - _Requirements: 9.3, 9.4, 9.5_
 
 - [ ] 9. Add cross-platform validation and CI integration
@@ -460,6 +487,8 @@
   - ✓ Docker service already enabled in `.github/workflows/ci.yml` (needs integration test job)
   - Add integration test job with appropriate timeouts and resource limits for container execution
   - Configure test categorization with `--ignored` flag handling for Docker-dependent tests
+  - On failure, always collect container stdout/stderr and `docker inspect`/`docker events` as CI artifacts
+  - Increase job-level timeout (e.g., 30–40 min) and set per-test timeouts in runner environment variables
   - _Requirements: 1.5, 8.4, 8.5_
 
 - [ ] 9.3 Implement CI-specific test execution strategy
@@ -501,4 +530,6 @@
   - Add test result analysis and CI-specific reporting functionality
   - Implement tools for maintaining test data and container configurations across CI updates
   - Add CI health checks and automated test maintenance workflows
+  - Store perf artifacts and analyze trends; fail only on significant regressions beyond rolling baseline
+  - Use Criterion for performance regression detection and tracking
   - _Requirements: All requirements - maintenance and tooling_
