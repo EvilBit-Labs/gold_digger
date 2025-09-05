@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Manual Checks",
+  "description": "Manually run `just full-checks` and resolve any failures, repeating this process until the full checks complete without any failures or warnings",
+  "version": "1",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Run `just full-checks` and analyze any failures or warnings. If there are any issues, fix them and run the command again. Continue this process until `just full-checks` passes completely without any failures or warnings. Focus on:\n\n1. Formatting issues (cargo fmt --check)\n2. Linting errors (cargo clippy -- -D warnings)\n3. Test failures (cargo nextest run)\n4. Coverage issues (if applicable)\n5. Security issues (cargo audit, cargo deny)\n6. Pre-commit hooks (if applicable)\n\nAfter each fix, re-run `just full-checks` to verify the changes resolved the issues. Only stop when all checks pass successfully."
+  }
+}
