@@ -193,6 +193,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     needs: quality
     steps:
+      - name: Install bash (Alpine)
+        if: runner.os == 'Linux' && runner.arch == 'X64'
+        run: apk --no-cache add bash
+
+      - name: Install bash (Ubuntu/Debian)
+        if: runner.os == 'Linux' && runner.arch == 'ARM64'
+        run: sudo apt-get update && sudo apt-get install -y bash
+
       - uses: actions/checkout@v4
 
       - name: Setup Rust
