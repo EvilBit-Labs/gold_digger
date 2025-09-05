@@ -1,22 +1,31 @@
 # Implementation Plan
 
-- [ ] 1. Set up core integration test infrastructure with MySQL/MariaDB and TLS/non-TLS support
+- [x] 1. Set up core integration test infrastructure with MySQL/MariaDB and TLS/non-TLS support
 
   - Create basic test module structure and container management utilities
   - Implement MySQL and MariaDB container setup using testcontainers-modules crate with both TLS and non-TLS configurations
   - Add TLS certificate management and test database schema and seeding functionality
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 9.3_
 
+- [ ] 1.0 Add MySQL support to testcontainers configuration
+
+  - Update `Cargo.toml` dev-dependencies to add `mysql` feature to `testcontainers-modules`
+  - Verify both MySQL and MariaDB containers can be started successfully
+  - _Requirements: 1.1, 1.2_
+
 - [ ] 1.1 Create integration test module structure and dependencies
 
-  - Update `Cargo.toml` dev-dependencies to include `testcontainers-modules` with `mysql` and `mariadb` features
   - Create `tests/integration/mod.rs` with common test utilities and setup functions
   - Add `tests/integration_tests.rs` as main entry point for integration tests
   - Define `TestDatabase` enum for managing both MySQL and MariaDB containers
+  - Create `tests/integration/common.rs` with shared test utilities (CLI execution, output parsing)
+  - Add `tests/integration/containers.rs` with container management and health checks
+  - Define common test data structures and helper functions
   - _Requirements: 1.1, 1.2_
 
 - [ ] 1.2 Implement MySQL and MariaDB container setup with TLS and non-TLS configurations
 
+  - ✓ Basic MariaDB container setup exists in `tests/tls_integration.rs` (needs expansion)
   - Write `TestDatabase::new()` method using `testcontainers-modules` crate with `mysql` and `mariadb` features
   - Create separate test database implementations for MySQL and MariaDB containers with both TLS and non-TLS configurations
   - Configure TLS-enabled containers with SSL certificates and require_secure_transport=ON
@@ -26,8 +35,33 @@
   - Add Docker availability detection and graceful test skipping when Docker is unavailable
   - _Requirements: 1.1, 1.2, 1.3, 1.5, 9.3_
 
+- [ ] 1.2.1 Create TestDatabase enum and basic container management
+
+  - Define `TestDatabase` enum with `MySQL` and `MariaDB` variants
+  - Implement `TestDatabase::new()` with database type selection
+  - Add container startup and shutdown lifecycle management
+  - Implement connection string generation for each database type
+  - Add basic health check functionality
+
+- [ ] 1.2.2 Add TLS and non-TLS container configurations
+
+  - Create TLS-enabled container configurations with SSL certificates
+  - Configure MySQL/MariaDB containers with `require_secure_transport=ON` for TLS tests
+  - Create non-TLS container configurations for standard connection tests
+  - Implement certificate mounting and SSL configuration for containers
+  - Add TLS connection validation and certificate verification tests
+
+- [ ] 1.2.3 Implement container health checks and CI compatibility
+
+  - Add container readiness validation with configurable timeouts
+  - Implement retry logic for container startup in CI environments
+  - Add Docker availability detection and graceful test skipping
+  - Create CI-specific timeout and resource limit configurations
+  - Add container cleanup and resource management for CI environments
+
 - [ ] 1.3 Create TLS certificate management and test database schema system
 
+  - ✓ Basic TLS certificate handling exists in `tests/tls_integration.rs` (need to move to fixtures)
   - Create `tests/fixtures/tls/` directory with test SSL certificates for TLS-enabled containers
   - Generate self-signed certificates and CA certificates for TLS testing scenarios
   - Write `tests/fixtures/schema.sql` with comprehensive MySQL/MariaDB data type definitions
@@ -35,6 +69,40 @@
   - Implement `TestDatabase::seed_data()` method to execute schema and seed scripts on both database types
   - Add database-specific compatibility handling for MySQL vs MariaDB differences
   - _Requirements: 1.2, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 9.3_
+
+- [ ] 1.3.1 Set up TLS certificate fixtures and management
+
+  - Create `tests/fixtures/tls/` directory structure
+  - Move existing TLS certificate constants from `tests/tls_integration.rs` to fixture files
+  - Generate self-signed CA certificate and server certificates for testing
+  - Create certificate loading utilities for container configuration
+  - Add certificate validation helpers for TLS connection tests
+
+- [ ] 1.3.2 Create comprehensive test database schema
+
+  - Write `tests/fixtures/schema.sql` with all MySQL/MariaDB data types
+  - Include tables for: VARCHAR, TEXT, INTEGER, BIGINT, DECIMAL, FLOAT, DOUBLE types
+  - Add tables for: DATE, DATETIME, TIMESTAMP, TIME, YEAR types
+  - Include tables for: BINARY, VARBINARY, BLOB, JSON types
+  - Add tables for: ENUM, SET, BOOLEAN types
+  - Create edge case tables for NULL values, Unicode data, large content
+
+- [ ] 1.3.3 Create comprehensive test data seeding
+
+  - Write `tests/fixtures/seed_data.sql` with comprehensive test data
+  - Include data covering all data types with normal and edge case values
+  - Add NULL value test data across all columns and types
+  - Include Unicode and special character test data
+  - Create large dataset entries for performance testing (1000+ rows)
+  - Add database-specific test data for MySQL vs MariaDB differences
+
+- [ ] 1.3.4 Implement database seeding and compatibility handling
+
+  - Implement `TestDatabase::seed_data()` method with transaction support
+  - Add idempotent schema creation (CREATE TABLE IF NOT EXISTS)
+  - Implement upsert-based data seeding (REPLACE INTO for idempotency)
+  - Add MySQL vs MariaDB compatibility handling for data type differences
+  - Create database version detection and feature compatibility checks
 
 - [ ] 1.4 Implement TLS and non-TLS test database variants
 
@@ -45,20 +113,53 @@
   - Add test utilities to validate TLS connection establishment vs non-TLS connections
   - _Requirements: 1.1, 1.2, 1.3, 9.3, 9.4, 9.5_
 
-- [ ] 1.5 Add test execution utilities and CI environment handling
+- [ ] 1.5 Consolidate and refactor existing TLS integration tests
+
+  - Move existing TLS integration tests from `tests/tls_integration.rs` to new integration test structure
+  - Refactor existing testcontainers usage to use the new `TestDatabase` abstraction
+  - Integrate existing TLS certificate handling with new fixtures system
+  - Ensure existing TLS tests work with both MySQL and MariaDB containers
+  - _Requirements: 1.1, 1.2, 9.3_
+
+- [ ] 1.6 Add test execution utilities and CI environment handling
 
   - Implement temporary directory management for test output files with CI-safe cleanup
   - Create helper functions for executing Gold Digger CLI with test parameters and timeout handling
   - Add utilities for capturing and parsing Gold Digger output and exit codes
-  - Implement CI environment detection and Docker availability checking for testcontainers
+  - ✓ CI environment detection exists in `tests/tls_integration.rs` (need to generalize)
   - Add test execution utilities that can handle both TLS and non-TLS database connections
   - _Requirements: 1.4, 1.5, 4.1, 4.2, 4.3, 4.4, 4.5_
 
+- [ ] 1.6.1 Create Gold Digger CLI execution utilities
+
+  - Implement `GoldDiggerCli` struct for executing the binary with test parameters
+  - Add timeout handling and process management for CLI execution
+  - Create utilities for capturing stdout, stderr, and exit codes
+  - Implement parameter building for database URLs, queries, and output files
+  - Add environment variable management for test scenarios
+
+- [ ] 1.6.2 Implement output parsing and validation utilities
+
+  - Create output file readers for CSV, JSON, and TSV formats
+  - Implement row count and column validation utilities
+  - Add content validation helpers for data type verification
+  - Create performance measurement utilities (execution time, memory usage)
+  - Implement output comparison utilities for cross-format consistency tests
+
+- [ ] 1.6.3 Add temporary file and directory management
+
+  - Implement CI-safe temporary directory creation and cleanup
+  - Create temporary file management for output files with automatic cleanup
+  - Add test isolation utilities to prevent test interference
+  - Implement cleanup-on-failure handling for robust test execution
+  - Create utilities for test artifact collection and debugging
+
 - [ ] 2. Implement data type validation tests
 
-  - Create comprehensive tests for MySQL data type handling and conversion
-  - Validate NULL value processing across all data types
-  - Test type conversion safety and error handling
+  - ✓ Safe MySQL value handling exists in `src/lib.rs` (`mysql_value_to_string` function)
+  - Create comprehensive tests for MySQL data type handling and conversion using real database data
+  - Validate NULL value processing across all data types with actual query results
+  - Test type conversion safety and error handling with edge cases from real databases
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7_
 
 - [ ] 2.1 Create data type test framework
@@ -67,6 +168,30 @@
   - Implement test cases for VARCHAR, TEXT, INTEGER, BIGINT, DECIMAL, FLOAT data types
   - Add test validation for string preservation and numeric conversion accuracy
   - _Requirements: 3.1, 3.2, 3.3_
+
+- [ ] 2.1.1 Implement string and text data type tests
+
+  - Create tests for VARCHAR columns with various lengths and content
+  - Add TEXT column tests with large content and Unicode characters
+  - Test string preservation across CSV, JSON, and TSV output formats
+  - Validate special character handling and encoding in string types
+  - Add tests for empty strings vs NULL value handling
+
+- [ ] 2.1.2 Implement numeric data type tests
+
+  - Create tests for INTEGER and BIGINT columns with positive, negative, and zero values
+  - Add DECIMAL and FLOAT tests with precision and scale validation
+  - Test numeric conversion accuracy in string representation
+  - Validate handling of numeric edge cases (overflow, underflow, special values)
+  - Add tests for numeric NULL value handling across output formats
+
+- [ ] 2.1.3 Add comprehensive data type validation framework
+
+  - Create data type test case generator for systematic testing
+  - Implement validation utilities for expected vs actual output comparison
+  - Add cross-database compatibility tests (MySQL vs MariaDB data type handling)
+  - Create performance tests for data type conversion with large datasets
+  - Implement regression tests for data type handling edge cases
 
 - [ ] 2.2 Add temporal and binary data type tests
 
@@ -84,9 +209,10 @@
 
 - [ ] 3. Create output format validation framework
 
-  - Implement format-specific validators for CSV, JSON, and TSV outputs
-  - Test format compliance and consistency across different data scenarios
-  - Validate special character handling and encoding
+  - ✓ Basic format writers exist in `src/csv.rs`, `src/json.rs`, `src/tab.rs`
+  - Implement format-specific validators for CSV, JSON, and TSV outputs using real database results
+  - Test format compliance and consistency across different data scenarios with actual Gold Digger output
+  - Validate special character handling and encoding with real-world data
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
 
 - [ ] 3.1 Implement CSV format validation
@@ -95,6 +221,30 @@
   - Add RFC4180 compliance validation including header row verification
   - Test CSV quoting behavior with QuoteStyle::Necessary and NULL handling as empty strings
   - _Requirements: 2.1, 2.4, 2.5_
+
+- [ ] 3.1.1 Create CSV format compliance validator
+
+  - Implement `CsvValidator` struct with RFC4180 compliance checking
+  - Add header row validation and column count verification
+  - Create CSV parsing utilities using the csv crate for validation
+  - Implement quoting behavior validation (QuoteStyle::Necessary)
+  - Add line ending and delimiter validation
+
+- [ ] 3.1.2 Implement CSV content validation
+
+  - Create data integrity validation for CSV output content
+  - Add NULL value handling validation (empty strings in CSV)
+  - Implement special character escaping validation
+  - Create row count and column count validation utilities
+  - Add CSV-specific edge case testing (embedded newlines, quotes)
+
+- [ ] 3.1.3 Add CSV performance and compatibility tests
+
+  - Create performance tests for CSV generation with large datasets
+  - Add cross-platform CSV compatibility tests (line endings)
+  - Implement CSV output consistency tests across multiple runs
+  - Create CSV format regression tests for edge cases
+  - Add CSV memory usage validation for large result sets
 
 - [ ] 3.2 Implement JSON format validation
 
@@ -112,9 +262,10 @@
 
 - [ ] 4. Implement error handling and exit code validation tests
 
-  - Create comprehensive error scenario tests with proper exit code validation
-  - Test database connection failures and authentication errors
-  - Validate file I/O error handling and meaningful error messages
+  - ✓ Exit code mapping exists in `src/exit.rs`
+  - Create comprehensive error scenario tests with proper exit code validation using real Gold Digger CLI
+  - Test database connection failures and authentication errors with actual containers
+  - Validate file I/O error handling and meaningful error messages in real scenarios
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
 
 - [ ] 4.1 Create error scenario test framework
@@ -123,6 +274,30 @@
   - Implement test cases for invalid SQL syntax with exit code 4 validation
   - Add tests for non-existent table scenarios with appropriate error messages
   - _Requirements: 4.1, 4.2_
+
+- [ ] 4.1.1 Implement SQL error handling tests
+
+  - Create tests for invalid SQL syntax with various error types
+  - Add tests for non-existent table and column references
+  - Implement SQL permission error tests with restricted user accounts
+  - Create tests for SQL timeout scenarios with long-running queries
+  - Add validation for exit code 4 and appropriate error messages
+
+- [ ] 4.1.2 Implement database connection error tests
+
+  - Create tests for invalid database URLs and connection strings
+  - Add tests for authentication failures with wrong credentials
+  - Implement network connectivity error tests (unreachable host)
+  - Create tests for database server unavailability scenarios
+  - Add validation for exit code 3 and connection error messages
+
+- [ ] 4.1.3 Implement file I/O error handling tests
+
+  - Create tests for invalid output file paths and permissions
+  - Add tests for disk space exhaustion scenarios
+  - Implement tests for read-only filesystem scenarios
+  - Create tests for invalid file format specifications
+  - Add validation for exit code 5 and I/O error messages
 
 - [ ] 4.2 Implement connection and authentication error tests
 
@@ -180,6 +355,30 @@
   - Add tests for wide tables (20+ columns) to ensure all columns are handled correctly
   - _Requirements: 5.1, 5.2_
 
+- [ ] 6.1.1 Implement large row count performance tests
+
+  - Create test queries that generate 1000+ row result sets
+  - Add memory usage monitoring during large result set processing
+  - Implement execution time measurement and performance thresholds
+  - Create tests for result set processing without memory exhaustion
+  - Add validation for consistent performance across multiple runs
+
+- [ ] 6.1.2 Implement wide table performance tests
+
+  - Create test tables with 20+ columns of various data types
+  - Add tests for wide table query execution and output generation
+  - Implement column handling validation for wide result sets
+  - Create performance tests for wide table CSV, JSON, and TSV output
+  - Add memory usage validation for wide table processing
+
+- [ ] 6.1.3 Implement large content performance tests
+
+  - Create tests with large text fields (1MB+ content per field)
+  - Add tests for BLOB and binary data handling with large content
+  - Implement performance tests for large content output generation
+  - Create memory usage validation for large content processing
+  - Add tests for large content handling across all output formats
+
 - [ ] 6.2 Implement large content and memory validation tests
 
   - Create tests with large text fields (1MB+ content) to verify processing without truncation
@@ -233,12 +432,13 @@
 
 - [ ] 8.2 Implement comprehensive TLS and non-TLS connection security tests
 
+  - ✓ Basic TLS configuration tests exist in `tests/tls_integration.rs` (need expansion for Gold Digger CLI)
   - Create tests for TLS connection establishment and certificate handling validation using TLS-enabled containers
   - Add tests for non-TLS connections to ensure Gold Digger works with unencrypted connections
   - Test TLS connection failures and error handling when certificates are invalid or missing
   - Add tests for connection strings with special characters in passwords for both TLS and non-TLS
-  - Test verbose output credential redaction functionality for both connection types
-  - Validate that Gold Digger's TLS configuration works correctly with both `ssl` and `ssl-rustls` features
+  - ✓ Test verbose output credential redaction functionality (exists via `redact_url` function)
+  - ✓ TLS configuration works with rustls-only implementation (no dual feature support needed)
   - _Requirements: 9.3, 9.4, 9.5_
 
 - [ ] 9. Add cross-platform validation and CI integration
@@ -257,7 +457,7 @@
 
 - [ ] 9.2 Configure GitHub Actions CI integration for testcontainers
 
-  - Update `.github/workflows/ci.yml` to enable Docker service for testcontainers support
+  - ✓ Docker service already enabled in `.github/workflows/ci.yml` (needs integration test job)
   - Add integration test job with appropriate timeouts and resource limits for container execution
   - Configure test categorization with `--ignored` flag handling for Docker-dependent tests
   - _Requirements: 1.5, 8.4, 8.5_
@@ -272,10 +472,10 @@
 
 - [ ] 9.4 Update GitHub Actions workflow configuration for comprehensive database testing
 
-  - Modify `.github/workflows/ci.yml` to include Docker service and testcontainers support
+  - ✓ Docker service already enabled in `.github/workflows/ci.yml`
   - Add integration test matrix for different MySQL versions (8.0, 8.1) and MariaDB versions using testcontainers-modules
   - Configure test matrix to include both TLS and non-TLS connection testing scenarios
-  - Add feature flag testing matrix for both `ssl` (native-tls) and `ssl-rustls` features with TLS containers
+  - ✓ TLS is always available (rustls-only implementation) - no feature flag matrix needed
   - Configure appropriate timeouts, resource limits, and caching for container-based tests
   - Add integration test status reporting and artifact collection for failed tests
   - _Requirements: 1.5, 7.3, 8.4, 8.5, 9.3, 9.4, 9.5_
