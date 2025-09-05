@@ -116,3 +116,5 @@ docs/book/
 .env.*.local
 .envrc
 .direnv/
+
+megalinter-reports/
