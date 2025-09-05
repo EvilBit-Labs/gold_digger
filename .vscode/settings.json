@@ -78,5 +78,5 @@
     "editor.insertSpaces": true,
     "prettier.tabWidth": 2
   },
-  "markdown.validate.enabled": true
+  "markdown.validate.enabled": false
 }
