@@ -154,18 +154,7 @@ ci-full:
     echo "🎉 CI workflow equivalent completed successfully!"
 
 # Comprehensive full checks (all non-destructive validation)
-full-checks:
-    cd {{justfile_dir()}}
-    just fmt-check
-    just lint
-    just test
-    just validate-deps
-    just audit
-    just deny
-    just docs-check
-    just coverage-llvm
-    just build-all
-    just validate-cargo-dist
+full-checks: ci-check audit deny docs-check coverage-llvm build-all validate-cargo-dist
 
 # =============================================================================
 # BUILD

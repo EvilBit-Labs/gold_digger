@@ -7,7 +7,7 @@
   - Add TLS certificate management and test database schema and seeding functionality
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 9.3_
 
-- [ ] 1.0 Add MySQL support to testcontainers configuration
+- [x] 1.0 Add MySQL support to testcontainers configuration
 
   - Update `Cargo.toml` dev-dependencies to add `mysql` feature to `testcontainers-modules`
   - Verify both MySQL and MariaDB containers can be started successfully
