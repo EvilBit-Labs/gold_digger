@@ -5,7 +5,8 @@
 set windows-shell := ["powershell.exe", "-c"]
 
 # Default recipe (runs linting)
-default: lint
+default:
+    @just --choose
 
 # Variables
 export RUST_BACKTRACE := "1"
