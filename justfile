@@ -67,13 +67,7 @@ check:
     just test-no-docker
 
 # Quality gates (CI equivalent)
-ci-check:
-    cd {{justfile_dir()}}
-    just fmt-check
-    just lint
-    just test
-    just validate-deps
-    just deny-check
+ci-check: check fmt-check test validate-deps deny-check
 
 # Full CI workflow equivalent - mirrors .github/workflows/ci.yml exactly
 ci-full:
