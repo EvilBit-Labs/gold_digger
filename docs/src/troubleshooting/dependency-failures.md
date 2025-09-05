@@ -126,7 +126,7 @@ error: TLS connection failed: certificate validation error
    cargo build --release
 
    # Minimal build (TLS still available)
-   cargo build --no-default-features --features "json csv additional_mysql_types verbose"
+   cargo build --no-default-features --features "json csv additional_mysql_types verbose ssl-rustls"
    ```
 
 3. **Verify TLS Dependencies:**
@@ -168,7 +168,7 @@ error: Package does not have feature `missing_feature`
    ```toml
    # In Cargo.toml - rustls configuration (always available)
    [dependencies]
-   mysql = { version = "26.0.1", features = ["minimal"] }
+   mysql = { version = "26.0.1", default-features = false, features = ["minimal"] }
    rustls = "0.23.31"
    rustls-native-certs = "0.8.1"
    rustls-pemfile = "2.2.0"

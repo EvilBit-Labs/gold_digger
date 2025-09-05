@@ -211,7 +211,12 @@ jobs:
           # Run TLS-specific tests
           cargo nextest run tls_config_unit_tests
           cargo nextest run tls_integration
-          cargo nextest run dependency_validation
+
+          # Verify rustls dependencies are present
+          cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
+
+          # Verify no native-tls dependencies (rustls-only implementation)
+          ! cargo tree | grep "native-tls" || exit 1
 
       - name: Test platform certificate store integration
         run: |
@@ -291,7 +296,8 @@ jobs:
       - name: Verify TLS always available
         run: |
           # Test that TLS-related code is always available
-          cargo nextest run dependency_validation
+          # Verify rustls dependencies are present
+          cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
 
           # Verify rustls-only implementation (no native-tls)
           ! cargo tree | grep "native-tls" || exit 1
