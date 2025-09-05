@@ -3,6 +3,7 @@
 //! This module provides comprehensive integration testing using real MySQL/MariaDB containers
 //! via testcontainers. Tests validate the complete query-to-output pipeline with seeded data.
 
+mod fixtures;
 mod integration;
 mod test_support;
 

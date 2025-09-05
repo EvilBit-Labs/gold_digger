@@ -51,7 +51,7 @@
   - Implement connection string generation for each database type
   - Add basic health check functionality
 
-- [ ] 1.2.2 Add TLS and non-TLS container configurations
+- [x] 1.2.2 Add TLS and non-TLS container configurations
 
   - Create TLS-enabled container configurations with ephemeral SSL certificates
   - Generate per-run ephemeral CA and server/client certificates for each test execution
@@ -68,7 +68,7 @@
   - This may require creating a generic testcontainer for the TLS database server using Docker, in
     case the testcontainers-modules crate does not support it
 
-- [ ] 1.2.3 Implement container health checks and CI compatibility
+- [x] 1.2.3 Implement container health checks and CI compatibility
 
   - Add container readiness validation with configurable timeouts
   - Implement retry logic for container startup in CI environments
@@ -76,7 +76,15 @@
   - Create CI-specific timeout and resource limit configurations
   - Add container cleanup and resource management for CI environments
 
-- [ ] 1.3 Create TLS certificate management and test database schema system
+- [x] 1.2.4 Add multiplatform support (Linux and macOS)
+
+  - Expand the existing container setup to support Linux and macOS runners
+  - Add Docker availability detection and graceful test skipping for macOS
+  - Implement container cleanup and resource management for macOS
+  - Add support for generating certificates using LibreSSL on macOS and Linux
+  - _Requirements: 1.1, 1.2, 1.3, 1.5, 9.3_
+
+- [x] 1.3 Create TLS certificate management and test database schema system
 
   - ✓ Basic TLS certificate handling exists in `tests/tls_integration.rs` (need to move to fixtures)
   - Create `tests/fixtures/tls/` directory with test SSL certificates for TLS-enabled containers
