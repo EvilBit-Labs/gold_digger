@@ -231,7 +231,7 @@ The exit code mapping includes intelligent error detection based on error messag
 
 ## Testing
 
-Gold Digger includes comprehensive test suites to ensure reliability and correctness:
+Gold Digger includes comprehensive test suites to ensure reliability and correctness across multiple database systems and configurations:
 
 ### Unit Tests
 
@@ -250,7 +250,7 @@ just test-no-docker
 
 ### Integration Tests
 
-For comprehensive testing with real database connections, enable the integration test feature:
+Gold Digger features a comprehensive integration testing framework that validates functionality against real MySQL and MariaDB databases:
 
 ```bash
 # Run integration tests (requires Docker)
@@ -264,20 +264,51 @@ just test-integration  # Run only integration tests
 just test-all         # Run all tests including integration tests
 ```
 
+#### Integration Test Coverage
+
+The integration testing framework validates:
+
+- **Database Compatibility**: Both MySQL (8.0+) and MariaDB (10.11+) support
+- **TLS/Non-TLS Connections**: Secure and standard connection modes
+- **Data Type Handling**: All MySQL/MariaDB data types including NULL values
+- **Output Format Validation**: CSV (RFC4180), JSON, and TSV format compliance
+- **Error Scenarios**: Connection failures, SQL errors, and file I/O issues
+- **CLI Integration**: Command-line flag precedence and configuration validation
+- **Performance Testing**: Large result sets and memory usage validation
+- **Security Features**: Credential redaction and TLS certificate validation
+
+#### Test Database Systems
+
+Integration tests use testcontainers to provide isolated database environments:
+
+- **MySQL**: Versions 8.0, 8.1 with both TLS and non-TLS configurations
+- **MariaDB**: Version 10.11+ with SSL certificate management
+- **Test Data**: Comprehensive schema covering all MySQL data types
+- **Fixtures**: Pre-seeded test data including edge cases and Unicode content
+
 ### Test Requirements
 
 **Integration Tests:**
 
 - Docker installed and running
-- MariaDB testcontainers module (automatically pulled)
+- MySQL and MariaDB testcontainers modules (automatically pulled)
 - `integration_tests` feature enabled
-- Tests are marked with `#[ignore]` by default
+- Tests are marked with `#[ignore]` by default for CI efficiency
 
 **Unit Tests:**
 
 - No external dependencies required
 - Run in CI environments
 - Cover configuration, error handling, and format validation
+
+### Test Categories
+
+1. **Unit Tests**: Fast tests without external dependencies
+2. **TLS Integration Tests**: Certificate validation and secure connections
+3. **Database Integration Tests**: Real database query execution and data validation
+4. **CLI Integration Tests**: Command-line interface and configuration testing
+5. **Performance Tests**: Large dataset handling and memory usage validation
+6. **Cross-Platform Tests**: Consistent behavior across Linux, macOS, and Windows
 
 ### Test Coverage
 
@@ -287,6 +318,9 @@ cargo llvm-cov --html
 
 # Generate coverage for CI
 cargo llvm-cov --lcov --output-path lcov.info
+
+# Coverage with integration tests
+cargo llvm-cov --features integration_tests --html
 ```
 
 ## Security & Quality Assurance

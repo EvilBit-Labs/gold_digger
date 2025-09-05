@@ -1,19 +1,32 @@
-# Gold Digger TLS Integration Tests
+# Gold Digger Integration Tests
 
-This directory contains comprehensive TLS integration tests for Gold Digger's MySQL/MariaDB TLS functionality.
+This directory contains comprehensive integration tests for Gold Digger's MySQL/MariaDB functionality, including TLS support, data type handling, and output format validation.
 
 ## Test Structure
 
-### `tls_integration.rs`
+### Current Test Files
 
-Contains testcontainers-based TLS integration tests that validate:
+- **`tls_integration.rs`**: TLS connection and certificate validation tests
+- **`tls_config_unit_tests.rs`**: TLS configuration unit tests
+- **`end_to_end_type_conversion.rs`**: Data type conversion and safety tests
+- **`exit_codes.rs`**: Exit code validation tests
+- **`type_safety.rs`**: Type safety and NULL value handling tests
 
-- Basic TLS connection establishment
-- Certificate validation scenarios (valid, invalid, self-signed)
-- Custom CA certificate configuration
-- Programmatic TLS configuration via SslOpts
-- TLS error handling and messaging
-- Cross-platform TLS functionality
+### Planned Integration Test Framework
+
+The integration testing enhancement will add:
+
+- **`tests/integration/`**: Comprehensive integration test module structure
+- **`tests/integration/mod.rs`**: Common test utilities and setup functions
+- **`tests/integration/common.rs`**: Shared CLI execution and output parsing utilities
+- **`tests/integration/containers.rs`**: MySQL/MariaDB container management with health checks
+- **`tests/integration/data_types.rs`**: Comprehensive data type validation tests
+- **`tests/integration/output_formats.rs`**: Format-specific validators (CSV, JSON, TSV)
+- **`tests/integration/error_scenarios.rs`**: Error handling and exit code validation
+- **`tests/integration/cli_integration.rs`**: CLI flag precedence and configuration tests
+- **`tests/integration/performance.rs`**: Large dataset and memory usage tests
+- **`tests/integration/security.rs`**: Credential protection and TLS security tests
+- **`tests/fixtures/`**: Test database schema, seed data, and TLS certificates
 
 ## Running Tests
 
@@ -30,7 +43,9 @@ cargo test --release
 cargo test -- --ignored
 ```
 
-### TLS Integration Tests Only
+### Integration Test Categories
+
+#### Current TLS Integration Tests
 
 ```bash
 # Run only TLS integration tests
@@ -43,61 +58,157 @@ cargo test --test tls_integration --release
 cargo test --test tls_integration -- --ignored
 ```
 
-### Minimal Build Tests (without TLS)
+#### Planned Comprehensive Integration Tests
 
 ```bash
-# Run library unit tests only (no TLS features)
-cargo test --no-default-features --features json,csv --lib
+# Run comprehensive integration tests (requires Docker)
+cargo test --features integration_tests -- --ignored
 
-# Run all unit tests (no TLS features)
-cargo test --no-default-features --features json,csv --tests
-```
+# Run all tests including comprehensive integration tests
+cargo test --features integration_tests -- --include-ignored
 
-### Docker-dependent Tests
-
-Some tests require Docker and MySQL containers. These are marked with `#[ignore]` by default:
-
-```bash
-# Run all tests including Docker-dependent ones (requires Docker)
-cargo test --test tls_integration -- --ignored
-
-# Run specific Docker test
-cargo test --test tls_integration test_basic_tls_connection_establishment -- --ignored
-```
-
-### Heavy Integration Tests
-
-For comprehensive testing with real database connections, enable the `integration_tests` feature:
-
-```bash
-# Run integration tests (requires Docker and integration_tests feature)
-cargo test --test tls_integration --features "integration_tests" -- --ignored
-
-# Run all tests including integration tests
-cargo test --test tls_integration --features "integration_tests" -- --include-ignored
+# Run specific integration test categories
+cargo test --test integration_tests data_type_validation -- --ignored
+cargo test --test integration_tests output_format_validation -- --ignored
+cargo test --test integration_tests error_scenario_validation -- --ignored
+cargo test --test integration_tests performance_validation -- --ignored
 
 # Using justfile commands
 just test-integration  # Run only integration tests
 just test-all         # Run all tests including integration tests
 ```
 
+### Test Execution Strategies
+
+#### Fast Development Testing (No Docker)
+
+```bash
+# Unit tests only (no external dependencies)
+cargo test --lib
+
+# Unit tests with nextest (faster parallel execution)
+cargo nextest run --lib
+
+# Exclude Docker-dependent tests
+just test-no-docker
+```
+
+#### Comprehensive Testing (Docker Required)
+
+```bash
+# All tests including Docker-dependent integration tests
+cargo test --features integration_tests -- --include-ignored
+
+# CI-equivalent comprehensive testing
+just ci-check
+```
+
+#### Feature-Specific Testing
+
+```bash
+# Test with minimal features (no TLS features in minimal build)
+cargo test --no-default-features --features "json csv" --lib
+
+# Test with all features including integration tests
+cargo test --features "integration_tests additional_mysql_types" -- --include-ignored
+```
+
 ### Test Categories
 
-1. **Unit Tests** (`tls_unit_tests`): Test TLS configuration and validation without external
-   dependencies
-2. **Validation Tests** (`tls_validation_tests`): Test certificate validation and error scenarios
-3. **Integration Tests** (`tls_tests`): Test actual TLS connections (require Docker)
-4. **Performance Tests** (`tls_performance_tests`): Test connection pooling and concurrency (require
-   Docker)
-5. **No-TLS Tests** (`no_tls_tests`): Test behavior when TLS features are disabled
-6. **Heavy Integration Tests** (`integration_tests`): Comprehensive database integration tests (require Docker, TEST_DATABASE_URL, and `integration_tests` feature)
+#### Current Test Categories
+
+1. **Unit Tests** (`tls_unit_tests`): Test TLS configuration and validation without external dependencies
+2. **TLS Integration Tests** (`tls_integration`): Test actual TLS connections and certificate validation (require Docker)
+3. **Type Safety Tests** (`type_safety`): Test MySQL data type conversion and NULL value handling
+4. **Exit Code Tests** (`exit_codes`): Test proper exit code mapping for different error scenarios
+
+#### Planned Integration Test Categories
+
+1. **Data Type Validation Tests**: Comprehensive testing of all MySQL/MariaDB data types
+
+   - String types (VARCHAR, TEXT, CHAR)
+   - Numeric types (INTEGER, BIGINT, DECIMAL, FLOAT, DOUBLE)
+   - Temporal types (DATE, DATETIME, TIMESTAMP, TIME, YEAR)
+   - Binary types (BINARY, VARBINARY, BLOB)
+   - JSON and special types (JSON, ENUM, SET, BOOLEAN)
+   - NULL value handling across all types
+
+2. **Output Format Validation Tests**: Format-specific compliance and consistency testing
+
+   - CSV format validation (RFC4180 compliance, quoting behavior)
+   - JSON format validation (structure, deterministic ordering, NULL handling)
+   - TSV format validation (tab-delimited, special character handling)
+   - Cross-format consistency validation
+
+3. **Database Integration Tests**: Real database connection and query execution
+
+   - MySQL container setup and management (versions 8.0, 8.1)
+   - MariaDB container setup and management (version 10.11+)
+   - TLS and non-TLS connection testing
+   - Container health checks and CI compatibility
+
+4. **Error Scenario Tests**: Comprehensive error handling validation
+
+   - Database connection failures (authentication, network, timeout)
+   - SQL execution errors (syntax errors, permission denied, non-existent tables)
+   - File I/O errors (permission denied, disk space, invalid paths)
+   - Exit code validation for all error scenarios
+
+5. **CLI Integration Tests**: Command-line interface and configuration validation
+
+   - CLI flag precedence over environment variables
+   - Mutually exclusive option handling
+   - Configuration resolution and format detection
+   - Help text and completion generation
+
+6. **Performance Tests**: Large dataset handling and resource usage
+
+   - Large result set processing (1000+ rows)
+   - Wide table handling (20+ columns)
+   - Large content processing (1MB+ text fields)
+   - Memory usage validation and performance benchmarking
+
+7. **Security Tests**: Credential protection and TLS validation
+
+   - Credential redaction in logs and error messages
+   - TLS connection establishment and certificate validation
+   - Connection string parsing with special characters
+   - Security warning display for insecure TLS modes
+
+8. **Cross-Platform Tests**: Platform-specific behavior validation
+
+   - Path separator handling (Windows vs Unix)
+   - Line ending consistency (CRLF vs LF)
+   - Platform-specific TLS certificate store integration
 
 ## Requirements
 
-- **Rust**: Tests require the same Rust version as the main project
+### System Requirements
+
+- **Rust**: Tests require the same Rust version as the main project (1.89.0+)
 - **Docker** (optional): Required only for tests marked with `#[ignore]`
-- **MariaDB Image**: Docker tests will automatically pull `mariadb:10.11` image
-- **integration_tests feature** (optional): Feature flag required for heavy integration tests
+- **Disk Space**: ~500MB for Docker images and test artifacts
+
+### Docker Images
+
+Integration tests automatically pull the following Docker images:
+
+- **MariaDB**: `mariadb:10.11` (current TLS integration tests)
+- **MySQL**: `mysql:8.0`, `mysql:8.1` (planned comprehensive integration tests)
+- **Testcontainers**: Automatic container lifecycle management
+
+### Feature Flags
+
+- **`integration_tests`**: Feature flag required for comprehensive integration tests
+- **Default features**: Standard unit tests run without additional feature flags
+- **Minimal features**: `--no-default-features --features "json csv"` for lightweight testing
+
+### CI Environment Compatibility
+
+- **GitHub Actions**: Docker service enabled, appropriate timeouts configured
+- **Resource Limits**: Tests designed for shared CI resources with retry logic
+- **Container Cleanup**: Automatic cleanup prevents resource leaks in CI
+- **Timeout Handling**: Configurable timeouts for container startup in CI environments
 
 ## Test Features
 
