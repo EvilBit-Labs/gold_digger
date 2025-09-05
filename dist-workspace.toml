@@ -8,11 +8,19 @@ cargo-dist-version = "0.29.0"
 # CI backends to support
 ci = "github"
 # The installers to generate for each app
-installers = ["shell", "powershell", "npm", "homebrew", "msi"]
+installers = ["shell", "powershell", "homebrew"]
 # A GitHub repo to push Homebrew formulas to
 tap = "EvilBit-Labs/homebrew-tap"
 # Target platforms to build apps for (Rust target-triple syntax)
-targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "aarch64-pc-windows-msvc", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
+targets = [
+    "aarch64-apple-darwin",
+    "aarch64-unknown-linux-gnu",
+    "aarch64-pc-windows-msvc",
+    "x86_64-apple-darwin",
+    "x86_64-unknown-linux-gnu",
+    "x86_64-unknown-linux-musl",
+    "x86_64-pc-windows-msvc",
+]
 # Checksums to generate for each App
 checksum = "sha256"
 # The archive format to use for windows builds (defaults .zip)
