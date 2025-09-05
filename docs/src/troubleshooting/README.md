@@ -13,7 +13,7 @@ Before diving into specific issues, try these basic checks:
 
 ## Common Issue Categories
 
-- [Connection Problems](connection-issues.md) - Database connectivity issues
+- [Connection Problems](connection-issues.md) - Database connectivity and TLS issues (rustls-only implementation)
 - [Type Safety](type-safety.md) - Safe data type handling and conversion
 - [Type Errors](type-errors.md) - Data type conversion problems
 - [Performance Issues](performance.md) - Slow queries and memory usage

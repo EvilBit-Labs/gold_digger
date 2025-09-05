@@ -347,11 +347,8 @@ error: unable to get packages from source
 1. **Install Homebrew Dependencies:**
 
    ```bash
-   # Install OpenSSL via Homebrew
-   brew install openssl
-   export OPENSSL_DIR=$(brew --prefix openssl)
-
-   # Install pkg-config
+   # Gold Digger uses rustls - no OpenSSL needed
+   # Install pkg-config for other dependencies
    brew install pkg-config
    ```
 
@@ -389,16 +386,18 @@ error: unable to get packages from source
 
    ```bash
    # Ubuntu/Debian
-   sudo apt-get install build-essential pkg-config libssl-dev
+   sudo apt-get install build-essential pkg-config
 
    # CentOS/RHEL
    sudo yum groupinstall "Development Tools"
-   sudo yum install openssl-devel pkg-config
+   sudo yum install pkg-config
 
    # Fedora
    sudo dnf groupinstall "Development Tools"
-   sudo dnf install openssl-devel pkg-config
+   sudo dnf install pkg-config
    ```
+
+   **Note:** Gold Digger uses rustls exclusively - no OpenSSL development packages required.
 
 2. **Configure Linux-Specific Dependencies:**
 

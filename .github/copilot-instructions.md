@@ -151,8 +151,8 @@ The project includes a dedicated `src/tls.rs` module with:
 # Default build (rustls TLS)
 cargo build --release
 
-# Explicit rustls build
-cargo build --release --no-default-features --features "json csv ssl-rustls additional_mysql_types verbose"
+# Standard build (TLS always available)
+cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
 
 # Minimal build (no TLS)
 cargo build --release --no-default-features --features "json csv"

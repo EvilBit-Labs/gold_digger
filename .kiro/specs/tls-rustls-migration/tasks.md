@@ -121,7 +121,7 @@
   - Verify no native-tls dependencies remain in dependency tree
   - _Requirements: 9.1, 9.2, 9.3, 9.4_
 
-- [-] 16. Update project documentation for rustls-only implementation
+- [x] 16. Update project documentation for rustls-only implementation
 
   - Update CHANGELOG.md to document the native-tls removal
   - Update any remaining documentation references to native-tls

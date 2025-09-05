@@ -46,15 +46,15 @@ sudo apt install build-essential pkg-config libssl-dev git
 **RHEL/CentOS/Fedora:**
 
 ```bash
-sudo dnf install gcc pkg-config openssl-devel git
+sudo dnf install gcc pkg-config git
 # or for older versions:
-# sudo yum install gcc pkg-config openssl-devel git
+# sudo yum install gcc pkg-config git
 ```
 
 **Arch Linux:**
 
 ```bash
-sudo pacman -S base-devel pkg-config openssl git
+sudo pacman -S base-devel pkg-config git
 ```
 
 ### Build Steps
@@ -72,15 +72,17 @@ cargo build --release
 
 ## TLS Support
 
-Linux builds use OpenSSL by default. For pure Rust TLS (no OpenSSL dependency):
+Linux builds use rustls exclusively for TLS connections with platform certificate store integration:
 
 ```bash
-# Standard installation with TLS support
+# Standard installation (TLS always available)
 cargo install gold_digger
 
-# Or minimal installation without TLS
+# Minimal installation (TLS still available)
 cargo install gold_digger --no-default-features --features "json,csv,additional_mysql_types,verbose"
 ```
+
+**Note:** TLS support is built into all Gold Digger binaries. No OpenSSL dependencies are required.
 
 ## Distribution Packages (Coming Soon)
 
@@ -102,9 +104,11 @@ gold_digger --help
 
 ### Common Issues
 
-- **Missing OpenSSL development headers**: Install `libssl-dev` or `openssl-devel`
 - **Linker errors**: Install `build-essential` or equivalent
 - **Permission denied**: Check executable permissions and PATH
+- **Missing pkg-config**: Install `pkg-config` package
+
+**Note:** OpenSSL development headers are no longer required - Gold Digger uses rustls exclusively.
 
 ### Getting Help
 

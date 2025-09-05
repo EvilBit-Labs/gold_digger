@@ -137,7 +137,7 @@
 
 - **F005**: Provide standardized exit codes: 0 (success), 1 (no rows found), 2 (usage/config error), 3 (connection/auth error), 4 (query execution error), 5 (file I/O error)
 
-- **F006**: Support TLS/SSL connections via MySQL native-tls features; TLS/SSL must be configurable programmatically via the crate's native-tls features using `SslOpts` and `OptsBuilder::ssl_opts()`; URL-based ssl-mode parameters are not supported by the chosen mysql crate (see [mysql crate SSL documentation](https://docs.rs/mysql/26.0.1/mysql/struct.SslOpts.html) for programmatic TLS setup examples)
+- **F006**: Support TLS/SSL connections via MySQL rustls features; TLS/SSL must be configurable programmatically via the crate's rustls-tls features using `SslOpts` and `OptsBuilder::ssl_opts()`; URL-based ssl-mode parameters are not supported by the chosen mysql crate (see [mysql crate SSL documentation](https://docs.rs/mysql/26.0.1/mysql/struct.SslOpts.html) for programmatic TLS setup examples); TLS is always available without feature flags
 
 - **F007**: Implement streaming export mode for large result sets to avoid loading all rows into memory simultaneously
 
@@ -406,9 +406,11 @@ SUBCOMMANDS:
 
 ```toml
 mysql = { version = "26.0.1", features = [
-  "minimal",
-  "native-tls",
+  "rustls-tls",
 ], default-features = false }
+rustls = "0.23.31"
+rustls-native-certs = "0.8.1"
+rustls-pemfile = "2.2.0"
 clap = { version = "4", features = ["derive", "env"] }
 clap_complete = "4"
 csv = "1.3"

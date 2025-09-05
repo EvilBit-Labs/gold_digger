@@ -176,25 +176,22 @@ error: conflicting requirements for `dependency`
 
 **Common Issues:**
 
-- OpenSSL compilation failures
 - Visual Studio Build Tools missing
 - Long path limitations
 - MSVC vs GNU toolchain conflicts
 
 **Solutions:**
 
-1. **OpenSSL Issues:**
+1. **Standard Build:**
 
    ```bash
-   # Standard build with rustls TLS (recommended)
+   # Standard build (TLS always available with rustls)
    cargo build --release
 
-   # Minimal build without TLS (if TLS dependencies cause issues)
+   # Minimal build (TLS still available)
    cargo build --no-default-features --features "json csv"
 
-   # Alternative: Install system dependencies if needed
-   set VCPKG_ROOT=C:\vcpkg
-   vcpkg install openssl:x64-windows-static
+   # No additional TLS dependencies needed - rustls is pure Rust
    ```
 
 2. **Visual Studio Build Tools:**
@@ -223,8 +220,8 @@ error: conflicting requirements for `dependency`
 **Common Issues:**
 
 - Xcode command line tools missing
-- Homebrew OpenSSL linking issues
 - Apple Silicon vs Intel differences
+- Homebrew dependency conflicts
 
 **Solutions:**
 
@@ -238,18 +235,17 @@ error: conflicting requirements for `dependency`
    xcode-select -p
    ```
 
-2. **OpenSSL Linking:**
+2. **Build Configuration:**
 
    ```bash
-   # Use Homebrew OpenSSL (modern systems use openssl@3)
-   brew install openssl@3
-   export OPENSSL_DIR=$(brew --prefix openssl@3)
+   # Standard build (TLS always available with rustls)
+   cargo build --release
 
-   # Or use minimal build without TLS
+   # Minimal build (TLS still available)
    cargo build --no-default-features --features "json csv"
    ```
 
-   **Note:** Modern Homebrew installations use `openssl@3` as the default formula. If `brew --prefix openssl` fails, use `openssl@3` instead.
+   **Note:** Gold Digger uses rustls exclusively - no Homebrew OpenSSL installation required.
 
 3. **Apple Silicon Issues:**
 
@@ -286,11 +282,11 @@ error: conflicting requirements for `dependency`
 
    # CentOS/RHEL/Fedora
    sudo yum groupinstall "Development Tools"
-   sudo yum install openssl-devel pkg-config
+   sudo yum install pkg-config
 
    # Or use dnf on newer systems
    sudo dnf groupinstall "Development Tools"
-   sudo dnf install openssl-devel pkg-config
+   sudo dnf install pkg-config
    ```
 
 2. **Library Path Issues:**

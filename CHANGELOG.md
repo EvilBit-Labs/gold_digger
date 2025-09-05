@@ -2,16 +2,18 @@
 ## [Unreleased]
 
 ### BREAKING CHANGES
-- **TLS Migration**: Removed native-tls/OpenSSL support in favor of always-available rustls implementation
-  - **Removed**: `ssl` and `ssl-rustls` feature flags (native-tls and rustls-tls implementations)
-  - **Removed**: OpenSSL dependency and native-tls crate
-  - **Added**: Single rustls-based implementation always available without feature flags
-  - **Migration Steps**:
-    - Remove `ssl` and `ssl-rustls` feature flags from `Cargo.toml` dependencies
-    - Remove OpenSSL development packages from CI/build environments
-    - Update build matrices to remove OpenSSL toolchain setup steps
-    - Update distro packaging to remove OpenSSL dependencies
-    - TLS support is now built-in and always available
+- **TLS Migration**: Completed migration to rustls-only TLS implementation
+  - **Removed**: `ssl` and `ssl-rustls` feature flags - TLS is now always available
+  - **Removed**: `native-tls` dependency and OpenSSL support completely
+  - **Added**: Single rustls-based implementation with enhanced security controls
+  - **Enhanced**: Platform certificate store integration on all platforms (Windows/macOS/Linux)
+  - **Migration Impact**:
+    - TLS support is now built into all Gold Digger binaries without requiring feature flags
+    - Build commands no longer need `--features ssl` or `--features ssl-rustls`
+    - OpenSSL development packages are no longer required for building
+    - Certificate validation behavior may be more strict than native-tls (use CLI flags for compatibility)
+    - All existing DATABASE_URL formats continue to work unchanged
+  - **New TLS CLI Flags**: `--tls-ca-file`, `--insecure-skip-hostname-verify`, `--allow-invalid-certificate`
 
 ### Features
 - **TLS Implementation**: Migrated to always-available rustls implementation with enhanced security controls
@@ -37,9 +39,11 @@
 - Updated testcontainers-modules, tempfile, assert_cmd, insta, temp-env, rustls, and rustls-pemfile to latest stable versions
 
 ### TLS Migration
-- Migrated from native-tls/OpenSSL to always-available rustls implementation
-- Removed ssl and ssl-rustls feature flags in favor of built-in TLS support
-- Enhanced TLS configuration with new CLI flags for custom CA files and validation controls
+- **Completed migration from native-tls to rustls-only implementation**
+- **Removed**: All native-tls dependencies and OpenSSL support
+- **Simplified**: TLS is now always available without feature flags
+- **Enhanced**: New CLI flags for granular TLS security control
+- **Improved**: Better error messages with specific CLI flag suggestions for certificate issues
 
 
 <a name="v0.2.5"></a>

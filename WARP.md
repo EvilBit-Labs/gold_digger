@@ -28,8 +28,8 @@ cargo build
 # Release build
 cargo build --release
 
-# With pure Rust TLS (alternative to native TLS)
-cargo build --release --no-default-features --features "json csv ssl-rustls additional_mysql_types verbose"
+# Standard build (TLS always available with rustls)
+cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
 
 # Minimal build (no default features)
 cargo build --no-default-features --features "csv json"
@@ -408,8 +408,8 @@ Gold Digger supports two TLS implementations to eliminate OpenSSL dependencies w
 # Default build with native TLS (recommended)
 cargo build --release
 
-# Pure Rust TLS build
-cargo build --release --no-default-features --features "json csv ssl-rustls additional_mysql_types verbose"
+# Standard build (TLS always available)
+cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
 
 # No TLS support (insecure connections only)
 cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
@@ -497,8 +497,8 @@ Before submitting any changes:
 # Default build with native TLS (recommended)
 cargo build --release
 
-# Pure Rust TLS build (for containerized/static deployments)
-cargo build --release --no-default-features --features "json csv ssl-rustls additional_mysql_types verbose"
+# Standard build (TLS always available for containerized/static deployments)
+cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
 
 # Minimal build (no TLS, no extra types)
 cargo build --no-default-features --features "csv json"
@@ -506,8 +506,8 @@ cargo build --no-default-features --features "csv json"
 # Database admin build (all MySQL types with native TLS)
 cargo build --release --features "default additional_mysql_types"
 
-# Pure Rust TLS build (alternative to default native TLS)
-cargo build --release --no-default-features --features "json csv ssl-rustls additional_mysql_types verbose"
+# Standard build (TLS always available)
+cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
 ```
 
 ### Dependencies by Feature

@@ -58,8 +58,8 @@ cargo build --no-default-features --features "json csv"  # Without TLS
 3. **Platform-Specific Issues:**
 
    ```bash
-   # Windows OpenSSL issues
-   # Install vcpkg and set VCPKG_ROOT
+   # Windows build issues
+   # Install Visual Studio Build Tools
 
    # macOS linking issues
    # Install Xcode command line tools
@@ -336,8 +336,7 @@ cargo check --no-default-features --features "feature1,feature2"
 
    ```bash
    # Install Visual Studio Build Tools
-   # Set up vcpkg for OpenSSL
-   set VCPKG_ROOT=C:\vcpkg
+   # No additional TLS dependencies needed - rustls is pure Rust
    ```
 
 2. **macOS Issues:**
@@ -358,7 +357,7 @@ cargo check --no-default-features --features "feature1,feature2"
 
    # For CentOS/RHEL
    sudo yum groupinstall "Development Tools"
-   sudo yum install openssl-devel
+   sudo yum install pkg-config
    ```
 
 ## Environment-Specific Issues
