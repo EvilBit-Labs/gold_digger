@@ -32,10 +32,10 @@ license = false
 eula = false
 
 [package.metadata.cargo-machete]
-ignored = ["mysql_common", "rustls-native-certs", "native-tls"]
+ignored = ["mysql_common", "rustls-native-certs"]
 
 [dependencies]
-mysql = { version = "26.0.1", default-features = false, features = ["minimal"] }
+mysql = { version = "26.0.1", default-features = false, features = ["rustls-tls"] }
 anyhow = "1.0.99"
 csv = "1.3.1"
 serde_json = "1.0.143"
@@ -48,7 +48,7 @@ url = "2.5.7"
 rustls = "0.23.31"
 rustls-native-certs = "0.8.1"
 rustls-pemfile = "2.2.0"
-native-tls = { version = "^0.2.11", optional = true }
+
 
 [dev-dependencies]
 testcontainers-modules = { version = "0.13.0", features = ["mariadb","blocking"] }

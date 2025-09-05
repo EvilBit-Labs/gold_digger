@@ -134,7 +134,9 @@ error: TLS connection failed: certificate validation error
    ```toml
    # In Cargo.toml - rustls is always available
    [dependencies]
-   mysql = { version = "26.0.1", features = ["minimal"] }
+   mysql = { version = "26.0.1", features = [
+     "rustls-tls",
+   ], default-features = false }
    rustls = "0.23.31"
    rustls-native-certs = "0.8.1"
    rustls-pemfile = "2.2.0"
@@ -168,7 +170,9 @@ error: Package does not have feature `missing_feature`
    ```toml
    # In Cargo.toml - rustls configuration (always available)
    [dependencies]
-   mysql = { version = "26.0.1", default-features = false, features = ["minimal"] }
+   mysql = { version = "26.0.1", default-features = false, features = [
+     "rustls-tls",
+   ] }
    rustls = "0.23.31"
    rustls-native-certs = "0.8.1"
    rustls-pemfile = "2.2.0"
@@ -293,21 +297,25 @@ error: unable to get packages from source
 
 **Common Issues:**
 
-- OpenSSL compilation failures
 - MSVC vs GNU toolchain conflicts
 - Windows-specific system libraries
+- Missing Visual Studio Build Tools
 
 **Solutions:**
 
-1. **Use rustls Instead of OpenSSL:**
+1. **Gold Digger uses rustls exclusively:**
 
    ```toml
-   # In Cargo.toml
+   # In Cargo.toml - rustls is always available
    [dependencies]
-   mysql = { version = "24.0", features = [
+   mysql = { version = "26.0.1", features = [
      "rustls-tls",
    ], default-features = false }
+   rustls = "0.23.31"
+   rustls-native-certs = "0.8.1"
    ```
+
+   **Note:** Gold Digger uses rustls exclusively. No OpenSSL dependencies are required.
 
 2. **Install Windows Build Tools:**
 
@@ -315,9 +323,7 @@ error: unable to get packages from source
    # Install Visual Studio Build Tools
    # Download from: https://visualstudio.microsoft.com/downloads/
 
-   # Or use vcpkg for OpenSSL
-   vcpkg install openssl:x64-windows-static
-   set VCPKG_ROOT=C:\vcpkg
+   # No additional TLS libraries needed - rustls is pure Rust
    ```
 
 3. **Configure Windows-Specific Dependencies:**
@@ -608,12 +614,17 @@ Edit the generated `deny.toml` to customize license policies, vulnerability chec
 1. **TLS Configuration:**
 
    ```toml
-   # Choose one TLS backend
+   # Gold Digger uses rustls exclusively
    [dependencies]
-   mysql = { version = "24.0", features = ["native-tls"] }
-   # OR
-   mysql = { version = "24.0", features = ["rustls-tls"] }
+   mysql = { version = "26.0.1", features = [
+     "rustls-tls",
+   ], default-features = false }
+   rustls = "0.23.31"
+   rustls-native-certs = "0.8.1"
+   rustls-pemfile = "2.2.0"
    ```
+
+   **Note:** Gold Digger no longer supports native-tls. All builds use rustls for TLS connections.
 
 2. **Feature Conflicts:**
 

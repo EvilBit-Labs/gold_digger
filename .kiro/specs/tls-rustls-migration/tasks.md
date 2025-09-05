@@ -113,7 +113,7 @@
   - Test that security warnings still display correctly
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 8.1, 8.2_
 
-- [ ] 15. Complete final cleanup of native-tls dependencies
+- [x] 15. Complete final cleanup of native-tls dependencies
 
   - Remove `native-tls` from optional dependencies in Cargo.toml
   - Update `mysql` dependency to use only `rustls-tls` feature instead of `minimal`
@@ -121,7 +121,7 @@
   - Verify no native-tls dependencies remain in dependency tree
   - _Requirements: 9.1, 9.2, 9.3, 9.4_
 
-- [ ] 16. Update project documentation for rustls-only implementation
+- [-] 16. Update project documentation for rustls-only implementation
 
   - Update CHANGELOG.md to document the native-tls removal
   - Update any remaining documentation references to native-tls
