@@ -243,17 +243,17 @@ jobs:
           tool: cargo-llvm-cov
 
       - name: Generate coverage (default features with TLS)
-        run: cargo llvm-cov --workspace --lcov --output-path lcov-default.info
+        run: cargo llvm-cov --workspace --no-report
 
       - name: Generate coverage (minimal features with TLS)
         run: |
-          cargo llvm-cov --workspace --lcov --output-path lcov-minimal.info \
-            --no-default-features --features "json csv additional_mysql_types"
+          cargo llvm-cov --workspace --no-report --no-default-features \
+          --features "json csv additional_mysql_types"
 
       - name: Combine coverage reports
         run: |
           # Combine both coverage reports
-          cat lcov-default.info lcov-minimal.info > lcov.info
+          cargo llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload to Codecov
         uses: codecov/codecov-action@v5
