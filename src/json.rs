@@ -1,11 +1,14 @@
-use std::{collections::BTreeMap, io::Write};
+use std::{
+    collections::BTreeMap,
+    io::{BufWriter, Write},
+};
 
 use crate::FormatWriter;
 use anyhow::Result;
 
 /// JSON writer that implements the FormatWriter trait
 pub struct JsonWriter<W: Write> {
-    writer: W,
+    writer: BufWriter<W>,
     columns: Vec<String>,
     first_row: bool,
     pretty: bool,
@@ -15,7 +18,7 @@ impl<W: Write> JsonWriter<W> {
     /// Creates a new JsonWriter with the specified writer and pretty printing option
     pub fn new(writer: W, pretty: bool) -> Self {
         Self {
-            writer,
+            writer: BufWriter::with_capacity(64 * 1024, writer), // 64KB buffer for better performance
             columns: Vec::new(),
             first_row: true,
             pretty,

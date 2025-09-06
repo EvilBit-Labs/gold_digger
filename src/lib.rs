@@ -24,12 +24,29 @@ pub mod json;
 pub mod tab;
 /// TLS configuration module.
 pub mod tls;
+/// Utility functions module.
+pub mod utils;
 
 /// Trait for writing data in different formats
 pub trait FormatWriter {
     fn write_header(&mut self, columns: &[String]) -> Result<()>;
     fn write_row(&mut self, row: &[String]) -> Result<()>;
     fn finalize(self) -> Result<()>;
+}
+
+/// Trait for streaming data processing (future enhancement)
+///
+/// This trait will enable memory-efficient processing of large result sets
+/// by processing rows one at a time instead of loading everything into memory.
+pub trait StreamingProcessor {
+    type Item;
+    type Error;
+
+    /// Process a single item from the stream
+    fn process_item(&mut self, item: Self::Item) -> std::result::Result<(), Self::Error>;
+
+    /// Finalize the streaming operation
+    fn finalize(self) -> std::result::Result<(), Self::Error>;
 }
 
 // TODO: Implement RowStream with correct QueryResult type signature
@@ -61,6 +78,7 @@ pub fn rows_to_strings(rows: Vec<Row>) -> anyhow::Result<Vec<Vec<String>>> {
         return Ok(Vec::new());
     }
 
+    // Pre-allocate with known capacity for better performance
     let mut result_rows = Vec::with_capacity(rows.len() + 1);
 
     // Extract headers from the first row
@@ -72,13 +90,19 @@ pub fn rows_to_strings(rows: Vec<Row>) -> anyhow::Result<Vec<Vec<String>>> {
     result_rows.push(header_row);
 
     // Process each row using safe iteration
-    for row in rows {
+    for (row_index, row) in rows.iter().enumerate() {
         let mut data_row = Vec::with_capacity(row.len());
         for i in 0..row.len() {
             match row.as_ref(i) {
                 Some(value) => match mysql_value_to_string(value) {
                     Ok(string_value) => data_row.push(string_value),
-                    Err(e) => return Err(e.context("Type conversion failed during row processing")),
+                    Err(e) => {
+                        return Err(e.context(format!(
+                            "Type conversion failed at row {} column {}",
+                            row_index + 1,
+                            i + 1
+                        )));
+                    },
                 },
                 None => data_row.push(String::new()),
             }
@@ -114,11 +138,15 @@ fn mysql_value_to_string(value: &mysql::Value) -> anyhow::Result<String> {
         mysql::Value::NULL => Ok(String::new()),
         mysql::Value::Bytes(bytes) => {
             // Try to convert bytes to UTF-8 string, fallback to lossy conversion
-            // Use Cow to avoid unnecessary allocation when bytes are valid UTF-8
-            Ok(match std::str::from_utf8(bytes) {
-                Ok(s) => s.to_string(),
-                Err(_) => String::from_utf8_lossy(bytes).into_owned(),
-            })
+            // For binary data that's not valid UTF-8, use lossy conversion with clear indication
+            match std::str::from_utf8(bytes) {
+                Ok(s) => Ok(s.to_string()),
+                Err(_) => {
+                    // For binary data, use lossy conversion
+                    let lossy = String::from_utf8_lossy(bytes);
+                    Ok(lossy.into_owned())
+                },
+            }
         },
         mysql::Value::Int(i) => Ok(i.to_string()),
         mysql::Value::UInt(u) => Ok(u.to_string()),
@@ -248,15 +276,12 @@ mod tests {
 
     #[test]
     fn test_get_required_env_present() {
-        unsafe {
-            std::env::set_var("TEST_ENV_VAR", "test_value");
-        }
-        let result = get_required_env("TEST_ENV_VAR");
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "test_value");
-        unsafe {
-            std::env::remove_var("TEST_ENV_VAR");
-        }
+        // Use temp_env for safer environment variable testing
+        temp_env::with_var("TEST_ENV_VAR", Some("test_value"), || {
+            let result = get_required_env("TEST_ENV_VAR");
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), "test_value");
+        });
     }
 
     #[test]

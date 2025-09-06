@@ -14,6 +14,10 @@ use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
 
+// Import the new certificate generation functionality
+mod fixtures;
+use fixtures::tls::EphemeralCertificate;
+
 /// Helper function to create a temporary certificate file for testing
 fn create_temp_cert_file(content: &str) -> Result<(TempDir, PathBuf)> {
     let temp_dir = tempfile::tempdir()?;
@@ -22,27 +26,13 @@ fn create_temp_cert_file(content: &str) -> Result<(TempDir, PathBuf)> {
     Ok((temp_dir, cert_path))
 }
 
-/// Sample valid PEM certificate for testing
-/// This is a self-signed certificate for testing purposes
-const VALID_CERT_PEM: &str = r#"-----BEGIN CERTIFICATE-----
-MIIDGDCCAgACCQD2WSi79mOTeDANBgkqhkiG9w0BAQsFADBOMQswCQYDVQQGEwJV
-UzENMAsGA1UECAwEVGVzdDENMAsGA1UEBwwEVGVzdDENMAsGA1UECgwEVGVzdDES
-MBAGA1UEAwwJbG9jYWxob3N0MB4XDTI1MDgyNTA0NDEwNFoXDTI2MDgyNTA0NDEw
-NFowTjELMAkGA1UEBhMCVVMxDTALBgNVBAgMBFRlc3QxDTALBgNVBAcMBFRlc3Qx
-DTALBgNVBAoMBFRlc3QxEjAQBgNVBAMMCWxvY2FsaG9zdDCCASIwDQYJKoZIhvcN
-AQEBBQADggEPADCCAQoCggEBAMQjVqh9sn8uf8vB2I4zIFn8m2zKcBA2OBrlFAPQ
-5PpwESb+sXlt7QWJAiIXm7XhcsJL8GD6Ct6XJUU6VRII2YKApBzhPfNmPhC63IUr
-/srCmwpbsy20DYspgiphOgs/gBgHbzmaal8D8ETgWwWBeW/R54Zi2/vII4SGPHu+
-KktymA5DjrX7o2bCu9XnwZz8WT9eBHCT+UhSPUFuhHKfM2/sgIvPe7qbFHhngp+f
-dMMUg5QB1so9OQbjqaQy08SzBp0o2M9oJ2TMSiv7U7Uq5vwx3grCpeTzOwAwR9NW
-mp0BHoyE5rR+gy3SodfLAGweDUCa8Q9n+nmaFlG9eLDkuK0CAwEAATANBgkqhkiG
-9w0BAQsFAAOCAQEAeHlXPJiv7VygsF0l2jz/zUWLa5DYWqCvDtyfFMV9qz7+Apwh
-e6ueJMypfz+DoIh0WOzJN3DqRf3ZuHji0yjzE7w6QsWpHgJnMTkiWhVP3IMJRtqO
-TaucQ3oVVIEAzUYj4caDT/pC18oGRDEPTk1ofe+zFiYkFFFzqzK5wMzOOPcCP5TD
-WEe7qMbEzBFOQKBEcDPk3z0VLM0fUryLi0U9hVXnMwHNnj7MOWl3IOFB0771ojd+
-nrKVKzHYOR+fmZ0Fim9yiudVIcaQXbi3aT21tPkS21X3X/99LXdqMzgppnAtS2X0
-9L6n2197CD51CVvFpEuFXJO1mpI4TIXnctNnzQ==
------END CERTIFICATE-----"#;
+/// Generate a valid PEM certificate for testing using rcgen
+/// This replaces the hardcoded certificate with dynamic generation
+fn generate_test_certificate() -> Result<String> {
+    let (cert_pem, _key_pem) =
+        EphemeralCertificate::generate_self_signed(vec!["localhost".to_string(), "test.local".to_string()])?;
+    Ok(cert_pem)
+}
 
 /// Check if we're running in CI environment to avoid testcontainers
 fn is_ci() -> bool {
@@ -106,7 +96,8 @@ mod custom_ca_tests {
     /// Requirement: 10.2 - Custom CA certificate validation
     #[test]
     fn test_custom_ca_file_functionality() -> Result<()> {
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
         let config = TlsConfig::with_custom_ca(&cert_path);
 
@@ -279,7 +270,8 @@ mod tls_error_handling_tests {
     #[test]
     fn test_tls_configuration_validation_errors() -> Result<()> {
         // Test mutually exclusive flags
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
         let result = gold_digger::tls::TlsConfig::from_cli_args(
             Some(&cert_path),
@@ -318,7 +310,8 @@ mod security_warning_tests {
         config.display_security_warnings(); // Should not display warning
 
         // Test custom CA mode (no warning)
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM).unwrap();
+        let cert_pem = generate_test_certificate().unwrap();
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem).unwrap();
         let config = TlsConfig::with_custom_ca(&cert_path);
         config.display_security_warnings(); // Should not display warning
     }
@@ -415,7 +408,8 @@ mod integration_tests {
         let connection_string = format!("mysql://test:test@{}:{}", host, port);
 
         // Create a temporary CA certificate file for testing
-        let (_temp_dir, ca_cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, ca_cert_path) = create_temp_cert_file(&cert_pem)?;
 
         // Test TLS configuration with custom CA certificate
         let config = TlsConfig::with_custom_ca(&ca_cert_path);
