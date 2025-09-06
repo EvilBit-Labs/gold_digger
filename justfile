@@ -243,6 +243,98 @@ test-all:
     cd {{justfile_dir()}}
     cargo test --features integration_tests
 
+# Run integration tests with nextest (parallel execution and flaky test quarantine)
+test-integration-nextest:
+    cd {{justfile_dir()}}
+    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
+        echo "Running integration tests with nextest..."; \
+        GOLD_DIGGER_QUARANTINE_FLAKY_TESTS=1 GOLD_DIGGER_FLAKY_TEST_RETRIES=3 \
+        cargo nextest run --test integration_tests --features integration_tests; \
+    else \
+        echo "nextest not available, falling back to cargo test..."; \
+        cargo test --test integration_tests --features integration_tests; \
+    fi
+
+# Run integration tests with JUnit XML output for CI
+test-integration-ci:
+    cd {{justfile_dir()}}
+    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
+        echo "Running integration tests with nextest and JUnit output..."; \
+        mkdir -p target/nextest-reports; \
+        GOLD_DIGGER_QUARANTINE_FLAKY_TESTS=1 GOLD_DIGGER_FLAKY_TEST_RETRIES=3 \
+        cargo nextest run --test integration_tests --features integration_tests \
+            --message-format json-pretty \
+            --junit-path target/nextest-reports/integration-tests.xml; \
+    else \
+        echo "nextest not available, falling back to cargo test..."; \
+        cargo test --test integration_tests --features integration_tests; \
+    fi
+
+# Run fast integration test subset for PR validation (< 5 minutes)
+test-integration-fast:
+    cd {{justfile_dir()}}
+    @echo "Running fast integration test subset for PR validation..."
+    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
+        GOLD_DIGGER_INTEGRATION_FAST=1 \
+        cargo nextest run --test integration_tests --features integration_tests \
+            --test-threads 2 --timeout 300; \
+    else \
+        GOLD_DIGGER_INTEGRATION_FAST=1 \
+        cargo test --test integration_tests --features integration_tests; \
+    fi
+
+# Run comprehensive integration test suite for main branch
+test-integration-comprehensive:
+    cd {{justfile_dir()}}
+    @echo "Running comprehensive integration test suite..."
+    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
+        GOLD_DIGGER_INTEGRATION_COMPREHENSIVE=1 GOLD_DIGGER_QUARANTINE_FLAKY_TESTS=1 \
+        cargo nextest run --test integration_tests --features integration_tests \
+            --test-threads 4 --timeout 900; \
+    else \
+        GOLD_DIGGER_INTEGRATION_COMPREHENSIVE=1 \
+        cargo test --test integration_tests --features integration_tests; \
+    fi
+
+# Check Docker availability for integration tests
+check-docker:
+    @echo "Checking Docker availability for integration tests..."
+    @if command -v docker >/dev/null 2>&1; then \
+        if docker info >/dev/null 2>&1; then \
+            echo "✓ Docker is available and daemon is running"; \
+            docker --version; \
+        else \
+            echo "✗ Docker is installed but daemon is not running"; \
+            echo "  Please start Docker daemon to run integration tests"; \
+            exit 1; \
+        fi; \
+    else \
+        echo "✗ Docker is not installed"; \
+        echo "  Please install Docker to run integration tests"; \
+        exit 1; \
+    fi
+
+# Run integration tests with Docker availability check
+test-integration-safe:
+    just check-docker
+    just test-integration-nextest
+
+# Run integration tests with artifact collection on failure
+test-integration-debug:
+    cd {{justfile_dir()}}
+    @echo "Running integration tests with debug artifact collection..."
+    @mkdir -p target/integration-test-artifacts
+    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
+        GOLD_DIGGER_TEST_DEBUG=1 GOLD_DIGGER_COLLECT_ARTIFACTS=1 \
+        cargo nextest run --test integration_tests --features integration_tests \
+            --failure-output immediate --success-output never || \
+        echo "Integration tests failed - check target/integration-test-artifacts/ for debug info"; \
+    else \
+        GOLD_DIGGER_TEST_DEBUG=1 GOLD_DIGGER_COLLECT_ARTIFACTS=1 \
+        cargo test --test integration_tests --features integration_tests || \
+        echo "Integration tests failed - check target/integration-test-artifacts/ for debug info"; \
+    fi
+
 # Run tests with coverage (llvm-cov)
 coverage:
     cd {{justfile_dir()}}

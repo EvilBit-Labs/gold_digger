@@ -497,19 +497,355 @@ pub fn skip_if_no_docker() {
     }
 }
 
-/// Check if running in CI environment
-pub fn is_ci_environment() -> bool {
-    std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok()
+/// CI environment detection and handling utilities
+#[allow(dead_code)]
+pub struct CiEnvironment;
+
+#[allow(dead_code)]
+impl CiEnvironment {
+    /// Check if running in CI environment
+    pub fn is_ci() -> bool {
+        std::env::var("CI").is_ok()
+            || std::env::var("GITHUB_ACTIONS").is_ok()
+            || std::env::var("GITLAB_CI").is_ok()
+            || std::env::var("JENKINS_URL").is_ok()
+            || std::env::var("BUILDKITE").is_ok()
+    }
+
+    /// Check if running in GitHub Actions specifically
+    pub fn is_github_actions() -> bool {
+        std::env::var("GITHUB_ACTIONS").is_ok()
+    }
+
+    /// Get appropriate timeout for CI vs local execution
+    pub fn get_test_timeout() -> Duration {
+        if Self::is_ci() {
+            // Longer timeout for CI environments due to resource constraints
+            Duration::from_secs(300) // 5 minutes for CI
+        } else {
+            Duration::from_secs(60) // 1 minute for local
+        }
+    }
+
+    /// Get appropriate timeout for container operations
+    pub fn get_container_timeout() -> Duration {
+        if Self::is_ci() {
+            Duration::from_secs(180) // 3 minutes for container startup in CI
+        } else {
+            Duration::from_secs(60) // 1 minute for local
+        }
+    }
+
+    /// Get appropriate timeout for database operations
+    pub fn get_database_timeout() -> Duration {
+        if Self::is_ci() {
+            Duration::from_secs(120) // 2 minutes for database operations in CI
+        } else {
+            Duration::from_secs(30) // 30 seconds for local
+        }
+    }
+
+    /// Get CI-specific resource limits
+    pub fn get_resource_limits() -> CiResourceLimits {
+        if Self::is_ci() {
+            CiResourceLimits {
+                max_memory_usage_mb: 1024,                    // 1GB limit for CI
+                max_disk_usage_mb: 512,                       // 512MB disk limit for CI
+                max_execution_time: Duration::from_secs(600), // 10 minutes max
+                max_parallel_tests: 2,                        // Limit parallelism in CI
+            }
+        } else {
+            CiResourceLimits {
+                max_memory_usage_mb: 2048,                    // 2GB limit for local
+                max_disk_usage_mb: 1024,                      // 1GB disk limit for local
+                max_execution_time: Duration::from_secs(300), // 5 minutes max
+                max_parallel_tests: 4,                        // More parallelism locally
+            }
+        }
+    }
+
+    /// Check if Docker is available and working
+    pub fn check_docker_availability() -> DockerAvailability {
+        let docker_check = std::process::Command::new("docker").arg("version").output();
+
+        match docker_check {
+            Ok(output) if output.status.success() => {
+                // Check if Docker daemon is running
+                let daemon_check = std::process::Command::new("docker").arg("info").output();
+
+                match daemon_check {
+                    Ok(daemon_output) if daemon_output.status.success() => DockerAvailability::Available,
+                    _ => DockerAvailability::DaemonNotRunning,
+                }
+            },
+            _ => DockerAvailability::NotInstalled,
+        }
+    }
+
+    /// Get CI-specific environment variables for test configuration
+    pub fn get_ci_config() -> CiConfig {
+        CiConfig {
+            runner_os: std::env::var("RUNNER_OS").unwrap_or_else(|_| "unknown".to_string()),
+            runner_arch: std::env::var("RUNNER_ARCH").unwrap_or_else(|_| "unknown".to_string()),
+            github_ref: std::env::var("GITHUB_REF").ok(),
+            github_sha: std::env::var("GITHUB_SHA").ok(),
+            github_run_id: std::env::var("GITHUB_RUN_ID").ok(),
+            github_run_number: std::env::var("GITHUB_RUN_NUMBER").ok(),
+            is_pull_request: std::env::var("GITHUB_EVENT_NAME")
+                .map(|event| event == "pull_request")
+                .unwrap_or(false),
+        }
+    }
+
+    /// Create JUnit XML report for CI integration
+    pub fn create_junit_report(test_results: &[TestExecutionResult]) -> Result<String> {
+        let mut xml = String::new();
+        xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
+        xml.push('\n');
+
+        let total_tests = test_results.len();
+        let failed_tests = test_results.iter().filter(|r| !r.passed).count();
+        let total_time: f64 = test_results.iter().map(|r| r.execution_time.as_secs_f64()).sum();
+
+        xml.push_str(&format!(
+            r#"<testsuite name="gold_digger_integration_tests" tests="{}" failures="{}" time="{:.3}">"#,
+            total_tests, failed_tests, total_time
+        ));
+        xml.push('\n');
+
+        for result in test_results {
+            xml.push_str(&format!(
+                r#"  <testcase name="{}" classname="integration_tests" time="{:.3}""#,
+                result.test_name,
+                result.execution_time.as_secs_f64()
+            ));
+
+            if result.passed {
+                xml.push_str(" />");
+            } else {
+                xml.push('>');
+                xml.push('\n');
+                xml.push_str(&format!(
+                    r#"    <failure message="{}">{}</failure>"#,
+                    result.error_message.as_deref().unwrap_or("Test failed"),
+                    result.error_details.as_deref().unwrap_or("")
+                ));
+                xml.push('\n');
+                xml.push_str("  </testcase>");
+            }
+            xml.push('\n');
+        }
+
+        xml.push_str("</testsuite>");
+        xml.push('\n');
+
+        Ok(xml)
+    }
+
+    /// Emit GitHub Actions annotations for test failures
+    pub fn emit_github_annotations(test_results: &[TestExecutionResult]) -> Result<()> {
+        if !Self::is_github_actions() {
+            return Ok(());
+        }
+
+        for result in test_results {
+            if !result.passed {
+                println!(
+                    "::error title=Integration Test Failed::Test '{}' failed: {}",
+                    result.test_name,
+                    result.error_message.as_deref().unwrap_or("Unknown error")
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Check if flaky test quarantine is enabled
+    pub fn is_flaky_test_quarantine_enabled() -> bool {
+        std::env::var("GOLD_DIGGER_QUARANTINE_FLAKY_TESTS")
+            .map(|v| v == "1" || v.to_lowercase() == "true")
+            .unwrap_or(false)
+    }
+
+    /// Get retry count for flaky tests
+    pub fn get_flaky_test_retry_count() -> usize {
+        std::env::var("GOLD_DIGGER_FLAKY_TEST_RETRIES")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(3) // Default to 3 retries
+    }
 }
 
-/// Get appropriate timeout for CI vs local execution
+/// Docker availability status
+#[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)]
+pub enum DockerAvailability {
+    /// Docker is available and daemon is running
+    Available,
+    /// Docker is installed but daemon is not running
+    DaemonNotRunning,
+    /// Docker is not installed
+    NotInstalled,
+}
+
+/// CI resource limits
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct CiResourceLimits {
+    /// Maximum memory usage in MB
+    pub max_memory_usage_mb: usize,
+    /// Maximum disk usage in MB
+    pub max_disk_usage_mb: usize,
+    /// Maximum execution time
+    pub max_execution_time: Duration,
+    /// Maximum number of parallel tests
+    pub max_parallel_tests: usize,
+}
+
+/// CI configuration information
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct CiConfig {
+    /// Operating system of the runner
+    pub runner_os: String,
+    /// Architecture of the runner
+    pub runner_arch: String,
+    /// GitHub ref (branch/tag)
+    pub github_ref: Option<String>,
+    /// GitHub commit SHA
+    pub github_sha: Option<String>,
+    /// GitHub run ID
+    pub github_run_id: Option<String>,
+    /// GitHub run number
+    pub github_run_number: Option<String>,
+    /// Whether this is a pull request
+    pub is_pull_request: bool,
+}
+
+/// Test execution result for CI reporting
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct TestExecutionResult {
+    /// Test name
+    pub test_name: String,
+    /// Whether the test passed
+    pub passed: bool,
+    /// Execution time
+    pub execution_time: Duration,
+    /// Error message if failed
+    pub error_message: Option<String>,
+    /// Detailed error information
+    pub error_details: Option<String>,
+    /// Test artifacts (file paths)
+    pub artifacts: Vec<std::path::PathBuf>,
+}
+
+/// Cargo nextest integration utilities
+#[allow(dead_code)]
+pub struct CargoNextestIntegration;
+
+#[allow(dead_code)]
+impl CargoNextestIntegration {
+    /// Check if running under cargo nextest
+    pub fn is_nextest() -> bool {
+        std::env::var("NEXTEST").is_ok() || std::env::var("NEXTEST_RUN_ID").is_ok()
+    }
+
+    /// Get nextest-specific configuration
+    pub fn get_nextest_config() -> NextestConfig {
+        NextestConfig {
+            run_id: std::env::var("NEXTEST_RUN_ID").ok(),
+            profile: std::env::var("NEXTEST_PROFILE").unwrap_or_else(|_| "default".to_string()),
+            partition: std::env::var("NEXTEST_PARTITION").ok(),
+            total_partitions: std::env::var("NEXTEST_TOTAL_PARTITIONS")
+                .ok()
+                .and_then(|v| v.parse().ok()),
+            test_threads: std::env::var("NEXTEST_TEST_THREADS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(1),
+        }
+    }
+
+    /// Create nextest-compatible test output
+    pub fn emit_nextest_output(test_name: &str, result: &TestExecutionResult) -> Result<()> {
+        if !Self::is_nextest() {
+            return Ok(());
+        }
+
+        // Nextest expects specific output format for test results
+        let status = if result.passed { "PASS" } else { "FAIL" };
+        println!("test {} ... {} ({:.3}s)", test_name, status, result.execution_time.as_secs_f64());
+
+        if !result.passed {
+            if let Some(error) = &result.error_message {
+                eprintln!("Error: {}", error);
+            }
+            if let Some(details) = &result.error_details {
+                eprintln!("Details: {}", details);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Configure test execution for nextest parallel execution
+    pub fn configure_parallel_execution() -> ParallelExecutionConfig {
+        let nextest_config = Self::get_nextest_config();
+        let ci_limits = CiEnvironment::get_resource_limits();
+
+        ParallelExecutionConfig {
+            max_parallel_tests: std::cmp::min(nextest_config.test_threads, ci_limits.max_parallel_tests),
+            test_timeout: CiEnvironment::get_test_timeout(),
+            container_timeout: CiEnvironment::get_container_timeout(),
+            enable_flaky_test_quarantine: CiEnvironment::is_flaky_test_quarantine_enabled(),
+            flaky_test_retry_count: CiEnvironment::get_flaky_test_retry_count(),
+        }
+    }
+}
+
+/// Nextest configuration
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct NextestConfig {
+    /// Nextest run ID
+    pub run_id: Option<String>,
+    /// Nextest profile
+    pub profile: String,
+    /// Current partition (for test sharding)
+    pub partition: Option<String>,
+    /// Total number of partitions
+    pub total_partitions: Option<usize>,
+    /// Number of test threads
+    pub test_threads: usize,
+}
+
+/// Parallel execution configuration
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub struct ParallelExecutionConfig {
+    /// Maximum number of parallel tests
+    pub max_parallel_tests: usize,
+    /// Timeout for individual tests
+    pub test_timeout: Duration,
+    /// Timeout for container operations
+    pub container_timeout: Duration,
+    /// Whether to enable flaky test quarantine
+    pub enable_flaky_test_quarantine: bool,
+    /// Number of retries for flaky tests
+    pub flaky_test_retry_count: usize,
+}
+
+/// Check if running in CI environment (backward compatibility)
+pub fn is_ci_environment() -> bool {
+    CiEnvironment::is_ci()
+}
+
+/// Get appropriate timeout for CI vs local execution (backward compatibility)
 #[allow(dead_code)]
 pub fn get_test_timeout() -> Duration {
-    if is_ci_environment() {
-        Duration::from_secs(300) // 5 minutes for CI
-    } else {
-        Duration::from_secs(60) // 1 minute for local
-    }
+    CiEnvironment::get_test_timeout()
 }
 
 impl TlsContainerConfig {

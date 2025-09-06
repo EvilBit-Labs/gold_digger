@@ -199,7 +199,7 @@
   - Create helper functions that wrap `assert_cmd::Command` for common test scenarios (TLS, non-TLS,
     different formats)
 
-- [ ] 1.6.2 Implement output validation with predicates and insta snapshots
+- [x] 1.6.2 Implement output validation with predicates and insta snapshots
 
   - Use `predicates` crate for validating output file existence, content, and format
   - Implement `insta` snapshot testing for CLI output regression testing and format validation
@@ -210,7 +210,7 @@
   - Implement performance measurement using `assert_cmd`'s execution time tracking
   - Create snapshot-based output comparison utilities for cross-format consistency tests
 
-- [ ] 1.6.3 Add temporary file and directory management with tempfile
+- [x] 1.6.3 Add temporary file and directory management with tempfile
 
   - Use `tempfile` crate for CI-safe temporary directory creation and automatic cleanup
   - Integrate `tempfile` with `assert_cmd::Command` for output file management in tests

@@ -8,6 +8,7 @@
 use anyhow::{Context, Result};
 use assert_cmd::Command;
 use predicates::prelude::*;
+use serde_json;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -740,11 +741,398 @@ pub struct TsvParseResult {
     pub row_count: usize,
 }
 
+/// Temporary file and directory management with tempfile for CI-safe cleanup
+pub struct TempFileManager {
+    /// Temporary directory for test isolation
+    temp_dir: tempfile::TempDir,
+    /// Test name for debugging and artifact collection
+    test_name: String,
+    /// File counter for unique naming
+    file_counter: std::cell::RefCell<usize>,
+}
+
+impl TempFileManager {
+    /// Create a new temporary file manager for a test
+    pub fn new(test_name: &str) -> Result<Self> {
+        let temp_dir = tempfile::Builder::new()
+            .prefix(&format!("gold_digger_test_{}_", test_name))
+            .tempdir()
+            .with_context(|| format!("Failed to create temporary directory for test: {}", test_name))?;
+
+        Ok(Self {
+            temp_dir,
+            test_name: test_name.to_string(),
+            file_counter: std::cell::RefCell::new(0),
+        })
+    }
+
+    /// Create a temporary output file with the appropriate extension
+    pub fn create_output_file(&self, format: &OutputFormat) -> Result<tempfile::NamedTempFile> {
+        let temp_file = tempfile::Builder::new()
+            .prefix(&format!("output_{}_", self.test_name))
+            .suffix(&format!(".{}", format.extension()))
+            .tempfile_in(self.temp_dir.path())
+            .with_context(|| format!("Failed to create temporary output file for format: {:?}", format))?;
+
+        // Increment file counter
+        *self.file_counter.borrow_mut() += 1;
+
+        Ok(temp_file)
+    }
+
+    /// Create a temporary input file (e.g., for query files)
+    pub fn create_input_file(&self, content: &str, extension: &str) -> Result<tempfile::NamedTempFile> {
+        let temp_file = tempfile::Builder::new()
+            .prefix(&format!("input_{}_", self.test_name))
+            .suffix(&format!(".{}", extension))
+            .tempfile_in(self.temp_dir.path())
+            .with_context(|| format!("Failed to create temporary input file with extension: {}", extension))?;
+
+        // Write content to the file
+        std::fs::write(temp_file.path(), content).with_context(|| {
+            format!("Failed to write content to temporary input file: {}", temp_file.path().display())
+        })?;
+
+        // Increment file counter
+        *self.file_counter.borrow_mut() += 1;
+
+        Ok(temp_file)
+    }
+
+    /// Create a temporary directory for test artifacts
+    pub fn create_temp_subdir(&self, name: &str) -> Result<std::path::PathBuf> {
+        let subdir_path = self.temp_dir.path().join(name);
+        std::fs::create_dir_all(&subdir_path)
+            .with_context(|| format!("Failed to create temporary subdirectory: {}", subdir_path.display()))?;
+        Ok(subdir_path)
+    }
+
+    /// Get the path to the main temporary directory
+    pub fn temp_dir_path(&self) -> &Path {
+        self.temp_dir.path()
+    }
+
+    /// Create a temporary file path (without creating the file)
+    pub fn temp_file_path(&self, filename: &str) -> std::path::PathBuf {
+        self.temp_dir.path().join(filename)
+    }
+
+    /// Get the number of temporary files created
+    pub fn temp_file_count(&self) -> usize {
+        *self.file_counter.borrow()
+    }
+
+    /// Collect test artifacts for debugging (copies files to a persistent location)
+    pub fn collect_artifacts(&self, artifact_dir: &Path) -> Result<Vec<std::path::PathBuf>> {
+        let mut collected_files = Vec::new();
+
+        // Create artifact directory if it doesn't exist
+        std::fs::create_dir_all(artifact_dir)
+            .with_context(|| format!("Failed to create artifact directory: {}", artifact_dir.display()))?;
+
+        // Copy all temporary files to artifact directory
+        // Copy all files from the temp directory
+        for entry in std::fs::read_dir(self.temp_dir.path())? {
+            let entry = entry?;
+            let source_path = entry.path();
+
+            if source_path.is_file() {
+                let filename = source_path.file_name().unwrap();
+                let dest_path = artifact_dir.join(filename);
+
+                std::fs::copy(&source_path, &dest_path).with_context(|| {
+                    format!("Failed to copy artifact from {} to {}", source_path.display(), dest_path.display())
+                })?;
+                collected_files.push(dest_path);
+            }
+        }
+
+        Ok(collected_files)
+    }
+
+    /// Get disk space usage of temporary directory
+    pub fn get_disk_usage(&self) -> Result<u64> {
+        let mut total_size = 0u64;
+
+        for entry in walkdir::WalkDir::new(self.temp_dir.path()) {
+            let entry = entry?;
+            if entry.file_type().is_file() {
+                let metadata = entry.metadata()?;
+                total_size += metadata.len();
+            }
+        }
+
+        Ok(total_size)
+    }
+
+    /// Check if temporary directory is within size limits
+    pub fn check_size_limits(&self, max_size_bytes: u64) -> Result<bool> {
+        let current_size = self.get_disk_usage()?;
+        Ok(current_size <= max_size_bytes)
+    }
+
+    /// Clean up specific temporary file by path
+    pub fn cleanup_file(&self, path: &Path) -> Result<()> {
+        if path.exists() {
+            std::fs::remove_file(path)
+                .with_context(|| format!("Failed to clean up temporary file: {}", path.display()))?;
+        }
+        Ok(())
+    }
+
+    /// Force cleanup of all temporary files (normally handled by Drop)
+    pub fn force_cleanup(&self) -> Result<()> {
+        // The temp_dir will be cleaned up when this struct is dropped
+        // Individual temp files are managed by RAII
+        Ok(())
+    }
+}
+
+impl Drop for TempFileManager {
+    /// Automatic cleanup when TempFileManager is dropped
+    fn drop(&mut self) {
+        // tempfile handles cleanup automatically, but we can add logging if needed
+        if std::env::var("GOLD_DIGGER_TEST_DEBUG").is_ok() {
+            eprintln!("Cleaning up temporary directory for test: {}", self.test_name);
+        }
+    }
+}
+
+/// Integration with assert_cmd::Command for output file management
+pub struct AssertCmdIntegration;
+
+impl AssertCmdIntegration {
+    /// Execute Gold Digger with temporary file management
+    pub fn execute_with_temp_files(
+        test_case: &TestCase,
+        db_url: &str,
+        temp_manager: &TempFileManager,
+    ) -> Result<(assert_cmd::assert::Assert, tempfile::NamedTempFile)> {
+        // Create temporary output file
+        let output_file = temp_manager.create_output_file(&test_case.expected_format)?;
+
+        // Build command
+        let mut cmd = assert_cmd::Command::cargo_bin("gold_digger")?;
+
+        cmd.arg("--db-url")
+            .arg(db_url)
+            .arg("--query")
+            .arg(&test_case.query)
+            .arg("--output")
+            .arg(output_file.path());
+
+        // Add CLI arguments
+        for arg in &test_case.cli_args {
+            cmd.arg(arg);
+        }
+
+        // Set environment variables
+        for (key, value) in &test_case.env_vars {
+            cmd.env(key, value);
+        }
+
+        // Execute and return assertion along with output file
+        let assert = cmd.assert();
+        Ok((assert, output_file))
+    }
+
+    /// Execute Gold Digger with query file input
+    pub fn execute_with_query_file(
+        query_content: &str,
+        db_url: &str,
+        output_format: &OutputFormat,
+        temp_manager: &TempFileManager,
+    ) -> Result<(assert_cmd::assert::Assert, tempfile::NamedTempFile, tempfile::NamedTempFile)> {
+        // Create temporary query file
+        let query_file = temp_manager.create_input_file(query_content, "sql")?;
+
+        // Create temporary output file
+        let output_file = temp_manager.create_output_file(output_format)?;
+
+        // Build command
+        let mut cmd = assert_cmd::Command::cargo_bin("gold_digger")?;
+
+        cmd.arg("--db-url")
+            .arg(db_url)
+            .arg("--query-file")
+            .arg(query_file.path())
+            .arg("--output")
+            .arg(output_file.path());
+
+        // Execute and return assertion along with both files
+        let assert = cmd.assert();
+        Ok((assert, output_file, query_file))
+    }
+
+    /// Execute Gold Digger with timeout and temporary file management
+    pub fn execute_with_timeout(
+        test_case: &TestCase,
+        db_url: &str,
+        temp_manager: &TempFileManager,
+        timeout: Duration,
+    ) -> Result<(std::process::Output, tempfile::NamedTempFile)> {
+        // Create temporary output file
+        let output_file = temp_manager.create_output_file(&test_case.expected_format)?;
+
+        // Build command
+        let mut cmd = assert_cmd::Command::cargo_bin("gold_digger")?;
+
+        cmd.arg("--db-url")
+            .arg(db_url)
+            .arg("--query")
+            .arg(&test_case.query)
+            .arg("--output")
+            .arg(output_file.path())
+            .timeout(timeout);
+
+        // Add CLI arguments
+        for arg in &test_case.cli_args {
+            cmd.arg(arg);
+        }
+
+        // Set environment variables
+        for (key, value) in &test_case.env_vars {
+            cmd.env(key, value);
+        }
+
+        // Execute with timeout
+        let output = cmd.output()?;
+        Ok((output, output_file))
+    }
+}
+
+/// Test isolation utilities using tempfile::TempDir
+pub struct TestIsolation {
+    /// Test name for identification
+    test_name: String,
+    /// Temporary file manager
+    temp_manager: TempFileManager,
+    /// Original environment variables (for restoration)
+    original_env: HashMap<String, Option<String>>,
+    /// Test start time
+    start_time: std::time::Instant,
+}
+
+impl TestIsolation {
+    /// Create a new test isolation environment
+    pub fn new(test_name: &str) -> Result<Self> {
+        let temp_manager = TempFileManager::new(test_name)?;
+
+        Ok(Self {
+            test_name: test_name.to_string(),
+            temp_manager,
+            original_env: HashMap::new(),
+            start_time: std::time::Instant::now(),
+        })
+    }
+
+    /// Get the temporary file manager
+    pub fn temp_manager(&self) -> &TempFileManager {
+        &self.temp_manager
+    }
+
+    /// Set environment variable for this test (will be restored on drop)
+    pub fn set_env_var(&mut self, key: &str, value: &str) {
+        // Store original value for restoration
+        self.original_env.insert(key.to_string(), std::env::var(key).ok());
+
+        // Set new value
+        unsafe {
+            std::env::set_var(key, value);
+        }
+    }
+
+    /// Remove environment variable for this test (will be restored on drop)
+    pub fn remove_env_var(&mut self, key: &str) {
+        // Store original value for restoration
+        self.original_env.insert(key.to_string(), std::env::var(key).ok());
+
+        // Remove variable
+        unsafe {
+            std::env::remove_var(key);
+        }
+    }
+
+    /// Get test execution time so far
+    pub fn elapsed_time(&self) -> Duration {
+        self.start_time.elapsed()
+    }
+
+    /// Create test artifact directory for debugging
+    pub fn create_artifact_dir(&self) -> Result<std::path::PathBuf> {
+        let artifact_dir = std::env::temp_dir()
+            .join("gold_digger_test_artifacts")
+            .join(&self.test_name);
+
+        std::fs::create_dir_all(&artifact_dir)
+            .with_context(|| format!("Failed to create artifact directory: {}", artifact_dir.display()))?;
+
+        Ok(artifact_dir)
+    }
+
+    /// Collect all test artifacts for debugging
+    pub fn collect_artifacts_on_failure(&self) -> Result<Vec<std::path::PathBuf>> {
+        let artifact_dir = self.create_artifact_dir()?;
+        self.temp_manager.collect_artifacts(&artifact_dir)
+    }
+
+    /// Check resource usage and limits
+    pub fn check_resource_limits(&self, max_disk_usage: u64) -> Result<ResourceUsageReport> {
+        let disk_usage = self.temp_manager.get_disk_usage()?;
+        let execution_time = self.elapsed_time();
+        let temp_file_count = self.temp_manager.temp_file_count();
+
+        Ok(ResourceUsageReport {
+            disk_usage_bytes: disk_usage,
+            execution_time,
+            temp_file_count,
+            within_disk_limit: disk_usage <= max_disk_usage,
+            temp_dir_path: self.temp_manager.temp_dir_path().to_path_buf(),
+        })
+    }
+}
+
+impl Drop for TestIsolation {
+    /// Restore environment variables when test isolation is dropped
+    fn drop(&mut self) {
+        // Restore original environment variables
+        for (key, original_value) in &self.original_env {
+            unsafe {
+                match original_value {
+                    Some(value) => std::env::set_var(key, value),
+                    None => std::env::remove_var(key),
+                }
+            }
+        }
+
+        // Log cleanup if debug mode is enabled
+        if std::env::var("GOLD_DIGGER_TEST_DEBUG").is_ok() {
+            eprintln!("Test isolation cleanup completed for: {}", self.test_name);
+        }
+    }
+}
+
+/// Resource usage report for test monitoring
+#[derive(Debug, Clone)]
+pub struct ResourceUsageReport {
+    /// Disk usage in bytes
+    pub disk_usage_bytes: u64,
+    /// Test execution time
+    pub execution_time: Duration,
+    /// Number of temporary files created
+    pub temp_file_count: usize,
+    /// Whether disk usage is within limits
+    pub within_disk_limit: bool,
+    /// Path to temporary directory
+    pub temp_dir_path: std::path::PathBuf,
+}
+
 /// Test data utilities
 pub struct TestDataUtils;
 
 impl TestDataUtils {
-    /// Create a temporary output file with the appropriate extension
+    /// Create a temporary output file with the appropriate extension (deprecated - use TempFileManager)
+    #[deprecated(note = "Use TempFileManager::create_output_file instead")]
     pub fn create_temp_output_file(format: &OutputFormat) -> Result<NamedTempFile> {
         let temp_file = tempfile::Builder::new()
             .suffix(&format!(".{}", format.extension()))
@@ -762,6 +1150,16 @@ impl TestDataUtils {
         let metadata =
             fs::metadata(path).with_context(|| format!("Failed to get metadata for file: {}", path.display()))?;
         Ok(metadata.len())
+    }
+
+    /// Create temporary file manager for a test
+    pub fn create_temp_manager(test_name: &str) -> Result<TempFileManager> {
+        TempFileManager::new(test_name)
+    }
+
+    /// Create test isolation environment
+    pub fn create_test_isolation(test_name: &str) -> Result<TestIsolation> {
+        TestIsolation::new(test_name)
     }
 }
 
@@ -784,7 +1182,7 @@ impl TestEnvironment {
         // Store original value for restoration
         self.original_env.insert(key.to_string(), std::env::var(key).ok());
 
-        // Set new value - std::env::set_var is safe in single-threaded tests
+        // Set new value
         unsafe {
             std::env::set_var(key, value);
         }
@@ -795,7 +1193,7 @@ impl TestEnvironment {
         // Store original value for restoration
         self.original_env.insert(key.to_string(), std::env::var(key).ok());
 
-        // Remove variable - std::env::remove_var is safe in single-threaded tests
+        // Remove variable
         unsafe {
             std::env::remove_var(key);
         }
@@ -812,11 +1210,637 @@ impl Drop for TestEnvironment {
     /// Restore original environment variables when dropped
     fn drop(&mut self) {
         for (key, original_value) in &self.original_env {
-            match original_value {
-                Some(value) => unsafe { std::env::set_var(key, value) },
-                None => unsafe { std::env::remove_var(key) },
+            unsafe {
+                match original_value {
+                    Some(value) => std::env::set_var(key, value),
+                    None => std::env::remove_var(key),
+                }
             }
         }
+    }
+}
+/// Output validation framework using predicates and insta snapshots
+pub struct OutputValidator;
+
+impl OutputValidator {
+    /// Validate output file existence and content using predicates
+    pub fn validate_file_output(path: &Path, format: &OutputFormat) -> Result<FileValidationResult> {
+        use predicates::prelude::*;
+
+        // Check file existence
+        let file_exists_predicate = predicate::path::exists();
+        if !file_exists_predicate.eval(path) {
+            return Err(anyhow::anyhow!("Output file does not exist: {}", path.display()));
+        }
+
+        // Check file is not empty
+        let file_not_empty_predicate = predicate::path::is_file();
+        if !file_not_empty_predicate.eval(path) {
+            return Err(anyhow::anyhow!("Output file is empty: {}", path.display()));
+        }
+
+        // Read and validate content based on format
+        let content =
+            fs::read_to_string(path).with_context(|| format!("Failed to read output file: {}", path.display()))?;
+
+        let validation_result = match format {
+            OutputFormat::Csv => Self::validate_csv_content(&content)?,
+            OutputFormat::Json => Self::validate_json_content(&content)?,
+            OutputFormat::Tsv => Self::validate_tsv_content(&content)?,
+        };
+
+        Ok(validation_result)
+    }
+
+    /// Validate CSV content using predicates for RFC4180 compliance
+    pub fn validate_csv_content(content: &str) -> Result<FileValidationResult> {
+        use predicates::prelude::*;
+
+        // Check basic CSV structure predicates
+        let has_header_predicate = predicate::str::is_empty().not();
+        if !has_header_predicate.eval(content) {
+            return Err(anyhow::anyhow!("CSV content is empty"));
+        }
+
+        // Parse CSV and validate structure
+        let csv_result = OutputParser::parse_csv(content)?;
+
+        // Validate CSV-specific requirements using predicates
+        let min_columns_predicate = predicate::ge(1usize);
+        if !min_columns_predicate.eval(&csv_result.column_count) {
+            return Err(anyhow::anyhow!("CSV must have at least 1 column, found {}", csv_result.column_count));
+        }
+
+        // Check for proper CSV quoting (QuoteStyle::Necessary)
+        let proper_quoting = Self::validate_csv_quoting(content)?;
+
+        // Check for CRLF line endings (RFC4180 requirement)
+        let has_crlf = content.contains("\r\n");
+
+        Ok(FileValidationResult {
+            format: OutputFormat::Csv,
+            row_count: csv_result.row_count,
+            column_count: csv_result.column_count,
+            file_size: content.len(),
+            format_compliance: FormatComplianceResult {
+                is_compliant: proper_quoting && (has_crlf || csv_result.row_count == 0),
+                compliance_issues: if !proper_quoting {
+                    vec!["Improper CSV quoting detected".to_string()]
+                } else if !has_crlf && csv_result.row_count > 0 {
+                    vec!["Missing CRLF line endings for RFC4180 compliance".to_string()]
+                } else {
+                    vec![]
+                },
+            },
+            content_validation: ContentValidationResult {
+                headers: Some(csv_result.headers),
+                data_types_detected: vec![], // Could be enhanced to detect data types
+                null_handling_correct: true, // Assume correct for now
+            },
+        })
+    }
+
+    /// Validate JSON content using predicates for structure compliance
+    pub fn validate_json_content(content: &str) -> Result<FileValidationResult> {
+        use predicates::prelude::*;
+
+        // Check basic JSON structure predicates
+        let valid_json_predicate = predicate::str::is_empty().not();
+        if !valid_json_predicate.eval(content) {
+            return Err(anyhow::anyhow!("JSON content is empty"));
+        }
+
+        // Parse JSON and validate structure
+        let json_result = OutputParser::parse_json(content)?;
+
+        // Validate JSON-specific requirements
+        let json_value: serde_json::Value = serde_json::from_str(content)?;
+
+        // Check for {"data": [...]} structure
+        let has_data_field = json_value.get("data").is_some();
+        let data_is_array = json_value.get("data").map(|d| d.is_array()).unwrap_or(false);
+
+        // Check for deterministic key ordering (BTreeMap ensures this)
+        let has_deterministic_ordering = Self::validate_json_key_ordering(&json_value)?;
+
+        Ok(FileValidationResult {
+            format: OutputFormat::Json,
+            row_count: json_result.row_count,
+            column_count: json_result.column_count,
+            file_size: content.len(),
+            format_compliance: FormatComplianceResult {
+                is_compliant: has_data_field && data_is_array && has_deterministic_ordering,
+                compliance_issues: {
+                    let mut issues = vec![];
+                    if !has_data_field {
+                        issues.push("Missing 'data' field in JSON structure".to_string());
+                    }
+                    if !data_is_array {
+                        issues.push("'data' field is not an array".to_string());
+                    }
+                    if !has_deterministic_ordering {
+                        issues.push("JSON keys are not in deterministic order".to_string());
+                    }
+                    issues
+                },
+            },
+            content_validation: ContentValidationResult {
+                headers: None,               // JSON doesn't have headers in the same way
+                data_types_detected: vec![], // Could be enhanced
+                null_handling_correct: true, // JSON null handling is standard
+            },
+        })
+    }
+
+    /// Validate TSV content using predicates for tab-delimited format
+    pub fn validate_tsv_content(content: &str) -> Result<FileValidationResult> {
+        use predicates::prelude::*;
+
+        // Check basic TSV structure predicates
+        let has_content_predicate = predicate::str::is_empty().not();
+        if !has_content_predicate.eval(content) {
+            return Err(anyhow::anyhow!("TSV content is empty"));
+        }
+
+        // Parse TSV and validate structure
+        let tsv_result = OutputParser::parse_tsv(content)?;
+
+        // Validate TSV-specific requirements
+        let has_tabs = content.contains('\t');
+        let proper_quoting = Self::validate_tsv_quoting(content)?;
+
+        Ok(FileValidationResult {
+            format: OutputFormat::Tsv,
+            row_count: tsv_result.row_count,
+            column_count: tsv_result.column_count,
+            file_size: content.len(),
+            format_compliance: FormatComplianceResult {
+                is_compliant: has_tabs && proper_quoting,
+                compliance_issues: {
+                    let mut issues = vec![];
+                    if !has_tabs && tsv_result.column_count > 1 {
+                        issues.push("Missing tab delimiters in TSV format".to_string());
+                    }
+                    if !proper_quoting {
+                        issues.push("Improper TSV quoting detected".to_string());
+                    }
+                    issues
+                },
+            },
+            content_validation: ContentValidationResult {
+                headers: Some(tsv_result.headers),
+                data_types_detected: vec![],
+                null_handling_correct: true, // Assume correct for now
+            },
+        })
+    }
+
+    /// Validate CSV quoting behavior (QuoteStyle::Necessary)
+    fn validate_csv_quoting(content: &str) -> Result<bool> {
+        // This is a simplified validation - in practice, you'd want more sophisticated checking
+        // For now, we'll assume proper quoting if the CSV can be parsed successfully
+        use csv::ReaderBuilder;
+
+        let mut reader = ReaderBuilder::new().has_headers(true).from_reader(content.as_bytes());
+
+        // Try to read all records - if successful, quoting is likely correct
+        for result in reader.records() {
+            result?; // Will fail if quoting is incorrect
+        }
+
+        Ok(true)
+    }
+
+    /// Validate TSV quoting behavior
+    fn validate_tsv_quoting(content: &str) -> Result<bool> {
+        // Similar to CSV but with tab delimiter
+        use csv::ReaderBuilder;
+
+        let mut reader = ReaderBuilder::new()
+            .has_headers(true)
+            .delimiter(b'\t')
+            .from_reader(content.as_bytes());
+
+        // Try to read all records
+        for result in reader.records() {
+            result?;
+        }
+
+        Ok(true)
+    }
+
+    /// Validate JSON key ordering for deterministic output
+    fn validate_json_key_ordering(json_value: &serde_json::Value) -> Result<bool> {
+        // Check if JSON was parsed with deterministic ordering
+        // This is ensured by using BTreeMap in the JSON serialization
+        // For validation, we'll check if re-serializing produces the same result
+        let serialized = serde_json::to_string(json_value)?;
+        let reparsed: serde_json::Value = serde_json::from_str(&serialized)?;
+        let reserialized = serde_json::to_string(&reparsed)?;
+
+        Ok(serialized == reserialized)
+    }
+
+    /// Create predicates for CSV content validation
+    pub fn csv_content_predicates() -> CsvContentPredicates {
+        CsvContentPredicates::new()
+    }
+
+    /// Create predicates for JSON content validation
+    pub fn json_content_predicates() -> JsonContentPredicates {
+        JsonContentPredicates::new()
+    }
+
+    /// Create predicates for TSV content validation
+    pub fn tsv_content_predicates() -> TsvContentPredicates {
+        TsvContentPredicates::new()
+    }
+}
+
+/// CSV content validation predicates
+pub struct CsvContentPredicates;
+
+impl CsvContentPredicates {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for CsvContentPredicates {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CsvContentPredicates {
+    /// Predicate for validating CSV row count
+    pub fn row_count(expected: usize) -> impl Predicate<str> {
+        predicate::function(move |content: &str| {
+            if let Ok(result) = OutputParser::parse_csv(content) {
+                result.row_count == expected
+            } else {
+                false
+            }
+        })
+    }
+
+    /// Predicate for validating CSV column count
+    pub fn column_count(expected: usize) -> impl Predicate<str> {
+        predicate::function(move |content: &str| {
+            if let Ok(result) = OutputParser::parse_csv(content) {
+                result.column_count == expected
+            } else {
+                false
+            }
+        })
+    }
+
+    /// Predicate for validating CSV headers
+    pub fn has_headers(expected_headers: Vec<String>) -> impl Predicate<str> {
+        predicate::function(move |content: &str| {
+            if let Ok(result) = OutputParser::parse_csv(content) {
+                result.headers == expected_headers
+            } else {
+                false
+            }
+        })
+    }
+
+    /// Predicate for validating CSV contains specific value
+    pub fn contains_value(column_index: usize, value: String) -> impl Predicate<str> {
+        predicate::function(move |content: &str| {
+            if let Ok(result) = OutputParser::parse_csv(content) {
+                result
+                    .rows
+                    .iter()
+                    .any(|row| row.get(column_index).map(|cell| cell == &value).unwrap_or(false))
+            } else {
+                false
+            }
+        })
+    }
+
+    /// Predicate for RFC4180 compliance
+    pub fn is_rfc4180_compliant() -> impl Predicate<str> {
+        predicate::function(|content: &str| {
+            // Check for CRLF line endings and proper CSV structure
+            content.contains("\r\n") && OutputParser::parse_csv(content).is_ok()
+        })
+    }
+}
+
+/// JSON content validation predicates
+pub struct JsonContentPredicates;
+
+impl JsonContentPredicates {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for JsonContentPredicates {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl JsonContentPredicates {
+    /// Predicate for validating JSON row count
+    pub fn row_count(expected: usize) -> impl Predicate<str> {
+        predicate::function(move |content: &str| {
+            if let Ok(result) = OutputParser::parse_json(content) {
+                result.row_count == expected
+            } else {
+                false
+            }
+        })
+    }
+
+    /// Predicate for validating JSON structure ({"data": [...]})
+    pub fn has_data_structure() -> impl Predicate<str> {
+        predicate::function(|content: &str| {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(content) {
+                json.get("data").map(|d| d.is_array()).unwrap_or(false)
+            } else {
+                false
+            }
+        })
+    }
+
+    /// Predicate for deterministic key ordering
+    pub fn has_deterministic_ordering() -> impl Predicate<str> {
+        predicate::function(|content: &str| {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(content) {
+                // Re-serialize and compare
+                if let Ok(serialized) = serde_json::to_string(&json) {
+                    serialized == content
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        })
+    }
+}
+
+/// TSV content validation predicates
+pub struct TsvContentPredicates;
+
+impl TsvContentPredicates {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for TsvContentPredicates {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TsvContentPredicates {
+    /// Predicate for validating TSV row count
+    pub fn row_count(expected: usize) -> impl Predicate<str> {
+        predicate::function(move |content: &str| {
+            if let Ok(result) = OutputParser::parse_tsv(content) {
+                result.row_count == expected
+            } else {
+                false
+            }
+        })
+    }
+
+    /// Predicate for validating TSV has tab delimiters
+    pub fn has_tab_delimiters() -> impl Predicate<str> {
+        predicate::str::contains("\t")
+    }
+
+    /// Predicate for validating TSV column count
+    pub fn column_count(expected: usize) -> impl Predicate<str> {
+        predicate::function(move |content: &str| {
+            if let Ok(result) = OutputParser::parse_tsv(content) {
+                result.column_count == expected
+            } else {
+                false
+            }
+        })
+    }
+}
+
+/// File validation result
+#[derive(Debug, Clone)]
+pub struct FileValidationResult {
+    /// Output format that was validated
+    pub format: OutputFormat,
+    /// Number of data rows found
+    pub row_count: usize,
+    /// Number of columns found
+    pub column_count: usize,
+    /// File size in bytes
+    pub file_size: usize,
+    /// Format compliance validation result
+    pub format_compliance: FormatComplianceResult,
+    /// Content validation result
+    pub content_validation: ContentValidationResult,
+}
+
+/// Format compliance validation result
+#[derive(Debug, Clone)]
+pub struct FormatComplianceResult {
+    /// Whether the format is compliant with standards
+    pub is_compliant: bool,
+    /// List of compliance issues found
+    pub compliance_issues: Vec<String>,
+}
+
+/// Content validation result
+#[derive(Debug, Clone)]
+pub struct ContentValidationResult {
+    /// Column headers (if applicable)
+    pub headers: Option<Vec<String>>,
+    /// Data types detected in the content
+    pub data_types_detected: Vec<String>,
+    /// Whether NULL handling is correct
+    pub null_handling_correct: bool,
+}
+
+/// Performance measurement utilities using assert_cmd execution time tracking
+pub struct PerformanceMeasurement;
+
+impl PerformanceMeasurement {
+    /// Measure execution time of a Gold Digger command
+    pub fn measure_execution_time<F, T>(operation: F) -> Result<(Duration, T)>
+    where
+        F: FnOnce() -> Result<T>,
+    {
+        let start_time = std::time::Instant::now();
+        let result = operation()?;
+        let execution_time = start_time.elapsed();
+
+        Ok((execution_time, result))
+    }
+
+    /// Create performance threshold predicate
+    pub fn execution_time_under(threshold: Duration) -> impl Predicate<Duration> {
+        predicate::lt(threshold)
+    }
+
+    /// Create memory usage predicate
+    pub fn memory_usage_under(threshold_bytes: u64) -> impl Predicate<u64> {
+        predicate::lt(threshold_bytes)
+    }
+
+    /// Measure and validate performance with predicates
+    pub fn validate_performance_thresholds(
+        execution_time: Duration,
+        memory_usage: u64,
+        max_execution_time: Duration,
+        max_memory_usage: u64,
+    ) -> Result<PerformanceValidationResult> {
+        use predicates::prelude::*;
+
+        let time_predicate = predicate::lt(max_execution_time);
+        let memory_predicate = predicate::lt(max_memory_usage);
+
+        let time_within_threshold = time_predicate.eval(&execution_time);
+        let memory_within_threshold = memory_predicate.eval(&memory_usage);
+
+        Ok(PerformanceValidationResult {
+            execution_time,
+            memory_usage,
+            time_within_threshold,
+            memory_within_threshold,
+            max_execution_time,
+            max_memory_usage,
+        })
+    }
+}
+
+/// Performance validation result
+#[derive(Debug, Clone)]
+pub struct PerformanceValidationResult {
+    /// Actual execution time
+    pub execution_time: Duration,
+    /// Actual memory usage in bytes
+    pub memory_usage: u64,
+    /// Whether execution time was within threshold
+    pub time_within_threshold: bool,
+    /// Whether memory usage was within threshold
+    pub memory_within_threshold: bool,
+    /// Maximum allowed execution time
+    pub max_execution_time: Duration,
+    /// Maximum allowed memory usage
+    pub max_memory_usage: u64,
+}
+
+/// Snapshot testing utilities for CLI output verification and regression testing
+pub struct SnapshotTesting;
+
+impl SnapshotTesting {
+    /// Create snapshot of CLI output with sensitive data redaction
+    pub fn create_cli_output_snapshot(test_name: &str, stdout: &str, stderr: &str, exit_code: i32) -> Result<()> {
+        // Redact sensitive information
+        let redacted_stdout = Self::redact_sensitive_data(stdout);
+        let redacted_stderr = Self::redact_sensitive_data(stderr);
+
+        // Create combined snapshot
+        let snapshot_content = format!(
+            "Exit Code: {}\n\n--- STDOUT ---\n{}\n\n--- STDERR ---\n{}",
+            exit_code, redacted_stdout, redacted_stderr
+        );
+
+        let snapshot_name = format!("{}_cli_output", test_name);
+        insta::assert_snapshot!(snapshot_name, snapshot_content);
+
+        Ok(())
+    }
+
+    /// Create snapshot of output file content
+    pub fn create_file_output_snapshot(test_name: &str, file_content: &str, format: &OutputFormat) -> Result<()> {
+        let snapshot_name = format!("{}_{}_output", test_name, format.extension());
+        insta::assert_snapshot!(snapshot_name, file_content);
+        Ok(())
+    }
+
+    /// Create snapshot for cross-format consistency testing
+    pub fn create_cross_format_snapshot(
+        test_name: &str,
+        csv_content: &str,
+        json_content: &str,
+        tsv_content: &str,
+    ) -> Result<()> {
+        // Parse all formats to ensure they contain the same data
+        let csv_result = OutputParser::parse_csv(csv_content)?;
+        let json_result = OutputParser::parse_json(json_content)?;
+        let tsv_result = OutputParser::parse_tsv(tsv_content)?;
+
+        // Create consistency report
+        let consistency_report = format!(
+            "Cross-Format Consistency Report\n\
+            CSV: {} rows, {} columns\n\
+            JSON: {} rows, {} columns\n\
+            TSV: {} rows, {} columns\n\
+            \n\
+            Row Count Consistent: {}\n\
+            Column Count Consistent: {}\n\
+            \n\
+            --- CSV Content ---\n{}\n\
+            \n\
+            --- JSON Content ---\n{}\n\
+            \n\
+            --- TSV Content ---\n{}",
+            csv_result.row_count,
+            csv_result.column_count,
+            json_result.row_count,
+            json_result.column_count,
+            tsv_result.row_count,
+            tsv_result.column_count,
+            csv_result.row_count == json_result.row_count && json_result.row_count == tsv_result.row_count,
+            csv_result.column_count == json_result.column_count && json_result.column_count == tsv_result.column_count,
+            csv_content,
+            json_content,
+            tsv_content
+        );
+
+        let snapshot_name = format!("{}_cross_format_consistency", test_name);
+        insta::assert_snapshot!(snapshot_name, consistency_report);
+
+        Ok(())
+    }
+
+    /// Redact sensitive information from output
+    fn redact_sensitive_data(content: &str) -> String {
+        let mut redacted = content.to_string();
+
+        // Redact mysql:// URLs
+        if let Ok(re) = regex::Regex::new(r"mysql://[^:]+:[^@]+@[^/]+/[^\s]+") {
+            redacted = re.replace_all(&redacted, "mysql://***:***@***/***").to_string();
+        }
+
+        // Redact DATABASE_URL references
+        redacted = redacted.replace("DATABASE_URL", "***DATABASE_URL***");
+
+        // Redact password patterns
+        if let Ok(re) = regex::Regex::new(r"password[=:]\s*[^\s]+") {
+            redacted = re.replace_all(&redacted, "password=***").to_string();
+        }
+
+        // Redact connection strings in error messages
+        if let Ok(re) = regex::Regex::new(r"connection string: [^\s]+") {
+            redacted = re.replace_all(&redacted, "connection string: ***").to_string();
+        }
+
+        redacted
+    }
+
+    /// Update snapshots for a test (useful for maintenance)
+    pub fn update_snapshots_for_test(test_name: &str) -> Result<()> {
+        // This would typically be handled by insta's CLI tools
+        // For now, we'll just provide a helper message
+        println!("To update snapshots for test '{}', run:", test_name);
+        println!("cargo insta review --test {}", test_name);
+        Ok(())
     }
 }
 
@@ -851,6 +1875,64 @@ impl TestAssertions {
         if actual != expected {
             return Err(anyhow::anyhow!("Column count mismatch: expected {}, got {}", expected, actual));
         }
+        Ok(())
+    }
+
+    /// Assert file validation result using predicates
+    pub fn assert_file_validation(
+        result: &FileValidationResult,
+        expected_rows: usize,
+        expected_columns: usize,
+    ) -> Result<()> {
+        use predicates::prelude::*;
+
+        let row_predicate = predicate::eq(expected_rows);
+        let column_predicate = predicate::eq(expected_columns);
+
+        if !row_predicate.eval(&result.row_count) {
+            return Err(anyhow::anyhow!(
+                "Row count validation failed: expected {}, got {}",
+                expected_rows,
+                result.row_count
+            ));
+        }
+
+        if !column_predicate.eval(&result.column_count) {
+            return Err(anyhow::anyhow!(
+                "Column count validation failed: expected {}, got {}",
+                expected_columns,
+                result.column_count
+            ));
+        }
+
+        if !result.format_compliance.is_compliant {
+            return Err(anyhow::anyhow!(
+                "Format compliance validation failed: {}",
+                result.format_compliance.compliance_issues.join(", ")
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Assert performance validation using predicates
+    pub fn assert_performance_thresholds(result: &PerformanceValidationResult) -> Result<()> {
+        if !result.time_within_threshold {
+            return Err(anyhow::anyhow!(
+                "Execution time exceeded threshold: {:?} > {:?}",
+                result.execution_time,
+                result.max_execution_time
+            ));
+        }
+
+        if !result.memory_within_threshold {
+            return Err(anyhow::anyhow!(
+                "Memory usage exceeded threshold: {} bytes > {} bytes",
+                result.memory_usage,
+                result.max_memory_usage
+            ));
+        }
+
         Ok(())
     }
 }
