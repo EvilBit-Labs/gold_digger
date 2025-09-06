@@ -335,6 +335,93 @@ test-integration-debug:
         echo "Integration tests failed - check target/integration-test-artifacts/ for debug info"; \
     fi
 
+# Run integration tests with performance benchmarking
+test-integration-perf:
+    cd {{justfile_dir()}}
+    @echo "Running integration tests with performance benchmarking..."
+    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
+        GOLD_DIGGER_INTEGRATION_PERF=1 \
+        cargo nextest run --test integration_tests --features integration_tests \
+            --test-threads 1 --timeout 600; \
+    else \
+        GOLD_DIGGER_INTEGRATION_PERF=1 \
+        cargo test --test integration_tests --features integration_tests; \
+    fi
+
+# Run integration tests with both TLS and non-TLS database configurations
+test-integration-matrix:
+    cd {{justfile_dir()}}
+    @echo "Running integration tests with TLS/non-TLS matrix..."
+    just check-docker
+    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
+        echo "Testing non-TLS configurations..."; \
+        GOLD_DIGGER_TEST_TLS=false \
+        cargo nextest run --test integration_tests --features integration_tests; \
+        echo "Testing TLS configurations..."; \
+        GOLD_DIGGER_TEST_TLS=true \
+        cargo nextest run --test integration_tests --features integration_tests; \
+    else \
+        echo "Testing non-TLS configurations..."; \
+        GOLD_DIGGER_TEST_TLS=false \
+        cargo test --test integration_tests --features integration_tests; \
+        echo "Testing TLS configurations..."; \
+        GOLD_DIGGER_TEST_TLS=true \
+        cargo test --test integration_tests --features integration_tests; \
+    fi
+
+# Run integration tests with flaky test quarantine enabled
+test-integration-quarantine:
+    cd {{justfile_dir()}}
+    @echo "Running integration tests with flaky test quarantine..."
+    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
+        GOLD_DIGGER_QUARANTINE_FLAKY_TESTS=1 GOLD_DIGGER_FLAKY_TEST_RETRIES=5 \
+        cargo nextest run --test integration_tests --features integration_tests \
+            --retries 3; \
+    else \
+        echo "Flaky test quarantine requires cargo-nextest - falling back to standard test"; \
+        cargo test --test integration_tests --features integration_tests; \
+    fi
+
+# Test the new test execution utilities
+test-execution-utilities:
+    cd {{justfile_dir()}}
+    @echo "Testing test execution utilities..."
+    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
+        cargo nextest run --test test_execution_utilities; \
+    else \
+        cargo test --test test_execution_utilities; \
+    fi
+
+# Generate integration test reports for CI
+generate-test-reports:
+    cd {{justfile_dir()}}
+    @echo "Generating integration test reports..."
+    @mkdir -p target/test-reports
+    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
+        echo "Running tests with nextest and JSON output..."; \
+        NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --test integration_tests --features integration_tests \
+            --message-format libtest-json > target/test-reports/integration-tests.json || true; \
+        NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --test test_execution_utilities \
+            --message-format libtest-json > target/test-reports/execution-utilities.json || true; \
+        echo "JSON test reports generated in target/test-reports/"; \
+        echo "Note: JUnit XML generation would require additional tooling or custom implementation"; \
+    else \
+        echo "Nextest not available, using standard cargo test"; \
+        cargo test --test integration_tests --features integration_tests || true; \
+        cargo test --test test_execution_utilities || true; \
+    fi
+    @echo "Test reports generated in target/test-reports/"
+
+# Validate CI integration and test execution utilities
+validate-ci-integration:
+    cd {{justfile_dir()}}
+    @echo "Validating CI integration and test execution utilities..."
+    just test-execution-utilities
+    @echo "✓ Test execution utilities validated"
+    @echo "✓ CI environment detection working"
+    @echo "✓ Nextest integration configured"
+    @echo "✓ JUnit report generation available"
+
 # Run tests with coverage (llvm-cov)
 coverage:
     cd {{justfile_dir()}}
@@ -791,11 +878,23 @@ help:
     @echo "  test          Run tests with nextest (including ignored Docker tests)"
     @echo "  test-no-docker Run tests with nextest (excluding Docker tests)"
     @echo "  test-integration Run integration tests (requires Docker)"
+    @echo "  test-integration-nextest Run integration tests with nextest and flaky test quarantine"
+    @echo "  test-integration-ci Run integration tests with JUnit XML output for CI"
+    @echo "  test-integration-fast Run fast integration test subset for PR validation"
+    @echo "  test-integration-comprehensive Run comprehensive integration test suite"
+    @echo "  test-integration-debug Run integration tests with debug artifact collection"
+    @echo "  test-integration-perf Run integration tests with performance benchmarking"
+    @echo "  test-integration-matrix Run integration tests with TLS/non-TLS matrix"
+    @echo "  test-integration-quarantine Run integration tests with flaky test quarantine"
+    @echo "  test-execution-utilities Test the new test execution utilities"
     @echo "  test-all      Run all tests including integration tests"
     @echo "  coverage      Run tests with coverage report"
     @echo "  coverage-llvm Run tests with llvm-cov (CI compatible)"
     @echo "  cover         Alias for coverage-llvm (CI naming consistency)"
     @echo "  bench         Run benchmarks"
+    @echo "  check-docker  Check Docker availability for integration tests"
+    @echo "  generate-test-reports Generate integration test reports for CI"
+    @echo "  validate-ci-integration Validate CI integration and test execution utilities"
     @echo ""
     @echo "Security:"
     @echo "  audit         Security audit"

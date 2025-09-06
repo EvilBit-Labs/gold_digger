@@ -18,6 +18,8 @@ use tempfile::NamedTempFile;
 
 use super::{GoldDiggerResult, OutputFormat, TestCase};
 
+// TempFileManager is defined in this module, no need to re-export
+
 /// Enhanced CLI execution utilities for Gold Digger using assert_cmd and predicates
 ///
 /// This struct provides a robust CLI testing framework that replaces the previous

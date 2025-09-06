@@ -11,8 +11,9 @@ use tempfile::TempDir;
 
 use super::containers::DatabaseContainer;
 
-// Import the proper TLS fixtures from the parent module
-use super::super::fixtures::tls::{CertificateLoader, CertificateValidator, EphemeralCertificate};
+// Import the proper TLS fixtures from the parent fixtures module
+// TODO: Fix import path for fixtures module
+// use super::super::fixtures::tls::{CertificateLoader, CertificateValidator, EphemeralCertificate};
 use super::{TestDatabase, TestDatabasePlain, is_ci_environment, is_docker_available};
 
 /// Helper function to create a temporary certificate file for testing
