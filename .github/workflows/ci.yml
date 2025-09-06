@@ -50,7 +50,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: quality
     steps:
-      - uses: actions/checkout@v5
+      - uses: taiki-e/checkout-action@v1
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -120,7 +120,7 @@ jobs:
           - "default"
           - "minimal"
     steps:
-      - uses: actions/checkout@v5
+      - uses: taiki-e/checkout-action@v1
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -162,7 +162,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     needs: quality
     steps:
-      - uses: actions/checkout@v5
+      - uses: taiki-e/checkout-action@v1
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -230,7 +230,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [test-tls, test-features, test-cross-platform]
     steps:
-      - uses: actions/checkout@v5
+      - uses: taiki-e/checkout-action@v1
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
