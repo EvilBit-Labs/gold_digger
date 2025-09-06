@@ -1099,59 +1099,26 @@ impl ContainerManager {
         }
     }
 
-    /// Check available disk space with cross-platform support
-    fn check_disk_space() -> Result<u64> {
-        match std::env::consts::OS {
-            "linux" | "macos" => {
-                // Use statvfs on Unix systems (Linux and macOS)
-                #[cfg(unix)]
-                {
-                    use std::ffi::CString;
-                    use std::mem;
+    /// Check available disk space with cross-platform support using sysinfo crate
+    pub fn check_disk_space() -> Result<u64> {
+        use sysinfo::Disks;
 
-                    // Use /tmp on both Linux and macOS as it's typically available
-                    let path = CString::new("/tmp").context("Failed to create path string")?;
-                    let mut stat: libc::statvfs = unsafe { mem::zeroed() };
+        let disks = Disks::new_with_refreshed_list();
 
-                    let result = unsafe { libc::statvfs(path.as_ptr(), &mut stat) };
-                    if result == 0 {
-                        let available_bytes = (stat.f_bavail as u64) * (stat.f_frsize as u64);
-                        return Ok(available_bytes);
-                    }
-                }
-
-                // Fallback: try using df command for cross-platform compatibility
-                let df_output = std::process::Command::new("df")
-                    .args(["-k", "/tmp"]) // Use -k for kilobyte output
-                    .output()
-                    .context("Failed to execute df command")?;
-
-                if df_output.status.success() {
-                    let df_str = String::from_utf8_lossy(&df_output.stdout);
-
-                    // Parse df output (format: filesystem 1K-blocks used available capacity mounted-on)
-                    for line in df_str.lines().skip(1) {
-                        // Skip header line
-                        let parts: Vec<&str> = line.split_whitespace().collect();
-                        if parts.len() >= 4
-                            && let Ok(available_kb) = parts[3].parse::<u64>()
-                        {
-                            return Ok(available_kb * 1024); // Convert KB to bytes
-                        }
-                    }
-                }
-
-                // Platform-specific fallback estimates
-                match std::env::consts::OS {
-                    "macos" => Ok(20 * 1024 * 1024 * 1024), // 20GB for macOS (typically more space)
-                    _ => Ok(10 * 1024 * 1024 * 1024),       // 10GB for Linux
-                }
-            },
-            _ => {
-                // Fallback estimate for other platforms
-                Ok(10 * 1024 * 1024 * 1024)
-            },
+        // Look for /tmp mount point first
+        for disk in &disks {
+            if disk.mount_point() == std::path::Path::new("/tmp") {
+                return Ok(disk.available_space());
+            }
         }
+
+        // Fallback to first available disk
+        if let Some(disk) = disks.first() {
+            return Ok(disk.available_space());
+        }
+
+        // Final fallback estimate if no disks found
+        Ok(10 * 1024 * 1024 * 1024) // 10GB
     }
 
     /// Create and add a database container
@@ -1715,5 +1682,140 @@ pub mod utils {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_check_disk_space_basic() {
+        // Test that check_disk_space returns a reasonable value
+        let result = ContainerManager::check_disk_space();
+        assert!(result.is_ok(), "check_disk_space should not fail");
+
+        let disk_space = result.unwrap();
+        assert!(disk_space > 0, "Available disk space should be greater than 0");
+
+        // Disk space should be at least 1GB (reasonable minimum)
+        let min_expected = 1024 * 1024 * 1024; // 1GB
+        assert!(disk_space >= min_expected, "Available disk space should be at least 1GB, got {} bytes", disk_space);
+    }
+
+    #[test]
+    fn test_check_disk_space_returns_bytes() {
+        let result = ContainerManager::check_disk_space();
+        assert!(result.is_ok(), "check_disk_space should not fail");
+
+        let disk_space = result.unwrap();
+
+        // Verify it's a reasonable size (not too small, not impossibly large)
+        let min_bytes = 1024 * 1024; // 1MB minimum
+        let max_bytes = 100 * 1024 * 1024 * 1024 * 1024; // 100TB maximum (reasonable upper bound for CI/CD servers)
+
+        assert!(disk_space >= min_bytes, "Disk space too small: {} bytes", disk_space);
+        assert!(disk_space <= max_bytes, "Disk space too large (likely error): {} bytes", disk_space);
+    }
+
+    #[test]
+    fn test_check_disk_space_consistency() {
+        // Test that multiple calls return consistent results
+        let result1 = ContainerManager::check_disk_space();
+        let result2 = ContainerManager::check_disk_space();
+
+        assert!(result1.is_ok(), "First call should succeed");
+        assert!(result2.is_ok(), "Second call should succeed");
+
+        let space1 = result1.unwrap();
+        let space2 = result2.unwrap();
+
+        // Results should be within 10% of each other (allowing for some system activity)
+        let diff = space1.abs_diff(space2);
+        let max_diff = space1 / 10; // 10% tolerance
+
+        assert!(
+            diff <= max_diff,
+            "Disk space results should be consistent: {} vs {} (diff: {})",
+            space1,
+            space2,
+            diff
+        );
+    }
+
+    #[test]
+    fn test_docker_preflight_check_disk_space() {
+        let preflight = ContainerManager::docker_preflight_check();
+
+        // If Docker is available, disk space should be checked
+        if preflight.docker_available {
+            assert!(
+                preflight.environment.is_some(),
+                "Docker environment info should be available when Docker is available"
+            );
+
+            if let Some(env) = &preflight.environment {
+                assert!(env.available_disk_space > 0, "Available disk space should be greater than 0");
+
+                // Should be at least 1GB
+                let min_disk = 1024 * 1024 * 1024;
+                assert!(
+                    env.available_disk_space >= min_disk,
+                    "Available disk space should be at least 1GB, got {} bytes",
+                    env.available_disk_space
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_resource_availability_check() {
+        let result = ContainerManager::check_resource_availability();
+        assert!(result.is_ok(), "Resource availability check should not fail");
+
+        let sufficient = result.unwrap();
+
+        // If resources are sufficient, disk space should be at least 1GB
+        if sufficient {
+            let disk_result = ContainerManager::check_disk_space();
+            assert!(disk_result.is_ok(), "Disk space check should succeed when resources are sufficient");
+
+            let disk_space = disk_result.unwrap();
+            let min_disk = 1024 * 1024 * 1024; // 1GB
+            assert!(disk_space >= min_disk, "When resources are sufficient, disk space should be at least 1GB");
+        }
+    }
+
+    #[test]
+    fn test_disk_space_formatting() {
+        let result = ContainerManager::check_disk_space();
+        assert!(result.is_ok(), "check_disk_space should not fail");
+
+        let disk_space = result.unwrap();
+
+        // Test that we can format the disk space in a human-readable way
+        let gb = disk_space as f64 / (1024.0 * 1024.0 * 1024.0);
+        let formatted = format!("{:.2} GB", gb);
+
+        assert!(!formatted.is_empty(), "Formatted disk space should not be empty");
+        assert!(formatted.contains("GB"), "Formatted disk space should contain 'GB'");
+        assert!(gb > 0.0, "Disk space in GB should be greater than 0");
+    }
+
+    #[test]
+    fn test_sysinfo_integration() {
+        // Test that sysinfo crate is working correctly
+        use sysinfo::Disks;
+
+        let disks = Disks::new_with_refreshed_list();
+        assert!(!disks.is_empty(), "Should have at least one disk");
+
+        // Test that we can access disk information
+        for disk in &disks {
+            let mount_point = disk.mount_point();
+            let available_space = disk.available_space();
+
+            assert!(available_space > 0, "Disk {} should have available space", mount_point.display());
+        }
     }
 }

@@ -116,7 +116,7 @@
   - Ensure generated certificates are compatible with MySQL/MariaDB TLS requirements
   - _Requirements: 1.2, 1.3, 9.3_
 
-- [ ] 1.3.1.2 Replace libc disk space check with sysinfo crate
+- [x] 1.3.1.2 Replace libc disk space check with sysinfo crate
 
   - Replace unsafe `libc::statvfs()` calls in `tests/integration/containers.rs::check_disk_space()`
     with `sysinfo` crate
