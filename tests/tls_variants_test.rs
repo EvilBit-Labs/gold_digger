@@ -10,7 +10,9 @@ mod integration;
 use integration::{TestDatabasePlain, TestDatabaseTls, TlsContainerConfig};
 
 #[cfg(feature = "integration_tests")]
-use integration::{containers::DatabaseContainer, is_ci_environment, is_docker_available};
+use integration::containers::database_container::DatabaseContainer;
+#[cfg(feature = "integration_tests")]
+use integration::{is_ci_environment, is_docker_available};
 
 /// Skip test if Docker is not available
 #[cfg(feature = "integration_tests")]

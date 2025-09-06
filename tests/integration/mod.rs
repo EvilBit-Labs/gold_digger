@@ -840,6 +840,7 @@ pub struct ParallelExecutionConfig {
 }
 
 /// Check if running in CI environment (backward compatibility)
+#[allow(dead_code)]
 pub fn is_ci_environment() -> bool {
     CiEnvironment::is_ci()
 }

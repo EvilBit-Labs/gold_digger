@@ -8,8 +8,9 @@
 use anyhow::{Context, Result};
 use std::time::Duration;
 
+pub use crate::integration::containers::database_container::DatabaseContainer;
 /// Re-export container types from integration module
-pub use crate::integration::containers::{ContainerManager, DatabaseContainer};
+pub use crate::integration::containers::utils::ContainerManager;
 pub use crate::integration::{TestDatabase, is_ci_environment};
 
 /// Simplified container factory for common test scenarios

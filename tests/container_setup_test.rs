@@ -7,30 +7,16 @@ mod fixtures;
 mod integration;
 mod test_support;
 
-use integration::containers::{ContainerManager, utils};
+use integration::containers::utils::{self, ContainerManager};
 use integration::{TestDatabase, is_docker_available};
 
 #[test]
-fn test_docker_preflight_check() {
-    let preflight = ContainerManager::docker_preflight_check();
+fn test_basic_docker_availability() {
+    let docker_available = is_docker_available();
+    println!("Docker available: {}", docker_available);
 
-    println!("Docker preflight check results:");
-    println!("  Docker available: {}", preflight.docker_available);
-    println!("  Platform supported: {}", preflight.platform_supported);
-    println!("  Sufficient resources: {}", preflight.sufficient_resources);
-
-    if let Some(env) = &preflight.environment {
-        println!("  Docker version: {}", env.docker_version);
-        println!("  Platform: {}", env.platform);
-        println!("  Is CI: {}", env.is_ci);
-    }
-
-    for error in &preflight.error_messages {
-        println!("  Error: {}", error);
-    }
-
-    for skip_msg in &preflight.skip_messages {
-        println!("  Skip: {}", skip_msg);
+    if !docker_available {
+        println!("Skipping container tests - Docker not available");
     }
 }
 
@@ -46,7 +32,7 @@ fn test_docker_availability_check() {
         match std::env::consts::OS {
             "macos" => {
                 println!("Running on macOS - checking Docker Desktop setup");
-                if let Err(e) = integration::containers::utils::check_macos_docker_setup() {
+                if let Err(e) = utils::check_macos_docker_setup() {
                     println!("macOS Docker setup issue: {}", e);
                 } else {
                     println!("macOS Docker setup looks good");
@@ -63,7 +49,7 @@ fn test_docker_availability_check() {
         println!("Docker is not available - container tests will be skipped");
 
         // Provide platform-specific guidance
-        let recommendations = integration::containers::utils::get_platform_resource_recommendations();
+        let recommendations = utils::get_platform_resource_recommendations();
         println!("Platform recommendations:\n{}", recommendations);
     }
 }

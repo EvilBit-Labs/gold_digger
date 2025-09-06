@@ -8,7 +8,8 @@ use gold_digger::init_crypto_provider;
 
 mod fixtures;
 mod integration;
-use integration::{TestDatabase, containers::DatabaseContainer};
+use integration::TestDatabase;
+use integration::containers::database_container::DatabaseContainer;
 
 /// Test basic database seeding functionality
 #[test]
