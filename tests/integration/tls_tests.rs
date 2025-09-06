@@ -13,7 +13,7 @@ use super::containers::DatabaseContainer;
 
 // Import the proper TLS fixtures from the parent module
 use super::super::fixtures::tls::{CertificateLoader, CertificateValidator, EphemeralCertificate};
-use super::{TestDatabase, TestDatabasePlain, TestDatabaseTls, is_ci_environment, is_docker_available};
+use super::{TestDatabase, TestDatabasePlain, is_ci_environment, is_docker_available};
 
 /// Helper function to create a temporary certificate file for testing
 ///
@@ -455,7 +455,7 @@ mod container_integration_tests {
     /// Test basic TLS connection establishment with MySQL container using new abstraction
     /// Requirement: 1.1, 1.2 - TLS connection with MySQL using TestDatabase
     #[test]
-    #[cfg(feature = "tls_container_tests")]
+    #[cfg(feature = "integration_tests")]
     fn test_basic_tls_connection_mysql() -> Result<()> {
         skip_if_no_docker();
 
@@ -481,7 +481,7 @@ mod container_integration_tests {
     /// Test basic TLS connection establishment with MariaDB container using new abstraction
     /// Requirement: 1.1, 1.2 - TLS connection with MariaDB using TestDatabase
     #[test]
-    #[cfg(feature = "tls_container_tests")]
+    #[cfg(feature = "integration_tests")]
     fn test_basic_tls_connection_mariadb() -> Result<()> {
         skip_if_no_docker();
 

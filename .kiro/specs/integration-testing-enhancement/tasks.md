@@ -187,7 +187,7 @@
   - Provide justfile tasks for consistent local/CI invocation
   - _Requirements: 1.4, 1.5, 4.1, 4.2, 4.3, 4.4, 4.5_
 
-- [ ] 1.6.1 Implement CLI testing with assert_cmd and predicates
+- [x] 1.6.1 Implement CLI testing with assert_cmd and predicates
 
   - Replace bespoke `GoldDiggerCli` struct with `assert_cmd::Command::cargo_bin("gold_digger")`
   - Use `assert_cmd::Command` API for setting environment variables and CLI arguments
