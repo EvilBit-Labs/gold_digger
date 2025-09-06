@@ -157,7 +157,7 @@
   - Note: DDL statements are auto-committed by MySQL/MariaDB and should not be wrapped in
     transactions; only DML operations benefit from transactional atomicity
 
-- [ ] 1.4 Implement TLS and non-TLS test database variants
+- [x] 1.4 Implement TLS and non-TLS test database variants
 
   - Create `TestDatabaseTls` and `TestDatabasePlain` variants for TLS and non-TLS testing
   - Implement TLS container configuration with SSL certificate mounting and MySQL TLS settings

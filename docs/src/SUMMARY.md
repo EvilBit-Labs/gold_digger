@@ -35,6 +35,7 @@
 - [Development Setup](development/setup.md)
 - [Contributing](development/contributing.md)
 - [Integration Testing](development/integration-testing.md)
+- [TLS Variants](development/tls-variants.md)
 - [Architecture](development/architecture.md)
 - [API Reference](development/api-reference.md)
 - [Release Runbook](development/release-runbook.md)

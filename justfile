@@ -236,12 +236,12 @@ test-no-docker:
 # Run integration tests (requires Docker)
 test-integration:
     cd {{justfile_dir()}}
-    cargo test --features integration_tests -- --ignored
+    cargo test --features integration_tests
 
 # Run all tests including integration tests
 test-all:
     cd {{justfile_dir()}}
-    cargo test --features integration_tests -- --include-ignored
+    cargo test --features integration_tests
 
 # Run tests with coverage (llvm-cov)
 coverage:

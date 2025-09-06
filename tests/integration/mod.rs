@@ -14,10 +14,7 @@ pub mod common;
 pub mod containers;
 
 // Re-export commonly used types and functions
-#[allow(unused_imports)]
-pub use common::*;
-#[allow(unused_imports)]
-pub use containers::*;
+// Note: Specific re-exports to avoid unused import warnings
 
 /// Test database type enumeration for managing different database containers
 #[derive(Debug, Clone, PartialEq)]
@@ -29,8 +26,74 @@ pub enum TestDatabase {
     MariaDB { tls_enabled: bool },
 }
 
+/// TLS-enabled database variants for secure connection testing
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum TestDatabaseTls {
+    /// MySQL with TLS configuration
+    MySQL { tls_config: TlsContainerConfig },
+    /// MariaDB with TLS configuration
+    MariaDB { tls_config: TlsContainerConfig },
+}
+
+/// Plain (non-TLS) database variants for standard connection testing
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum TestDatabasePlain {
+    /// MySQL without TLS
+    MySQL,
+    /// MariaDB without TLS
+    MariaDB,
+}
+
+impl TestDatabase {
+    /// Create a new database configuration from this TestDatabase
+    #[allow(dead_code)]
+    pub fn to_config(&self) -> TestDatabaseConfig {
+        match self {
+            TestDatabase::MySQL { tls_enabled } => TestDatabaseConfig {
+                db_type: DatabaseType::MySQL,
+                tls_config: if *tls_enabled {
+                    Some(TlsContainerConfig::new_secure())
+                } else {
+                    None
+                },
+            },
+            TestDatabase::MariaDB { tls_enabled } => TestDatabaseConfig {
+                db_type: DatabaseType::MariaDB,
+                tls_config: if *tls_enabled {
+                    Some(TlsContainerConfig::new_secure())
+                } else {
+                    None
+                },
+            },
+        }
+    }
+}
+
+/// Database configuration for test containers
+#[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)]
+pub struct TestDatabaseConfig {
+    /// Database type (MySQL or MariaDB)
+    pub db_type: DatabaseType,
+    /// TLS configuration (None for plain connections)
+    pub tls_config: Option<TlsContainerConfig>,
+}
+
+/// Database type enumeration
+#[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)]
+pub enum DatabaseType {
+    /// MySQL database
+    MySQL,
+    /// MariaDB database
+    MariaDB,
+}
+
 impl TestDatabase {
     /// Create a new MySQL instance without TLS
+    #[allow(dead_code)]
     pub fn mysql() -> Self {
         Self::MySQL { tls_enabled: false }
     }
@@ -85,6 +148,89 @@ impl TestDatabase {
         match self {
             TestDatabase::MySQL { .. } => "mysql:8.0",
             TestDatabase::MariaDB { .. } => "mariadb:10.6",
+        }
+    }
+}
+
+impl TestDatabaseTls {
+    /// Create a new MySQL TLS database with secure defaults
+    #[allow(dead_code)]
+    pub fn mysql() -> Self {
+        Self::MySQL {
+            tls_config: TlsContainerConfig::new_secure(),
+        }
+    }
+
+    /// Create a new MariaDB TLS database with secure defaults
+    #[allow(dead_code)]
+    pub fn mariadb() -> Self {
+        Self::MariaDB {
+            tls_config: TlsContainerConfig::new_secure(),
+        }
+    }
+
+    /// Create a new MariaDB TLS database with custom configuration
+    #[allow(dead_code)]
+    pub fn mariadb_with_config(tls_config: TlsContainerConfig) -> Self {
+        Self::MariaDB { tls_config }
+    }
+
+    /// Get the database type name as a string
+    #[allow(dead_code)]
+    pub fn name(&self) -> &'static str {
+        match self {
+            TestDatabaseTls::MySQL { .. } => "mysql-tls",
+            TestDatabaseTls::MariaDB { .. } => "mariadb-tls",
+        }
+    }
+
+    /// Get the TLS configuration
+    #[allow(dead_code)]
+    pub fn tls_config(&self) -> &TlsContainerConfig {
+        match self {
+            TestDatabaseTls::MySQL { tls_config } => tls_config,
+            TestDatabaseTls::MariaDB { tls_config } => tls_config,
+        }
+    }
+
+    /// Convert to the base TestDatabase enum for compatibility
+    #[allow(dead_code)]
+    pub fn to_test_database(&self) -> TestDatabase {
+        match self {
+            TestDatabaseTls::MySQL { .. } => TestDatabase::MySQL { tls_enabled: true },
+            TestDatabaseTls::MariaDB { .. } => TestDatabase::MariaDB { tls_enabled: true },
+        }
+    }
+}
+
+impl TestDatabasePlain {
+    /// Create a new MySQL plain database
+    #[allow(dead_code)]
+    pub fn mysql() -> Self {
+        Self::MySQL
+    }
+
+    /// Create a new MariaDB plain database
+    #[allow(dead_code)]
+    pub fn mariadb() -> Self {
+        Self::MariaDB
+    }
+
+    /// Get the database type name as a string
+    #[allow(dead_code)]
+    pub fn name(&self) -> &'static str {
+        match self {
+            TestDatabasePlain::MySQL => "mysql-plain",
+            TestDatabasePlain::MariaDB => "mariadb-plain",
+        }
+    }
+
+    /// Convert to the base TestDatabase enum for compatibility
+    #[allow(dead_code)]
+    pub fn to_test_database(&self) -> TestDatabase {
+        match self {
+            TestDatabasePlain::MySQL => TestDatabase::MySQL { tls_enabled: false },
+            TestDatabasePlain::MariaDB => TestDatabase::MariaDB { tls_enabled: false },
         }
     }
 }
@@ -278,6 +424,24 @@ pub struct PerformanceResult {
     pub output_size: usize,
 }
 
+/// TLS container configuration for database containers
+#[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)]
+pub struct TlsContainerConfig {
+    /// Whether to require secure transport (SSL/TLS)
+    pub require_secure_transport: bool,
+    /// Minimum TLS version (TLSv1.2 or TLSv1.3)
+    pub min_tls_version: String,
+    /// Allowed cipher suites for TLS connections
+    pub cipher_suites: Vec<String>,
+    /// Whether to generate ephemeral certificates per test run
+    pub use_ephemeral_certs: bool,
+    /// Custom certificate paths (if not using ephemeral certificates)
+    pub ca_cert_path: Option<PathBuf>,
+    pub server_cert_path: Option<PathBuf>,
+    pub server_key_path: Option<PathBuf>,
+}
+
 /// Gold Digger execution result
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -344,5 +508,168 @@ pub fn get_test_timeout() -> Duration {
         Duration::from_secs(300) // 5 minutes for CI
     } else {
         Duration::from_secs(60) // 1 minute for local
+    }
+}
+
+impl TlsContainerConfig {
+    /// Create a new TLS container configuration with secure defaults
+    #[allow(dead_code)]
+    pub fn new_secure() -> Self {
+        Self {
+            require_secure_transport: true,
+            min_tls_version: "TLSv1.2".to_string(),
+            cipher_suites: vec![
+                "ECDHE-RSA-AES256-GCM-SHA384".to_string(),
+                "ECDHE-RSA-AES128-GCM-SHA256".to_string(),
+            ],
+            use_ephemeral_certs: true,
+            ca_cert_path: None,
+            server_cert_path: None,
+            server_key_path: None,
+        }
+    }
+
+    /// Create a TLS configuration with custom certificate paths
+    #[allow(dead_code)]
+    pub fn with_custom_certs<P: AsRef<Path>>(ca_cert_path: P, server_cert_path: P, server_key_path: P) -> Self {
+        Self {
+            require_secure_transport: true,
+            min_tls_version: "TLSv1.2".to_string(),
+            cipher_suites: vec![
+                "ECDHE-RSA-AES256-GCM-SHA384".to_string(),
+                "ECDHE-RSA-AES128-GCM-SHA256".to_string(),
+            ],
+            use_ephemeral_certs: false,
+            ca_cert_path: Some(ca_cert_path.as_ref().to_path_buf()),
+            server_cert_path: Some(server_cert_path.as_ref().to_path_buf()),
+            server_key_path: Some(server_key_path.as_ref().to_path_buf()),
+        }
+    }
+
+    /// Create a TLS configuration with strict security settings
+    #[allow(dead_code)]
+    pub fn with_strict_security(mut self) -> Result<Self> {
+        self.min_tls_version = "TLSv1.3".to_string();
+        self.cipher_suites = vec![
+            "TLS_AES_256_GCM_SHA384".to_string(),
+            "TLS_AES_128_GCM_SHA256".to_string(),
+            "TLS_CHACHA20_POLY1305_SHA256".to_string(),
+        ];
+        Ok(self)
+    }
+
+    /// Validate the TLS configuration
+    #[allow(dead_code)]
+    pub fn validate(&self) -> Result<()> {
+        // Validate TLS version
+        match self.min_tls_version.as_str() {
+            "TLSv1.2" | "TLSv1.3" => {},
+            _ => {
+                anyhow::bail!("Invalid TLS version: {}. Must be TLSv1.2 or TLSv1.3", self.min_tls_version);
+            },
+        }
+
+        // Validate cipher suites are not empty
+        if self.cipher_suites.is_empty() {
+            anyhow::bail!("Cipher suites cannot be empty for TLS configuration");
+        }
+
+        // Validate certificate paths if not using ephemeral certificates
+        if !self.use_ephemeral_certs {
+            if let Some(ca_path) = &self.ca_cert_path
+                && !ca_path.exists()
+            {
+                anyhow::bail!("CA certificate file does not exist: {}", ca_path.display());
+            }
+            if let Some(cert_path) = &self.server_cert_path
+                && !cert_path.exists()
+            {
+                anyhow::bail!("Server certificate file does not exist: {}", cert_path.display());
+            }
+            if let Some(key_path) = &self.server_key_path
+                && !key_path.exists()
+            {
+                anyhow::bail!("Server key file does not exist: {}", key_path.display());
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl TestDatabaseConfig {
+    /// Create a new MySQL configuration without TLS
+    #[allow(dead_code)]
+    pub fn mysql_plain() -> Self {
+        Self {
+            db_type: DatabaseType::MySQL,
+            tls_config: None,
+        }
+    }
+
+    /// Create a new MySQL configuration with TLS
+    #[allow(dead_code)]
+    pub fn mysql_tls() -> Self {
+        Self {
+            db_type: DatabaseType::MySQL,
+            tls_config: Some(TlsContainerConfig::new_secure()),
+        }
+    }
+
+    /// Create a new MariaDB configuration without TLS
+    #[allow(dead_code)]
+    pub fn mariadb_plain() -> Self {
+        Self {
+            db_type: DatabaseType::MariaDB,
+            tls_config: None,
+        }
+    }
+
+    /// Create a new MariaDB configuration with TLS
+    #[allow(dead_code)]
+    pub fn mariadb_tls() -> Self {
+        Self {
+            db_type: DatabaseType::MariaDB,
+            tls_config: Some(TlsContainerConfig::new_secure()),
+        }
+    }
+
+    /// Create a configuration with custom TLS settings
+    #[allow(dead_code)]
+    pub fn with_tls_config(db_type: DatabaseType, tls_config: TlsContainerConfig) -> Self {
+        Self {
+            db_type,
+            tls_config: Some(tls_config),
+        }
+    }
+
+    /// Get the database type name
+    #[allow(dead_code)]
+    pub fn name(&self) -> &'static str {
+        match (&self.db_type, &self.tls_config) {
+            (DatabaseType::MySQL, Some(_)) => "mysql-tls",
+            (DatabaseType::MySQL, None) => "mysql-plain",
+            (DatabaseType::MariaDB, Some(_)) => "mariadb-tls",
+            (DatabaseType::MariaDB, None) => "mariadb-plain",
+        }
+    }
+
+    /// Check if TLS is enabled
+    #[allow(dead_code)]
+    pub fn is_tls_enabled(&self) -> bool {
+        self.tls_config.is_some()
+    }
+
+    /// Convert to the base TestDatabase enum for compatibility
+    #[allow(dead_code)]
+    pub fn to_test_database(&self) -> TestDatabase {
+        match self.db_type {
+            DatabaseType::MySQL => TestDatabase::MySQL {
+                tls_enabled: self.tls_config.is_some(),
+            },
+            DatabaseType::MariaDB => TestDatabase::MariaDB {
+                tls_enabled: self.tls_config.is_some(),
+            },
+        }
     }
 }

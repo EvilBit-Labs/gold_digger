@@ -137,14 +137,20 @@ fn mysql_value_to_string(value: &mysql::Value) -> anyhow::Result<String> {
     match value {
         mysql::Value::NULL => Ok(String::new()),
         mysql::Value::Bytes(bytes) => {
-            // Try to convert bytes to UTF-8 string, fallback to lossy conversion
-            // For binary data that's not valid UTF-8, use lossy conversion with clear indication
+            // Try to convert bytes to UTF-8 string, fallback to hex encoding for binary data
             match std::str::from_utf8(bytes) {
                 Ok(s) => Ok(s.to_string()),
                 Err(_) => {
-                    // For binary data, use lossy conversion
-                    let lossy = String::from_utf8_lossy(bytes);
-                    Ok(lossy.into_owned())
+                    // For binary data that's not valid UTF-8, use hex encoding
+                    // This prevents data corruption and provides deterministic output
+                    if bytes.len() > 1024 {
+                        // For large binary data, truncate and indicate
+                        let hex_prefix = bytes.iter().take(32).map(|b| format!("{:02x}", b)).collect::<String>();
+                        Ok(format!("0x{}... ({} bytes)", hex_prefix, bytes.len()))
+                    } else {
+                        let hex_string = bytes.iter().map(|b| format!("{:02x}", b)).collect::<String>();
+                        Ok(format!("0x{}", hex_string))
+                    }
                 },
             }
         },
@@ -309,11 +315,16 @@ mod tests {
         let result = mysql_value_to_string(&mysql::Value::Bytes(bytes)).unwrap();
         assert_eq!(result, "hello world");
 
-        // Test invalid UTF-8 bytes - should use lossy conversion
+        // Test invalid UTF-8 bytes - should use hex encoding
         let invalid_bytes = vec![0xFF, 0xFE, 0xFD];
         let result = mysql_value_to_string(&mysql::Value::Bytes(invalid_bytes)).unwrap();
-        assert!(!result.is_empty()); // Should contain replacement characters
-        assert!(result.contains('\u{FFFD}')); // Explicitly check for Unicode replacement character
+        assert_eq!(result, "0xfffefd");
+
+        // Test large binary data - should truncate with indication
+        let large_bytes = vec![0xAB; 2000];
+        let result = mysql_value_to_string(&mysql::Value::Bytes(large_bytes)).unwrap();
+        assert!(result.starts_with("0x"));
+        assert!(result.contains("... (2000 bytes)"));
     }
 
     #[test]

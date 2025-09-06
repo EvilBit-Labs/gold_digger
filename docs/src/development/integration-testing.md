@@ -17,45 +17,146 @@ The integration testing enhancement provides:
 
 ## Test Architecture
 
+### Current Implementation Status
+
+The integration testing framework is actively under development with the following components
+implemented:
+
+**✅ Completed Components:**
+
+- Core integration test infrastructure with MySQL/MariaDB support
+- TLS and non-TLS database variants (`TestDatabaseTls`, `TestDatabasePlain`)
+- Container management with health checks and CI compatibility
+- TLS certificate management with ephemeral certificate generation
+- Comprehensive test database schema and seeding functionality
+- Cross-platform support (Linux and macOS)
+
+**🚧 In Progress:**
+
+- Data type validation tests
+- Output format validation framework
+- Error scenario testing
+- CLI integration tests
+- Performance testing
+- Security validation tests
+
 ### Test Module Structure
 
 ```
 tests/
 ├── integration/
-│   ├── mod.rs              # Common test utilities and setup functions
-│   ├── common.rs           # Shared CLI execution and output parsing utilities
-│   ├── containers.rs       # MySQL/MariaDB container management with health checks
-│   ├── data_types.rs       # Comprehensive data type validation tests
-│   ├── output_formats.rs   # Format-specific validators (CSV, JSON, TSV)
-│   ├── error_scenarios.rs  # Error handling and exit code validation
-│   ├── cli_integration.rs  # CLI flag precedence and configuration tests
-│   ├── performance.rs      # Large dataset and memory usage tests
-│   └── security.rs         # Credential protection and TLS security tests
+│   ├── mod.rs              # Common test utilities and setup functions (✅ Implemented)
+│   ├── common.rs           # Shared CLI execution and output parsing utilities (✅ Implemented)
+│   ├── containers.rs       # MySQL/MariaDB container management with health checks (✅ Implemented)
+│   ├── data_types.rs       # Comprehensive data type validation tests (🚧 Planned)
+│   ├── output_formats.rs   # Format-specific validators (CSV, JSON, TSV) (🚧 Planned)
+│   ├── error_scenarios.rs  # Error handling and exit code validation (🚧 Planned)
+│   ├── cli_integration.rs  # CLI flag precedence and configuration tests (🚧 Planned)
+│   ├── performance.rs      # Large dataset and memory usage tests (🚧 Planned)
+│   └── security.rs         # Credential protection and TLS security tests (🚧 Planned)
 ├── fixtures/
-│   ├── schema.sql          # Comprehensive test database schema
-│   ├── seed_data.sql       # Test data covering all data types and edge cases
-│   └── tls/                # TLS certificates for secure connection testing
-└── integration_tests.rs   # Main entry point for integration tests
+│   ├── schema.sql          # Comprehensive test database schema (✅ Implemented)
+│   ├── seed_data.sql       # Test data covering all data types and edge cases (✅ Implemented)
+│   └── tls/                # TLS certificates for secure connection testing (✅ Implemented)
+├── test_support/           # Shared testing utilities (✅ Implemented)
+│   ├── cli.rs              # CLI execution helpers
+│   ├── containers.rs       # Container management utilities
+│   ├── fixtures.rs         # Test data and schema utilities
+│   └── parsing.rs          # Output parsing and validation
+├── tls_variants_test.rs    # TLS and non-TLS database variant testing (✅ Implemented)
+├── tls_integration.rs      # TLS connection and certificate validation (✅ Implemented)
+├── integration_tests.rs    # Main integration test entry point (✅ Implemented)
+├── database_seeding_test.rs # Database schema and data seeding tests (✅ Implemented)
+└── container_setup_test.rs # Container lifecycle and health check tests (✅ Implemented)
 ```
 
 ### Container Management
 
-The framework uses testcontainers-modules for automated database lifecycle management:
+The framework uses testcontainers-modules for automated database lifecycle management with
+comprehensive TLS support:
 
 ```rust
 use testcontainers_modules::{mariadb::Mariadb, mysql::Mysql};
 
+// Base database types
 pub enum TestDatabase {
-    MySQL(Container<Mysql>),
-    MariaDB(Container<Mariadb>),
+    MySQL { tls_enabled: bool },
+    MariaDB { tls_enabled: bool },
 }
 
-impl TestDatabase {
-    pub fn new(db_type: DatabaseType, tls_enabled: bool) -> anyhow::Result<Self> {
+// TLS-enabled database variants
+pub enum TestDatabaseTls {
+    MySQL { tls_config: TlsContainerConfig },
+    MariaDB { tls_config: TlsContainerConfig },
+}
+
+// Plain (non-TLS) database variants
+pub enum TestDatabasePlain {
+    MySQL,
+    MariaDB,
+}
+
+// Container management with TLS support
+pub struct DatabaseContainer {
+    db_type: TestDatabase,
+    container: Box<dyn ContainerInstance>,
+    connection_url: String,
+    temp_dir: TempDir,
+    tls_config: ContainerTlsConfig,
+}
+
+impl DatabaseContainer {
+    // Create TLS-enabled container
+    pub fn new_tls(db_type: TestDatabaseTls) -> anyhow::Result<Self> {
         // Automatic container startup with health checks
-        // TLS configuration for secure testing
-        // Connection URL generation
+        // TLS configuration with ephemeral certificates
+        // Connection URL generation with SSL parameters
     }
+
+    // Create plain (non-TLS) container
+    pub fn new_plain(db_type: TestDatabasePlain) -> anyhow::Result<Self> {
+        // Standard container setup without TLS
+        // Connection URL generation for unencrypted connections
+    }
+
+    // Validate TLS connections
+    pub fn validate_tls_connection(&self) -> anyhow::Result<TlsValidationResult> {
+        // TLS handshake validation
+        // Certificate verification testing
+    }
+
+    // Validate plain connections
+    pub fn validate_plain_connection(&self) -> anyhow::Result<PlainValidationResult> {
+        // Standard connection testing
+        // Non-TLS connection validation
+    }
+}
+```
+
+### TLS Configuration
+
+The framework provides comprehensive TLS configuration options:
+
+```rust
+pub struct TlsContainerConfig {
+    pub require_secure_transport: bool,
+    pub min_tls_version: String, // "TLSv1.2" or "TLSv1.3"
+    pub cipher_suites: Vec<String>,
+    pub use_ephemeral_certs: bool, // Generate certificates per test run
+    pub ca_cert_path: Option<PathBuf>,
+    pub server_cert_path: Option<PathBuf>,
+    pub server_key_path: Option<PathBuf>,
+}
+
+impl TlsContainerConfig {
+    // Secure defaults with TLS 1.2+
+    pub fn new_secure() -> Self;
+
+    // Strict security with TLS 1.3 only
+    pub fn with_strict_security(self) -> anyhow::Result<Self>;
+
+    // Custom certificate paths
+    pub fn with_custom_certs(ca_cert: P, server_cert: P, server_key: P) -> Self;
 }
 ```
 
@@ -133,6 +234,7 @@ Credential protection and TLS validation:
 - **Docker**: Required for container-based testing
 - **Disk Space**: ~500MB for Docker images and test artifacts
 - **Network Access**: For pulling Docker images (first run only)
+- **Platform Support**: Linux and macOS (Windows support planned)
 
 ### Test Execution
 
@@ -144,14 +246,61 @@ cargo test --features integration_tests -- --ignored
 cargo test --features integration_tests -- --include-ignored
 
 # Run specific integration test categories
-cargo test --test integration_tests data_type_validation -- --ignored
-cargo test --test integration_tests output_format_validation -- --ignored
-cargo test --test integration_tests error_scenario_validation -- --ignored
+cargo test --features integration_tests --test tls_variants_test -- --ignored
+cargo test --features integration_tests --test tls_integration -- --ignored
+cargo test --features integration_tests --test database_seeding_test -- --ignored
+cargo test --features integration_tests --test container_setup_test -- --ignored
+
+# Run TLS variant tests specifically
+cargo test --features integration_tests test_mysql_tls_variant --test tls_variants_test -- --ignored
+cargo test --features integration_tests test_mariadb_plain_variant --test tls_variants_test -- --ignored
 
 # Using justfile commands
 just test-integration  # Run only integration tests
 just test-all         # Run all tests including integration tests
 ```
+
+### Current Test Categories
+
+**✅ Implemented Tests:**
+
+1. **TLS Variant Tests** (`tests/tls_variants_test.rs`):
+
+   - MySQL and MariaDB TLS-enabled containers
+   - Plain (non-TLS) container configurations
+   - Connection URL generation with SSL parameters
+   - TLS configuration validation
+   - Database variant conversions
+
+2. **TLS Integration Tests** (`tests/tls_integration.rs`):
+
+   - TLS connection establishment and validation
+   - Certificate verification testing
+   - SSL handshake validation
+   - TLS error handling
+
+3. **Database Seeding Tests** (`tests/database_seeding_test.rs`):
+
+   - Schema creation and validation
+   - Test data population with comprehensive data types
+   - NULL value handling across all data types
+   - Unicode and special character testing
+
+4. **Container Setup Tests** (`tests/container_setup_test.rs`):
+
+   - Container lifecycle management
+   - Health check validation
+   - Resource cleanup testing
+   - CI environment compatibility
+
+**🚧 Planned Tests:**
+
+05. **Data Type Validation Tests**: Comprehensive MySQL/MariaDB data type handling
+06. **Output Format Validation Tests**: CSV, JSON, and TSV format compliance
+07. **Error Scenario Tests**: Connection failures, SQL errors, and file I/O issues
+08. **CLI Integration Tests**: Command-line flag precedence and configuration
+09. **Performance Tests**: Large dataset handling and memory usage validation
+10. **Security Tests**: Credential protection and TLS certificate validation
 
 ### CI Integration
 

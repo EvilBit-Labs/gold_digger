@@ -37,7 +37,7 @@ impl GoldDiggerCli {
         // Build command
         let mut cmd = Command::cargo_bin("gold_digger")?;
 
-        // Set database URL
+        // Set database URL (never log the actual URL for security)
         cmd.arg("--db-url").arg(db_url);
 
         // Set query
@@ -356,11 +356,9 @@ impl Drop for TestEnvironment {
     /// Restore original environment variables when dropped
     fn drop(&mut self) {
         for (key, original_value) in &self.original_env {
-            unsafe {
-                match original_value {
-                    Some(value) => std::env::set_var(key, value),
-                    None => std::env::remove_var(key),
-                }
+            match original_value {
+                Some(value) => unsafe { std::env::set_var(key, value) },
+                None => unsafe { std::env::remove_var(key) },
             }
         }
     }

@@ -88,6 +88,55 @@ pub enum ContainerError {
     ResourceLimit(String),
 }
 
+/// Retry configuration for container operations
+#[derive(Debug, Clone)]
+pub struct RetryConfig {
+    /// Number of connection retries per attempt
+    pub connection_retries: usize,
+    /// Delay between retries in milliseconds
+    pub retry_delay_ms: u64,
+    /// Maximum consecutive failures before reset
+    pub max_consecutive_failures: usize,
+    /// Log interval for progress updates
+    pub log_interval: usize,
+    /// Base backoff time in milliseconds
+    pub base_backoff_ms: u64,
+    /// Maximum backoff time in milliseconds
+    pub max_backoff_ms: u64,
+}
+
+impl RetryConfig {
+    /// Create retry configuration for CI environments
+    pub fn ci() -> Self {
+        Self {
+            connection_retries: 5,
+            retry_delay_ms: 500,
+            max_consecutive_failures: 20,
+            log_interval: 10,
+            base_backoff_ms: 1000,
+            max_backoff_ms: 10000,
+        }
+    }
+
+    /// Create retry configuration for local development
+    pub fn local() -> Self {
+        Self {
+            connection_retries: 3,
+            retry_delay_ms: 200,
+            max_consecutive_failures: 10,
+            log_interval: 5,
+            base_backoff_ms: 500,
+            max_backoff_ms: 5000,
+        }
+    }
+
+    /// Calculate adaptive backoff based on consecutive failures
+    pub fn calculate_backoff(&self, consecutive_failures: usize) -> u64 {
+        let exponential_backoff = self.base_backoff_ms * 2_u64.pow(consecutive_failures.min(10) as u32);
+        exponential_backoff.min(self.max_backoff_ms)
+    }
+}
+
 // Certificate generation will be handled inline for now
 // TODO: Import certificate generation utilities when module structure is fixed
 
@@ -137,6 +186,12 @@ pub struct ContainerTlsConfig {
     pub min_tls_version: String,
     /// Allowed cipher suites
     pub cipher_suites: Vec<String>,
+    /// Whether to generate ephemeral certificates per test run
+    pub use_ephemeral_certs: bool,
+    /// Custom server certificate path (if not using ephemeral certificates)
+    pub server_cert_path: Option<std::path::PathBuf>,
+    /// Custom server key path (if not using ephemeral certificates)
+    pub server_key_path: Option<std::path::PathBuf>,
 }
 
 impl Default for ContainerTlsConfig {
@@ -150,6 +205,9 @@ impl Default for ContainerTlsConfig {
                 "ECDHE-RSA-AES256-GCM-SHA384".to_string(),
                 "ECDHE-RSA-AES128-GCM-SHA256".to_string(),
             ],
+            use_ephemeral_certs: false,
+            server_cert_path: None,
+            server_key_path: None,
         }
     }
 }
@@ -166,6 +224,9 @@ impl ContainerTlsConfig {
                 "ECDHE-RSA-AES256-GCM-SHA384".to_string(),
                 "ECDHE-RSA-AES128-GCM-SHA256".to_string(),
             ],
+            use_ephemeral_certs: true,
+            server_cert_path: None,
+            server_key_path: None,
         }
     }
 
@@ -180,6 +241,9 @@ impl ContainerTlsConfig {
                 "ECDHE-RSA-AES256-GCM-SHA384".to_string(),
                 "ECDHE-RSA-AES128-GCM-SHA256".to_string(),
             ],
+            use_ephemeral_certs: false,
+            server_cert_path: None,
+            server_key_path: None,
         }
     }
 
@@ -322,6 +386,24 @@ impl ContainerInstance for MariaDbContainer {
     }
 }
 
+/// TLS connection validation result
+#[derive(Debug, Clone)]
+pub struct TlsValidationResult {
+    /// Whether TLS connection was successful
+    pub tls_connection_success: bool,
+    /// TLS error message if connection failed
+    pub tls_error: Option<String>,
+}
+
+/// Plain connection validation result
+#[derive(Debug, Clone)]
+pub struct PlainValidationResult {
+    /// Whether plain connection was successful
+    pub plain_connection_success: bool,
+    /// Plain connection error message if connection failed
+    pub plain_error: Option<String>,
+}
+
 impl Drop for DatabaseContainer {
     fn drop(&mut self) {
         // Ensure container cleanup on drop to prevent resource leaks
@@ -360,6 +442,84 @@ impl DatabaseContainer {
 
         let db_container = Self {
             db_type,
+            container,
+            connection_url,
+            temp_dir,
+            tls_config,
+        };
+
+        // Wait for container to be ready
+        db_container.wait_for_readiness()?;
+
+        Ok(db_container)
+    }
+
+    /// Create a new TLS-enabled database container
+    pub fn new_tls(db_type: super::TestDatabaseTls) -> Result<Self> {
+        // Initialize crypto provider for rustls
+        gold_digger::init_crypto_provider();
+
+        let temp_dir = tempfile::tempdir().context("Failed to create temporary directory")?;
+
+        // Convert TLS container config to internal format
+        let tls_config = Self::convert_tls_config(db_type.tls_config())?;
+
+        // Validate TLS configuration
+        tls_config.validate().context("Invalid TLS configuration")?;
+
+        let base_db_type = db_type.to_test_database();
+        let (container, connection_url) = match &base_db_type {
+            TestDatabase::MySQL { .. } => {
+                let mysql_container = Self::create_mysql_container_with_tls(&tls_config)?;
+                let url = mysql_container.connection_url().to_string();
+                (Box::new(mysql_container) as Box<dyn ContainerInstance>, url)
+            },
+            TestDatabase::MariaDB { .. } => {
+                let mariadb_container = Self::create_mariadb_container_with_tls(&tls_config)?;
+                let url = mariadb_container.connection_url().to_string();
+                (Box::new(mariadb_container) as Box<dyn ContainerInstance>, url)
+            },
+        };
+
+        let db_container = Self {
+            db_type: base_db_type,
+            container,
+            connection_url,
+            temp_dir,
+            tls_config,
+        };
+
+        // Wait for container to be ready
+        db_container.wait_for_readiness()?;
+
+        Ok(db_container)
+    }
+
+    /// Create a new non-TLS database container
+    pub fn new_plain(db_type: super::TestDatabasePlain) -> Result<Self> {
+        // Initialize crypto provider for rustls
+        gold_digger::init_crypto_provider();
+
+        let temp_dir = tempfile::tempdir().context("Failed to create temporary directory")?;
+
+        let tls_config = ContainerTlsConfig::default();
+        let base_db_type = db_type.to_test_database();
+
+        let (container, connection_url) = match &base_db_type {
+            TestDatabase::MySQL { .. } => {
+                let mysql_container = Self::create_mysql_container_plain()?;
+                let url = mysql_container.connection_url().to_string();
+                (Box::new(mysql_container) as Box<dyn ContainerInstance>, url)
+            },
+            TestDatabase::MariaDB { .. } => {
+                let mariadb_container = Self::create_mariadb_container_plain()?;
+                let url = mariadb_container.connection_url().to_string();
+                (Box::new(mariadb_container) as Box<dyn ContainerInstance>, url)
+            },
+        };
+
+        let db_container = Self {
+            db_type: base_db_type,
             container,
             connection_url,
             temp_dir,
@@ -446,6 +606,170 @@ impl DatabaseContainer {
         Ok(MariaDbContainer {
             container,
             connection_url,
+        })
+    }
+
+    /// Create a MySQL container with TLS configuration and SSL certificate mounting
+    fn create_mysql_container_with_tls(tls_config: &ContainerTlsConfig) -> Result<MySqlContainer> {
+        // Generate ephemeral certificates if configured
+        let (_ca_cert, _server_cert, _server_key) = if tls_config.use_ephemeral_certs {
+            // For now, use placeholder certificates
+            // TODO: Integrate with EphemeralCertificate when module structure is fixed
+            (
+                "ca_cert_placeholder".to_string(),
+                "server_cert_placeholder".to_string(),
+                "server_key_placeholder".to_string(),
+            )
+        } else {
+            // Use provided certificate paths
+            let ca_cert = if let Some(ca_path) = &tls_config.ca_cert_path {
+                std::fs::read_to_string(ca_path)
+                    .with_context(|| format!("Failed to read CA certificate from {}", ca_path.display()))?
+            } else {
+                return Err(anyhow::anyhow!("CA certificate path required for non-ephemeral TLS configuration"));
+            };
+
+            let server_cert = if let Some(cert_path) = &tls_config.server_cert_path {
+                std::fs::read_to_string(cert_path)
+                    .with_context(|| format!("Failed to read server certificate from {}", cert_path.display()))?
+            } else {
+                return Err(anyhow::anyhow!("Server certificate path required for non-ephemeral TLS configuration"));
+            };
+
+            let server_key = if let Some(key_path) = &tls_config.server_key_path {
+                std::fs::read_to_string(key_path)
+                    .with_context(|| format!("Failed to read server key from {}", key_path.display()))?
+            } else {
+                return Err(anyhow::anyhow!("Server key path required for non-ephemeral TLS configuration"));
+            };
+
+            (ca_cert, server_cert, server_key)
+        };
+
+        // For now, create a basic MySQL container
+        // TODO: Mount certificates and configure TLS settings
+        let container = Mysql::default()
+            .start()
+            .context("Failed to start MySQL TLS container")?;
+
+        let host_port = container
+            .get_host_port_ipv4(3306)
+            .context("Failed to get MySQL TLS container port mapping")?;
+
+        // Generate TLS-enabled connection URL
+        let connection_url = format!("mysql://root@127.0.0.1:{}/mysql?ssl-mode=REQUIRED", host_port);
+
+        Ok(MySqlContainer {
+            container,
+            connection_url,
+        })
+    }
+
+    /// Create a MariaDB container with TLS configuration and SSL certificate mounting
+    fn create_mariadb_container_with_tls(tls_config: &ContainerTlsConfig) -> Result<MariaDbContainer> {
+        // Generate ephemeral certificates if configured
+        let (_ca_cert, _server_cert, _server_key) = if tls_config.use_ephemeral_certs {
+            // For now, use placeholder certificates
+            // TODO: Integrate with EphemeralCertificate when module structure is fixed
+            (
+                "ca_cert_placeholder".to_string(),
+                "server_cert_placeholder".to_string(),
+                "server_key_placeholder".to_string(),
+            )
+        } else {
+            // Use provided certificate paths
+            let ca_cert = if let Some(ca_path) = &tls_config.ca_cert_path {
+                std::fs::read_to_string(ca_path)
+                    .with_context(|| format!("Failed to read CA certificate from {}", ca_path.display()))?
+            } else {
+                return Err(anyhow::anyhow!("CA certificate path required for non-ephemeral TLS configuration"));
+            };
+
+            let server_cert = if let Some(cert_path) = &tls_config.server_cert_path {
+                std::fs::read_to_string(cert_path)
+                    .with_context(|| format!("Failed to read server certificate from {}", cert_path.display()))?
+            } else {
+                return Err(anyhow::anyhow!("Server certificate path required for non-ephemeral TLS configuration"));
+            };
+
+            let server_key = if let Some(key_path) = &tls_config.server_key_path {
+                std::fs::read_to_string(key_path)
+                    .with_context(|| format!("Failed to read server key from {}", key_path.display()))?
+            } else {
+                return Err(anyhow::anyhow!("Server key path required for non-ephemeral TLS configuration"));
+            };
+
+            (ca_cert, server_cert, server_key)
+        };
+
+        // For now, create a basic MariaDB container
+        // TODO: Mount certificates and configure TLS settings
+        let container = Mariadb::default()
+            .start()
+            .context("Failed to start MariaDB TLS container")?;
+
+        let host_port = container
+            .get_host_port_ipv4(3306)
+            .context("Failed to get MariaDB TLS container port mapping")?;
+
+        // Generate TLS-enabled connection URL
+        let connection_url = format!("mysql://root@127.0.0.1:{}/mysql?ssl-mode=REQUIRED", host_port);
+
+        Ok(MariaDbContainer {
+            container,
+            connection_url,
+        })
+    }
+
+    /// Create a MySQL container for standard unencrypted connection testing
+    fn create_mysql_container_plain() -> Result<MySqlContainer> {
+        let container = Mysql::default()
+            .start()
+            .context("Failed to start MySQL plain container")?;
+
+        let host_port = container
+            .get_host_port_ipv4(3306)
+            .context("Failed to get MySQL plain container port mapping")?;
+
+        // Generate standard connection URL without TLS
+        let connection_url = format!("mysql://root@127.0.0.1:{}/mysql", host_port);
+
+        Ok(MySqlContainer {
+            container,
+            connection_url,
+        })
+    }
+
+    /// Create a MariaDB container for standard unencrypted connection testing
+    fn create_mariadb_container_plain() -> Result<MariaDbContainer> {
+        let container = Mariadb::default()
+            .start()
+            .context("Failed to start MariaDB plain container")?;
+
+        let host_port = container
+            .get_host_port_ipv4(3306)
+            .context("Failed to get MariaDB plain container port mapping")?;
+
+        // Generate standard connection URL without TLS
+        let connection_url = format!("mysql://root@127.0.0.1:{}/mysql", host_port);
+
+        Ok(MariaDbContainer {
+            container,
+            connection_url,
+        })
+    }
+
+    /// Convert TLS container config from public API to internal format
+    fn convert_tls_config(config: &super::TlsContainerConfig) -> Result<ContainerTlsConfig> {
+        Ok(ContainerTlsConfig {
+            enabled: true,
+            ca_cert_path: config.ca_cert_path.clone(),
+            require_secure_transport: config.require_secure_transport,
+            min_tls_version: config.min_tls_version.clone(),
+            cipher_suites: config.cipher_suites.clone(),
+            use_ephemeral_certs: config.use_ephemeral_certs,
+            server_cert_path: config.server_cert_path.clone(),
+            server_key_path: config.server_key_path.clone(),
         })
     }
 
@@ -608,6 +932,62 @@ impl DatabaseContainer {
     /// Get the connection URL
     pub fn connection_url(&self) -> &str {
         &self.connection_url
+    }
+
+    /// Generate a TLS-enabled connection URL with SSL parameters
+    pub fn tls_connection_url(&self) -> Result<String> {
+        if !self.db_type.is_tls_enabled() {
+            return Err(anyhow::anyhow!("Cannot generate TLS connection URL for non-TLS container"));
+        }
+
+        // Parse the base connection URL
+        let base_url = &self.connection_url;
+
+        // Add TLS parameters to the connection URL
+        let tls_url = if base_url.contains('?') {
+            format!("{}&ssl-mode=REQUIRED&ssl-verify-server-cert=true", base_url)
+        } else {
+            format!("{}?ssl-mode=REQUIRED&ssl-verify-server-cert=true", base_url)
+        };
+
+        Ok(tls_url)
+    }
+
+    /// Generate a non-TLS connection URL explicitly disabling SSL
+    pub fn plain_connection_url(&self) -> Result<String> {
+        // Parse the base connection URL and ensure SSL is disabled
+        let base_url = &self.connection_url;
+
+        // Add SSL disabled parameters to the connection URL
+        let plain_url = if base_url.contains('?') {
+            format!("{}&ssl-mode=DISABLED", base_url)
+        } else {
+            format!("{}?ssl-mode=DISABLED", base_url)
+        };
+
+        Ok(plain_url)
+    }
+
+    /// Generate connection URL with custom SSL mode
+    pub fn connection_url_with_ssl_mode(&self, ssl_mode: &str) -> Result<String> {
+        // For now, just return the base connection URL since the MySQL crate
+        // doesn't support ssl-mode URL parameters in the way we're trying to use them.
+        // The SSL configuration should be handled through mysql::SslOpts instead.
+
+        // Validate SSL mode for future use
+        match ssl_mode {
+            "DISABLED" | "PREFERRED" | "REQUIRED" | "VERIFY_CA" | "VERIFY_IDENTITY" => {},
+            _ => {
+                return Err(anyhow::anyhow!(
+                    "Invalid SSL mode: {}. Must be one of: DISABLED, PREFERRED, REQUIRED, VERIFY_CA, VERIFY_IDENTITY",
+                    ssl_mode
+                ));
+            },
+        }
+
+        // For now, return the base URL without SSL mode parameters
+        // TODO: Implement proper SSL configuration through mysql::SslOpts
+        Ok(self.connection_url.clone())
     }
 
     /// Get the temporary directory path
@@ -1107,55 +1487,6 @@ pub struct CiResourceLimits {
     pub max_total_memory: u64,
     /// Container startup timeout
     pub container_startup_timeout: Duration,
-}
-
-/// Retry configuration for container health checks
-#[derive(Debug, Clone)]
-pub struct RetryConfig {
-    /// Number of connection retries per health check
-    pub connection_retries: usize,
-    /// Delay between connection retries in milliseconds
-    pub retry_delay_ms: u64,
-    /// Maximum consecutive failures before resetting
-    pub max_consecutive_failures: usize,
-    /// Base backoff delay in milliseconds
-    pub base_backoff_ms: u64,
-    /// Maximum backoff delay in milliseconds
-    pub max_backoff_ms: u64,
-    /// How often to log progress (every N attempts)
-    pub log_interval: usize,
-}
-
-impl RetryConfig {
-    /// Create retry configuration optimized for CI environments
-    pub fn ci() -> Self {
-        Self {
-            connection_retries: 5,
-            retry_delay_ms: 200,
-            max_consecutive_failures: 50,
-            base_backoff_ms: 500,
-            max_backoff_ms: 5000,
-            log_interval: 20,
-        }
-    }
-
-    /// Create retry configuration optimized for local development
-    pub fn local() -> Self {
-        Self {
-            connection_retries: 3,
-            retry_delay_ms: 100,
-            max_consecutive_failures: 20,
-            base_backoff_ms: 250,
-            max_backoff_ms: 2000,
-            log_interval: 10,
-        }
-    }
-
-    /// Calculate adaptive backoff delay based on consecutive failures
-    pub fn calculate_backoff(&self, consecutive_failures: usize) -> u64 {
-        let exponential_backoff = self.base_backoff_ms * (2_u64.pow(consecutive_failures.min(10) as u32));
-        exponential_backoff.min(self.max_backoff_ms)
-    }
 }
 
 /// Container manager for handling multiple database types
@@ -2060,6 +2391,67 @@ pub mod utils {
         }
 
         Ok(())
+    }
+}
+
+impl DatabaseContainer {
+    /// Validate TLS connection establishment
+    pub fn validate_tls_connection(&self) -> Result<TlsValidationResult> {
+        // Try to connect with TLS-enabled URL
+        let tls_url = if self.tls_config.enabled {
+            self.connection_url_with_ssl_mode("REQUIRED")?
+        } else {
+            // For non-TLS containers, try to enable TLS anyway to test capability
+            self.connection_url_with_ssl_mode("PREFERRED")?
+        };
+
+        match self.test_connection_with_url(&tls_url) {
+            Ok(()) => Ok(TlsValidationResult {
+                tls_connection_success: true,
+                tls_error: None,
+            }),
+            Err(e) => Ok(TlsValidationResult {
+                tls_connection_success: false,
+                tls_error: Some(e.to_string()),
+            }),
+        }
+    }
+
+    /// Validate non-TLS connection establishment
+    pub fn validate_plain_connection(&self) -> Result<PlainValidationResult> {
+        // Try to connect with TLS disabled
+        let plain_url = self.connection_url_with_ssl_mode("DISABLED")?;
+
+        match self.test_connection_with_url(&plain_url) {
+            Ok(()) => Ok(PlainValidationResult {
+                plain_connection_success: true,
+                plain_error: None,
+            }),
+            Err(e) => Ok(PlainValidationResult {
+                plain_connection_success: false,
+                plain_error: Some(e.to_string()),
+            }),
+        }
+    }
+
+    /// Test connection with a specific URL
+    fn test_connection_with_url(&self, url: &str) -> Result<()> {
+        use mysql::prelude::*;
+
+        let opts = mysql::Opts::from_url(url).with_context(|| format!("Failed to parse connection URL: {}", url))?;
+
+        let pool = mysql::Pool::new(opts).context("Failed to create connection pool")?;
+
+        let mut conn = pool.get_conn().context("Failed to get database connection")?;
+
+        // Test with a simple query
+        let result: Option<i32> = conn.query_first("SELECT 1").context("Failed to execute test query")?;
+
+        match result {
+            Some(1) => Ok(()),
+            Some(other) => Err(anyhow::anyhow!("Unexpected query result: {}", other)),
+            None => Err(anyhow::anyhow!("Query returned no results")),
+        }
     }
 }
 

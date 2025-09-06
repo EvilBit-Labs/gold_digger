@@ -2,6 +2,11 @@
 
 Common issues and solutions for Gold Digger's integration testing framework.
 
+## Current Implementation Status
+
+The integration testing framework is actively under development. Some tests may be incomplete or
+marked as TODO. This is expected during the development phase.
+
 ## Docker-Related Issues
 
 ### Docker Not Available
@@ -69,10 +74,35 @@ sudo pkill -f mariadb
 cargo test --features integration_tests -- --ignored
 
 # Check test discovery
-cargo test --features integration_tests --list | grep integration
+cargo test --features integration_tests --list | grep -E "(integration|tls_variants|database_seeding)"
 
-# Run specific integration test
-cargo test --features integration_tests test_mysql_connection -- --ignored
+# Run specific integration tests
+cargo test --features integration_tests --test tls_variants_test -- --ignored
+cargo test --features integration_tests --test tls_integration -- --ignored
+cargo test --features integration_tests --test database_seeding_test -- --ignored
+
+# Check if Docker is available
+docker info
+```
+
+### TLS Variant Tests Not Working
+
+**Symptom**: TLS variant tests fail with configuration or connection errors.
+
+**Solution**:
+
+```bash
+# Check TLS variant test specifically
+cargo test test_mysql_tls_variant --test tls_variants_test -- --ignored --nocapture
+
+# Verify TLS configuration validation
+cargo test test_tls_container_config_methods --test tls_variants_test
+
+# Check container creation
+cargo test test_connection_url_generation --test tls_variants_test -- --ignored
+
+# Enable verbose logging
+RUST_LOG=debug cargo test --test tls_variants_test -- --ignored --nocapture
 ```
 
 ### Test Data Issues
@@ -182,7 +212,7 @@ else
 fi
 
 # Skip resource-intensive tests in CI
-cargo test --features integration_tests -- --ignored --skip large_dataset
+cargo test -- --ignored --skip large_dataset
 ```
 
 ## Database-Specific Issues
@@ -232,13 +262,14 @@ docker logs <container_id>
 
 ```bash
 # Use nextest for parallel execution
-cargo nextest run --features integration_tests -- --ignored
+cargo nextest run -- --ignored
 
 # Run specific test categories
-cargo test --features integration_tests data_types -- --ignored
+cargo test --test tls_variants_test -- --ignored
+cargo test --test database_seeding_test -- --ignored
 
 # Skip performance tests for faster feedback
-cargo test --features integration_tests -- --ignored --skip performance
+cargo test -- --ignored --skip performance
 ```
 
 ### Container Cleanup Issues
@@ -269,8 +300,32 @@ RUST_LOG=debug cargo test --features integration_tests -- --ignored --nocapture
 # Keep containers running for inspection
 TESTCONTAINERS_RYUK_DISABLED=true cargo test --features integration_tests -- --ignored
 
+# Run specific test files with verbose output
+RUST_LOG=debug cargo test --features integration_tests --test tls_variants_test -- --ignored --nocapture
+RUST_LOG=debug cargo test --features integration_tests --test database_seeding_test -- --ignored --nocapture
+
 # Generate detailed test reports
 cargo nextest run --features integration_tests --profile ci -- --ignored
+```
+
+### Common TLS Issues
+
+**Symptom**: TLS tests fail with certificate or connection errors.
+
+**Solution**:
+
+```bash
+# Check TLS certificate generation
+cargo test test_tls_config_validation --test tls_variants_test
+
+# Verify TLS container configuration
+cargo test test_tls_container_config_methods --test tls_variants_test
+
+# Test TLS connection validation
+cargo test test_complete_tls_vs_plain_workflow --test tls_variants_test -- --ignored
+
+# Check rustls dependencies
+cargo tree | grep rustls
 ```
 
 ### Container Inspection
@@ -294,6 +349,9 @@ docker logs <container_id>
 ```bash
 # Generate coverage for integration tests
 cargo llvm-cov --features integration_tests --html -- --ignored
+
+# Generate coverage for all tests
+cargo llvm-cov --features integration_tests --html -- --include-ignored
 
 # View coverage report
 open target/llvm-cov/html/index.html
