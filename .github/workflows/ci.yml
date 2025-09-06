@@ -202,7 +202,7 @@ jobs:
 
       # Build the release binary and run the TLS integration and error handling tests
       - run: cargo build --release
-      - run: cargo nextest run --test tls_integration tls_error_handling_tests
+      - run: cargo nextest run --test tls_integration --test tls_integration_old
 
       - name: Test TLS configuration validation
         run: |
