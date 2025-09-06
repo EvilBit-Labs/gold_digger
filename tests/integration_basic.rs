@@ -35,7 +35,7 @@ mod tests {
         container.seed_data()?;
 
         // Verify we can execute a simple query directly on the container
-        container.execute_sql("SELECT COUNT(*) FROM test_data")?;
+        container.execute_sql("SELECT COUNT(*) FROM test_basic")?;
 
         Ok(())
     }
@@ -61,7 +61,7 @@ mod tests {
         container.seed_data()?;
 
         // Verify we can execute a simple query directly on the container
-        container.execute_sql("SELECT COUNT(*) FROM test_data")?;
+        container.execute_sql("SELECT COUNT(*) FROM test_basic")?;
 
         Ok(())
     }

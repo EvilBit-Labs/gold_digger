@@ -187,8 +187,8 @@ CREATE TABLE IF NOT EXISTS test_charsets (
 -- Timezone and temporal test table
 CREATE TABLE IF NOT EXISTS test_timezones (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    utc_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    local_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    utc_timestamp_col TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    local_timestamp_col TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     date_only DATE,
     time_only TIME,
     datetime_with_tz DATETIME,

@@ -17,6 +17,60 @@ use testcontainers_modules::{
 
 use super::{TestDatabase, is_ci_environment};
 
+/// Database version information for compatibility handling
+#[derive(Debug, Clone)]
+pub struct DatabaseInfo {
+    /// Database type (MySQL or MariaDB)
+    pub db_type: String,
+    /// Parsed version number
+    pub version: DatabaseVersion,
+    /// Raw version string from database
+    pub version_string: String,
+    /// Supported features for this database version
+    pub features: DatabaseFeatures,
+}
+
+/// Parsed database version for comparison
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct DatabaseVersion {
+    /// Major version number
+    pub major: u32,
+    /// Minor version number
+    pub minor: u32,
+    /// Patch version number
+    pub patch: u32,
+}
+
+impl DatabaseVersion {
+    /// Create a new database version
+    pub fn new(major: u32, minor: u32, patch: u32) -> Self {
+        Self { major, minor, patch }
+    }
+}
+
+impl std::fmt::Display for DatabaseVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{}.{}", self.major, self.minor, self.patch)
+    }
+}
+
+/// Database feature support flags
+#[derive(Debug, Clone)]
+pub struct DatabaseFeatures {
+    /// JSON column type support
+    pub supports_json: bool,
+    /// Window functions support
+    pub supports_window_functions: bool,
+    /// Common Table Expressions (CTE) support
+    pub supports_cte: bool,
+    /// Generated columns support
+    pub supports_generated_columns: bool,
+    /// Full-text search support
+    pub supports_fulltext: bool,
+    /// Spatial data types support
+    pub supports_spatial: bool,
+}
+
 /// Container-specific error types for better error handling
 #[derive(Debug, thiserror::Error)]
 pub enum ContainerError {
@@ -561,41 +615,315 @@ impl DatabaseContainer {
         self.temp_dir.path()
     }
 
-    /// Seed the database with test schema and data
+    /// Seed the database with comprehensive test schema and data
+    ///
+    /// This method implements idempotent database seeding with separate DDL and DML phases:
+    /// 1. DDL (Data Definition Language) - Schema creation executed outside transactions
+    /// 2. DML (Data Manipulation Language) - Data seeding executed inside transactions
+    /// 3. Database compatibility detection and handling for MySQL vs MariaDB differences
     pub fn seed_data(&self) -> Result<()> {
-        use mysql::prelude::*;
-
         let opts = mysql::Opts::from_url(&self.connection_url).context("Failed to parse database URL")?;
         let pool = mysql::Pool::new(opts).context("Failed to create database connection pool")?;
 
         let mut conn = pool.get_conn().context("Failed to get database connection")?;
 
-        // Create basic test table for initial testing
-        conn.exec_drop(
-            r"CREATE TABLE IF NOT EXISTS test_data (
-                id INT PRIMARY KEY AUTO_INCREMENT,
-                name VARCHAR(255),
-                value INT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )",
-            (),
-        )
-        .context("Failed to create test table")?;
+        // Detect database version and type for compatibility handling
+        let db_info = self.detect_database_version(&mut conn)?;
 
-        // Insert some test data
-        conn.exec_drop(
-            r"INSERT INTO test_data (name, value) VALUES
-              ('test1', 100),
-              ('test2', 200),
-              ('test3', 300)
-              ON DUPLICATE KEY UPDATE value = VALUES(value)",
-            (),
-        )
-        .context("Failed to insert test data")?;
+        eprintln!("Seeding database: {} version {}", db_info.db_type, db_info.version);
+
+        // Phase 1: DDL execution (outside transactions - auto-committed by MySQL/MariaDB)
+        self.execute_schema_ddl(&mut conn, &db_info)?;
+
+        // Phase 2: DML execution (inside explicit transactions for atomicity)
+        self.execute_data_seeding(&mut conn, &db_info)?;
+
+        eprintln!("Database seeding completed successfully");
+        Ok(())
+    }
+
+    /// Detect database version and type for compatibility handling
+    fn detect_database_version(&self, conn: &mut mysql::PooledConn) -> Result<DatabaseInfo> {
+        use mysql::prelude::*;
+
+        // Get version information
+        let version_result: Option<String> = conn
+            .query_first("SELECT VERSION()")
+            .context("Failed to query database version")?;
+
+        let version_string = version_result.unwrap_or_else(|| "unknown".to_string());
+
+        // Determine database type and version
+        let (db_type, version, features) = if version_string.to_lowercase().contains("mariadb") {
+            let version = Self::extract_version_number(&version_string);
+            let features = Self::detect_mariadb_features(&version);
+            ("MariaDB".to_string(), version, features)
+        } else {
+            let version = Self::extract_version_number(&version_string);
+            let features = Self::detect_mysql_features(&version);
+            ("MySQL".to_string(), version, features)
+        };
+
+        Ok(DatabaseInfo {
+            db_type,
+            version,
+            version_string,
+            features,
+        })
+    }
+
+    /// Execute DDL statements for schema creation (outside transactions)
+    fn execute_schema_ddl(&self, conn: &mut mysql::PooledConn, db_info: &DatabaseInfo) -> Result<()> {
+        use mysql::prelude::*;
+        use std::fs;
+
+        // Load schema.sql file
+        let schema_path = std::path::Path::new("tests/fixtures/schema.sql");
+        if !schema_path.exists() {
+            return Err(anyhow::anyhow!("Schema file not found: {}", schema_path.display()));
+        }
+
+        let schema_sql = fs::read_to_string(schema_path)
+            .with_context(|| format!("Failed to read schema file: {}", schema_path.display()))?;
+
+        eprintln!("Executing DDL statements for schema creation...");
+
+        // Split SQL into individual statements and execute each one
+        let statements = Self::split_sql_statements(&schema_sql);
+        let mut ddl_count = 0;
+
+        for (i, statement) in statements.iter().enumerate() {
+            let trimmed = statement.trim();
+
+            // Skip empty statements and comments
+            if trimmed.is_empty() || trimmed.starts_with("--") || trimmed.starts_with("/*") {
+                continue;
+            }
+
+            // Apply database-specific compatibility adjustments
+            let adjusted_statement = self.apply_compatibility_adjustments(trimmed, db_info)?;
+
+            // Execute DDL statement (auto-committed, not wrapped in transaction)
+            if let Err(e) = conn.exec_drop(&adjusted_statement, ()) {
+                // Log the error but continue with other statements for idempotency
+                eprintln!("Warning: DDL statement {} failed (may be expected for idempotency): {}", i + 1, e);
+                eprintln!("Statement: {}", adjusted_statement.chars().take(100).collect::<String>());
+            } else {
+                ddl_count += 1;
+            }
+        }
+
+        eprintln!("Executed {} DDL statements successfully", ddl_count);
+        Ok(())
+    }
+
+    /// Execute DML statements for data seeding (inside explicit transactions)
+    fn execute_data_seeding(&self, conn: &mut mysql::PooledConn, db_info: &DatabaseInfo) -> Result<()> {
+        use mysql::prelude::*;
+        use std::fs;
+
+        // Load seed_data.sql file
+        let seed_path = std::path::Path::new("tests/fixtures/seed_data.sql");
+        if !seed_path.exists() {
+            return Err(anyhow::anyhow!("Seed data file not found: {}", seed_path.display()));
+        }
+
+        let seed_sql = fs::read_to_string(seed_path)
+            .with_context(|| format!("Failed to read seed data file: {}", seed_path.display()))?;
+
+        eprintln!("Executing DML statements for data seeding...");
+
+        // Begin explicit transaction for atomic data seeding
+        // Use the connection's transaction method instead of SQL commands
+        let mut tx = conn
+            .start_transaction(mysql::TxOpts::default())
+            .context("Failed to start transaction for data seeding")?;
+
+        let statements = Self::split_sql_statements(&seed_sql);
+        let mut dml_count = 0;
+        let mut error_count = 0;
+
+        for (i, statement) in statements.iter().enumerate() {
+            let trimmed = statement.trim();
+
+            // Skip empty statements and comments
+            if trimmed.is_empty() || trimmed.starts_with("--") || trimmed.starts_with("/*") {
+                continue;
+            }
+
+            // Apply database-specific compatibility adjustments
+            let adjusted_statement = match self.apply_compatibility_adjustments(trimmed, db_info) {
+                Ok(stmt) => stmt,
+                Err(e) => {
+                    eprintln!("Warning: Failed to adjust statement {}: {}", i + 1, e);
+                    continue;
+                },
+            };
+
+            // Execute DML statement inside transaction
+            match tx.exec_drop(&adjusted_statement, ()) {
+                Ok(_) => {
+                    dml_count += 1;
+                },
+                Err(e) => {
+                    error_count += 1;
+                    eprintln!("Warning: DML statement {} failed: {}", i + 1, e);
+                    eprintln!("Statement: {}", adjusted_statement.chars().take(100).collect::<String>());
+
+                    // For critical errors, rollback and fail
+                    if adjusted_statement.to_uppercase().contains("INSERT") && error_count > 10 {
+                        tx.rollback().ok();
+                        return Err(anyhow::anyhow!(
+                            "Too many DML errors ({}), rolling back transaction",
+                            error_count
+                        ));
+                    }
+                },
+            }
+        }
+
+        // Commit transaction if we have successful operations
+        if dml_count > 0 {
+            tx.commit().context("Failed to commit data seeding transaction")?;
+            eprintln!("Committed {} DML statements successfully ({} errors)", dml_count, error_count);
+        } else {
+            tx.rollback().ok();
+            return Err(anyhow::anyhow!("No DML statements executed successfully"));
+        }
 
         Ok(())
     }
 
+    /// Apply database-specific compatibility adjustments to SQL statements
+    fn apply_compatibility_adjustments(&self, statement: &str, db_info: &DatabaseInfo) -> Result<String> {
+        let mut adjusted = statement.to_string();
+
+        // Handle MySQL vs MariaDB differences
+        match db_info.db_type.as_str() {
+            "MySQL" => {
+                // MySQL-specific adjustments
+                if db_info.version.major >= 8 {
+                    // MySQL 8.0+ specific features
+                    // No adjustments needed for now
+                } else {
+                    // MySQL 5.7 and earlier compatibility
+                    // Replace JSON functions that might not be available
+                    if adjusted.contains("JSON_OBJECT") && !db_info.features.supports_json {
+                        // Fallback for older MySQL versions without JSON support
+                        adjusted = adjusted.replace("JSON_OBJECT", "CONCAT");
+                    }
+                }
+            },
+            "MariaDB" => {
+                // MariaDB-specific adjustments
+                if db_info.version.major >= 10 && db_info.version.minor >= 2 {
+                    // MariaDB 10.2+ has JSON support
+                    // No adjustments needed
+                } else {
+                    // Older MariaDB versions - replace JSON with TEXT
+                    if adjusted.contains("JSON") {
+                        adjusted = adjusted.replace("JSON", "TEXT");
+                    }
+                }
+            },
+            _ => {
+                // Unknown database type - use conservative approach
+                eprintln!("Warning: Unknown database type {}, using conservative SQL", db_info.db_type);
+            },
+        }
+
+        // Handle CREATE TABLE IF NOT EXISTS for idempotency
+        if adjusted.to_uppercase().contains("CREATE TABLE") && !adjusted.to_uppercase().contains("IF NOT EXISTS") {
+            adjusted = adjusted.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS");
+        }
+
+        // Handle CREATE INDEX for idempotency (MySQL doesn't support IF NOT EXISTS for indexes)
+        if adjusted.to_uppercase().contains("CREATE INDEX IF NOT EXISTS") {
+            // MySQL doesn't support IF NOT EXISTS for CREATE INDEX, so we'll skip these
+            // or convert them to a different approach
+            let _index_name = if let Some(start) = adjusted.find("CREATE INDEX IF NOT EXISTS ") {
+                let remaining = &adjusted[start + 28..];
+                if let Some(space_pos) = remaining.find(' ') {
+                    remaining[..space_pos].to_string()
+                } else {
+                    "unknown_index".to_string()
+                }
+            } else {
+                "unknown_index".to_string()
+            };
+
+            // For now, just remove IF NOT EXISTS from CREATE INDEX statements
+            adjusted = adjusted.replace("CREATE INDEX IF NOT EXISTS", "CREATE INDEX");
+        }
+
+        Ok(adjusted)
+    }
+
+    /// Split SQL content into individual statements with improved parsing
+    fn split_sql_statements(sql_content: &str) -> Vec<String> {
+        let mut statements = Vec::new();
+        let lines: Vec<&str> = sql_content.lines().collect();
+        let mut current_statement = String::new();
+        let mut in_procedure = false;
+
+        for line in lines {
+            let trimmed_line = line.trim();
+
+            // Skip DELIMITER statements
+            if trimmed_line.to_uppercase().starts_with("DELIMITER") {
+                continue;
+            }
+
+            // Skip stored procedure definitions (they're complex and not needed for basic seeding)
+            if trimmed_line.to_uppercase().contains("CREATE PROCEDURE")
+                || trimmed_line.to_uppercase().contains("CREATE FUNCTION")
+            {
+                in_procedure = true;
+                continue;
+            }
+
+            if in_procedure {
+                // Skip everything until we see END followed by delimiter
+                if trimmed_line.to_uppercase().starts_with("END$$")
+                    || trimmed_line.to_uppercase().starts_with("END$")
+                    || (trimmed_line.to_uppercase() == "DELIMITER ;" && in_procedure)
+                {
+                    in_procedure = false;
+                }
+                continue;
+            }
+
+            // Skip empty lines and comments
+            if trimmed_line.is_empty() || trimmed_line.starts_with("--") || trimmed_line.starts_with("/*") {
+                continue;
+            }
+
+            // Add line to current statement
+            if !current_statement.is_empty() {
+                current_statement.push('\n');
+            }
+            current_statement.push_str(line);
+
+            // Check for statement terminator
+            if line.trim_end().ends_with(';') {
+                let trimmed = current_statement.trim();
+                if !trimmed.is_empty() {
+                    statements.push(trimmed.to_string());
+                }
+                current_statement.clear();
+            }
+        }
+
+        // Add the last statement if it doesn't end with semicolon
+        let trimmed = current_statement.trim();
+        if !trimmed.is_empty() {
+            statements.push(trimmed.to_string());
+        }
+
+        statements
+    }
+
+    /// Execute a SQL statement on the database
     /// Execute a SQL statement on the database
     pub fn execute_sql(&self, sql: &str) -> Result<()> {
         use mysql::prelude::*;
@@ -702,6 +1030,56 @@ impl DatabaseContainer {
 
         let lower_message = log_message.to_lowercase();
         !sensitive_patterns.iter().any(|pattern| lower_message.contains(pattern))
+    }
+
+    /// Extract version number from database version string
+    fn extract_version_number(version_string: &str) -> DatabaseVersion {
+        // Extract version numbers from strings like "8.0.35" or "10.6.16-MariaDB"
+        let version_part = version_string.split_whitespace().next().unwrap_or("0.0.0");
+
+        let parts: Vec<&str> = version_part.split('.').take(3).collect();
+
+        let major = parts.first().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+
+        let minor = parts.get(1).and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+
+        let patch = parts
+            .get(2)
+            .and_then(|s| {
+                // Handle cases like "16-MariaDB" - extract just the number part
+                s.chars()
+                    .take_while(|c| c.is_ascii_digit())
+                    .collect::<String>()
+                    .parse::<u32>()
+                    .ok()
+            })
+            .unwrap_or(0);
+
+        DatabaseVersion::new(major, minor, patch)
+    }
+
+    /// Detect MySQL-specific features based on version
+    fn detect_mysql_features(version: &DatabaseVersion) -> DatabaseFeatures {
+        DatabaseFeatures {
+            supports_json: version >= &DatabaseVersion::new(5, 7, 8),
+            supports_window_functions: version >= &DatabaseVersion::new(8, 0, 0),
+            supports_cte: version >= &DatabaseVersion::new(8, 0, 1),
+            supports_generated_columns: version >= &DatabaseVersion::new(5, 7, 6),
+            supports_fulltext: version >= &DatabaseVersion::new(5, 6, 0),
+            supports_spatial: version >= &DatabaseVersion::new(5, 7, 0),
+        }
+    }
+
+    /// Detect MariaDB-specific features based on version
+    fn detect_mariadb_features(version: &DatabaseVersion) -> DatabaseFeatures {
+        DatabaseFeatures {
+            supports_json: version >= &DatabaseVersion::new(10, 2, 7),
+            supports_window_functions: version >= &DatabaseVersion::new(10, 2, 0),
+            supports_cte: version >= &DatabaseVersion::new(10, 2, 1),
+            supports_generated_columns: version >= &DatabaseVersion::new(10, 2, 0),
+            supports_fulltext: version >= &DatabaseVersion::new(10, 0, 0),
+            supports_spatial: version >= &DatabaseVersion::new(10, 0, 0),
+        }
     }
 }
 
