@@ -4,14 +4,17 @@ Links to detailed API documentation and developer resources.
 
 ## Rustdoc Documentation
 
-The complete API documentation is available in the [rustdoc section](../api/gold_digger/index.html) of this site.
+The complete API documentation is available in the [rustdoc section](../api/gold_digger/index.html)
+of this site.
 
 ## Public API Overview
 
 ### Core Functions
 
-- [`rows_to_strings()`](../api/gold_digger/fn.rows_to_strings.html) - Convert database rows to string vectors
-- [`get_extension_from_filename()`](../api/gold_digger/fn.get_extension_from_filename.html) - Extract file extensions for format detection
+- [`rows_to_strings()`](../api/gold_digger/fn.rows_to_strings.html) - Convert database rows to
+  string vectors
+- [`get_extension_from_filename()`](../api/gold_digger/fn.get_extension_from_filename.html) -
+  Extract file extensions for format detection
 
 ### Output Modules
 
@@ -29,20 +32,23 @@ The complete API documentation is available in the [rustdoc section](../api/gold
 ### Basic Library Usage
 
 ```rust
-use gold_digger::{rows_to_strings, csv};
+use gold_digger::{csv, rows_to_strings};
 use mysql::{Pool, Row};
 use std::fs::File;
 
-// Convert database rows and write CSV
-let rows: Vec<Row> = /* query results */;
-let string_rows = rows_to_strings(rows)?;
-let output = File::create("output.csv")?;
-csv::write(string_rows, output)?;
+fn example() -> anyhow::Result<()> {
+    // Convert database rows and write CSV
+    let rows: Vec<Row> = vec![]; // query results would go here
+    let string_rows = rows_to_strings(rows)?;
+    let output = File::create("output.csv")?;
+    csv::write(string_rows, output)?;
+    Ok(())
+}
 ```
 
 ### Custom Format Implementation
 
-```rust
+```rust,ignore
 use anyhow::Result;
 use std::io::Write;
 

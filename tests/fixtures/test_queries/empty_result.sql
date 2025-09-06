@@ -1,0 +1,2 @@
+SELECT 1 AS id
+WHERE 1 = 0

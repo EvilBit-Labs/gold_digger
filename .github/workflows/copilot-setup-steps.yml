@@ -29,7 +29,7 @@ jobs:
     # If you do not check out your code, Copilot will do this for you.
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: taiki-e/checkout-action@v1
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
@@ -48,7 +48,7 @@ jobs:
       - name: Install cargo tools
         uses: taiki-e/install-action@v2
         with:
-          tool: cargo-nextest,cargo-llvm-cov,cargo-audit,cargo-deny,cargo-dist, mdbook
+          tool: cargo-nextest,cargo-llvm-cov,cargo-audit,cargo-deny,cargo-dist,mdbook
 
       - name: Install mdbook plugins
         uses: taiki-e/install-action@v2

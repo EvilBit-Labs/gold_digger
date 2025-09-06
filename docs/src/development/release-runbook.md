@@ -1,10 +1,12 @@
 # Release Runbook
 
-This document provides a step-by-step guide for creating releases using the cargo-dist automated release workflow.
+This document provides a step-by-step guide for creating releases using the cargo-dist automated
+release workflow.
 
 ## Overview
 
-Gold Digger uses cargo-dist for automated cross-platform releases. The release process is triggered by pushing a Git tag and automatically handles:
+Gold Digger uses cargo-dist for automated cross-platform releases. The release process is triggered
+by pushing a Git tag and automatically handles:
 
 - Cross-platform builds (6 target platforms)
 - Multiple installer generation
@@ -241,7 +243,8 @@ tap = "EvilBit-Labs/homebrew-tap"
 
 ### git-cliff Configuration
 
-The project uses git-cliff for automated changelog generation from conventional commits. The configuration is typically in `cliff.toml` (if present) or uses git-cliff defaults.
+The project uses git-cliff for automated changelog generation from conventional commits. The
+configuration is typically in `cliff.toml` (if present) or uses git-cliff defaults.
 
 **Key git-cliff commands:**
 

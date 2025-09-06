@@ -1,6 +1,7 @@
 # Build Failure Troubleshooting
 
-This guide provides comprehensive solutions for Rust compilation and build issues in the Gold Digger project.
+This guide provides comprehensive solutions for Rust compilation and build issues in the Gold Digger
+project.
 
 ## Quick Reference
 
@@ -28,9 +29,13 @@ error[E0277]: the trait `TraitName` is not implemented
 
 1. **Type Mismatch Errors:**
 
-   ```rust
+   ```rust,ignore
+   fn some_function() -> &'static str {
+       "example"
+   }
+
    // Problem: Type conversion issues
-   let value: String = some_function(); // Returns &str
+   let value: String = some_function(); // Returns &str - this would fail
 
    // Solution: Proper type conversion
    let value: String = some_function().to_string();
@@ -38,15 +43,19 @@ error[E0277]: the trait `TraitName` is not implemented
 
 2. **Missing Trait Implementations:**
 
-   ```rust
+   ```rust,ignore
    // Problem: Trait not in scope
    use std::collections::HashMap;
+
    let mut map = HashMap::new();
    map.insert("key", "value"); // May need trait
 
    // Solution: Import required traits
    use std::collections::HashMap;
    use std::iter::FromIterator;
+
+   let mut map = HashMap::new();
+   map.insert("key", "value");
    ```
 
 3. **Lifetime Issues:**
@@ -429,7 +438,8 @@ error: could not find native static library `library_name`
    cargo build -j 4
    ```
 
-   You can persist this setting by adding `build.jobs = N` under the `[build]` table in `.cargo/config.toml`.
+   You can persist this setting by adding `build.jobs = N` under the `[build]` table in
+   `.cargo/config.toml`.
 
 3. **Enable Incremental Compilation:**
 

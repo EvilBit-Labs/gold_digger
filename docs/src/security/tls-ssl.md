@@ -1,6 +1,7 @@
 # TLS/SSL Configuration
 
-Configure secure connections to your MySQL/MariaDB database with Gold Digger's flexible TLS security controls.
+Configure secure connections to your MySQL/MariaDB database with Gold Digger's flexible TLS security
+controls.
 
 ## TLS Implementation
 
@@ -214,7 +215,8 @@ TLS connection failed: connection timed out
    - Check server certificate validity and chain integrity
    - Confirm server is listening on the TLS port (typically 3306)
    - Validate TLS cipher/protocol compatibility between client and server
-   - Test using `openssl s_client -connect host:3306` or `curl --tlsv1.2` to capture handshake details
+   - Test using `openssl s_client -connect host:3306` or `curl --tlsv1.2` to capture handshake
+     details
    - Review server logs for TLS-related errors or connection rejections
    - Enable verbose TLS client debug output to diagnose timeouts and handshake failures
 

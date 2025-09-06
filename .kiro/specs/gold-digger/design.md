@@ -2,11 +2,14 @@
 
 ## Overview
 
-Gold Digger is architected as a single-purpose CLI tool that transforms MySQL/MariaDB query results into structured output formats. The design emphasizes reliability, security, and composability for automation workflows.
+Gold Digger is architected as a single-purpose CLI tool that transforms MySQL/MariaDB query results
+into structured output formats. The design emphasizes reliability, security, and composability for
+automation workflows.
 
 ### Design Principles
 
-- **CLI-first with Environment Fallback**: CLI flags take precedence over environment variables for flexible deployment
+- **CLI-first with Environment Fallback**: CLI flags take precedence over environment variables for
+  flexible deployment
 - **Offline-first**: No external service dependencies at runtime
 - **Fail-fast**: Clear error messages with standardized exit codes (0-5)
 - **Memory-efficient**: Streaming processing for large result sets with O(row_width) memory usage
@@ -976,7 +979,9 @@ fn execute_query_workflow(config: Config) -> Result<()> {
 
 ### Error Handling Flow
 
-The application uses a centralized error handling approach where all errors are mapped to standardized exit codes (Requirements 4.1-4.7). The main function catches all errors and calls `std::process::exit()` with the appropriate code.
+The application uses a centralized error handling approach where all errors are mapped to
+standardized exit codes (Requirements 4.1-4.7). The main function catches all errors and calls
+`std::process::exit()` with the appropriate code.
 
 ## Performance Characteristics
 

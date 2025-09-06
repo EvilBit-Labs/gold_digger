@@ -1,6 +1,7 @@
 # Dependency Failure Troubleshooting
 
-This guide provides comprehensive solutions for dependency conflicts, version issues, and feature flag problems in the Gold Digger project.
+This guide provides comprehensive solutions for dependency conflicts, version issues, and feature
+flag problems in the Gold Digger project.
 
 ## Quick Reference
 
@@ -179,7 +180,8 @@ error: Package does not have feature `missing_feature`
    serde = { version = "1.0", features = ["derive"] }
    ```
 
-   **Note:** Gold Digger uses rustls exclusively for TLS support. TLS is always available and does not require feature toggling.
+   **Note:** Gold Digger uses rustls exclusively for TLS support. TLS is always available and does
+   not require feature toggling.
 
 3. **TLS Configuration:**
 
@@ -555,7 +557,8 @@ cargo install depgraph
 cargo deny init
 ```
 
-Edit the generated `deny.toml` to customize license policies, vulnerability checks, and dependency restrictions for your project.
+Edit the generated `deny.toml` to customize license policies, vulnerability checks, and dependency
+restrictions for your project.
 
 ### Security Considerations
 

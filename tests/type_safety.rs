@@ -555,6 +555,7 @@ fn test_indexed_access_safety_fix() {
 
 /// Test error handling and edge cases that could cause panics
 #[test]
+#[ignore = "Container port exposure issue - needs migration to new DatabaseContainer API"]
 fn test_error_handling_edge_cases() {
     if is_ci() {
         return;

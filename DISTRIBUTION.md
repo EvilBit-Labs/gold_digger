@@ -4,7 +4,8 @@ This document describes the cross-platform distribution setup for Gold Digger us
 
 ## Overview
 
-Gold Digger uses [cargo-dist](https://opensource.axo.dev/cargo-dist/) to provide standardized cross-platform distribution with:
+Gold Digger uses [cargo-dist](https://opensource.axo.dev/cargo-dist/) to provide standardized
+cross-platform distribution with:
 
 - **Cross-platform binaries** for Linux (x86_64, ARM64), macOS (Intel, Apple Silicon), and Windows
 - **Automated installers** (shell script, PowerShell, MSI, Homebrew)
@@ -169,7 +170,8 @@ targets = [
 
 ### Workflow Integration
 
-The cargo-dist workflow (`.github/workflows/cargo-dist.yml`) integrates with the existing release process:
+The cargo-dist workflow (`.github/workflows/cargo-dist.yml`) integrates with the existing release
+process:
 
 1. **Main Release Workflow** (`release.yml`) handles core functionality
 2. **cargo-dist Workflow** (`cargo-dist.yml`) generates distribution artifacts

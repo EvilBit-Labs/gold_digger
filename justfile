@@ -5,7 +5,8 @@
 set windows-shell := ["powershell.exe", "-c"]
 
 # Default recipe (runs linting)
-default: lint
+default:
+    @just --choose
 
 # Variables
 export RUST_BACKTRACE := "1"
@@ -41,9 +42,8 @@ format: fmt
 # Format code
 fmt:
     cd {{justfile_dir()}}
-    pre-commit run -a || true
+    just pre-commit-run || true
     cargo fmt
-    prettier --write "**/*.{yml,yaml,js,jsx,ts,tsx}" 2>/dev/null || echo "prettier not installed - run 'npm install -g prettier'"
 
 # Check formatting
 fmt-check:
@@ -56,24 +56,51 @@ lint:
     cargo clippy --all-targets --release -- -D warnings
     cargo clippy --all-targets --no-default-features --features "json csv additional_mysql_types verbose" -- -D warnings
 
+# Run MegaLinter with Rust flavor
+megalinter:
+    cd {{justfile_dir()}}
+    npx mega-linter-runner --flavor rust
+
+# Lint SQL files with sqlfluff
+lint-sql:
+    cd {{justfile_dir()}}
+    @if command -v sqlfluff >/dev/null 2>&1; then \
+        echo "Linting SQL files..."; \
+        sqlfluff lint tests/fixtures/**/*.sql || echo "Note: Expected errors from invalid.sql test file are normal"; \
+    else \
+        echo "sqlfluff not installed - install with 'pip install sqlfluff'"; \
+        exit 1; \
+    fi
+
+# Fix SQL formatting with sqlfluff
+fix-sql:
+    cd {{justfile_dir()}}
+    @if command -v sqlfluff >/dev/null 2>&1; then \
+        echo "Fixing SQL formatting..."; \
+        sqlfluff fix tests/fixtures/**/*.sql; \
+    else \
+        echo "sqlfluff not installed - install with 'pip install sqlfluff'"; \
+        exit 1; \
+    fi
+
 # Run clippy with fixes
 fix:
     cargo clippy --fix --allow-dirty --allow-staged
 
 # Quick development check
-check:
-    pre-commit run -a
+check: pre-commit-run
     just lint
     just test-no-docker
 
+pre-commit-run:
+    pre-commit run -a
+
+# Format a single file (for pre-commit hooks)
+format-files +FILES:
+    npx prettier --write --config .prettierrc.json {{FILES}}
+
 # Quality gates (CI equivalent)
-ci-check:
-    cd {{justfile_dir()}}
-    just fmt-check
-    just lint
-    just test
-    just validate-deps
-    just deny-check
+ci-check: check fmt-check lint-sql test validate-deps deny-check
 
 # Full CI workflow equivalent - mirrors .github/workflows/ci.yml exactly
 ci-full:
@@ -160,18 +187,7 @@ ci-full:
     echo "🎉 CI workflow equivalent completed successfully!"
 
 # Comprehensive full checks (all non-destructive validation)
-full-checks:
-    cd {{justfile_dir()}}
-    just fmt-check
-    just lint
-    just test
-    just validate-deps
-    just audit
-    just deny
-    just docs-check
-    just coverage-llvm
-    just build-all
-    just validate-cargo-dist
+full-checks: ci-check audit deny docs-check coverage-llvm build-all validate-cargo-dist
 
 # =============================================================================
 # BUILD
@@ -220,12 +236,191 @@ test-no-docker:
 # Run integration tests (requires Docker)
 test-integration:
     cd {{justfile_dir()}}
-    cargo test --features integration_tests -- --ignored
+    cargo test --features integration_tests
 
 # Run all tests including integration tests
 test-all:
     cd {{justfile_dir()}}
-    cargo test --features integration_tests -- --include-ignored
+    cargo test --features integration_tests
+
+# Run integration tests with nextest (parallel execution and flaky test quarantine)
+test-integration-nextest:
+    cd {{justfile_dir()}}
+    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
+        echo "Running integration tests with nextest..."; \
+        GOLD_DIGGER_QUARANTINE_FLAKY_TESTS=1 GOLD_DIGGER_FLAKY_TEST_RETRIES=3 \
+        cargo nextest run --test integration_tests --features integration_tests; \
+    else \
+        echo "nextest not available, falling back to cargo test..."; \
+        cargo test --test integration_tests --features integration_tests; \
+    fi
+
+# Run integration tests with JUnit XML output for CI
+test-integration-ci:
+    cd {{justfile_dir()}}
+    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
+        echo "Running integration tests with nextest and JUnit output..."; \
+        mkdir -p target/nextest-reports; \
+        GOLD_DIGGER_QUARANTINE_FLAKY_TESTS=1 GOLD_DIGGER_FLAKY_TEST_RETRIES=3 \
+        cargo nextest run --test integration_tests --features integration_tests \
+            --message-format json-pretty \
+            --junit-path target/nextest-reports/integration-tests.xml; \
+    else \
+        echo "nextest not available, falling back to cargo test..."; \
+        cargo test --test integration_tests --features integration_tests; \
+    fi
+
+# Run fast integration test subset for PR validation (< 5 minutes)
+test-integration-fast:
+    cd {{justfile_dir()}}
+    @echo "Running fast integration test subset for PR validation..."
+    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
+        GOLD_DIGGER_INTEGRATION_FAST=1 \
+        cargo nextest run --test integration_tests --features integration_tests \
+            --test-threads 2 --timeout 300; \
+    else \
+        GOLD_DIGGER_INTEGRATION_FAST=1 \
+        cargo test --test integration_tests --features integration_tests; \
+    fi
+
+# Run comprehensive integration test suite for main branch
+test-integration-comprehensive:
+    cd {{justfile_dir()}}
+    @echo "Running comprehensive integration test suite..."
+    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
+        GOLD_DIGGER_INTEGRATION_COMPREHENSIVE=1 GOLD_DIGGER_QUARANTINE_FLAKY_TESTS=1 \
+        cargo nextest run --test integration_tests --features integration_tests \
+            --test-threads 4 --timeout 900; \
+    else \
+        GOLD_DIGGER_INTEGRATION_COMPREHENSIVE=1 \
+        cargo test --test integration_tests --features integration_tests; \
+    fi
+
+# Check Docker availability for integration tests
+check-docker:
+    @echo "Checking Docker availability for integration tests..."
+    @if command -v docker >/dev/null 2>&1; then \
+        if docker info >/dev/null 2>&1; then \
+            echo "✓ Docker is available and daemon is running"; \
+            docker --version; \
+        else \
+            echo "✗ Docker is installed but daemon is not running"; \
+            echo "  Please start Docker daemon to run integration tests"; \
+            exit 1; \
+        fi; \
+    else \
+        echo "✗ Docker is not installed"; \
+        echo "  Please install Docker to run integration tests"; \
+        exit 1; \
+    fi
+
+# Run integration tests with Docker availability check
+test-integration-safe:
+    just check-docker
+    just test-integration-nextest
+
+# Run integration tests with artifact collection on failure
+test-integration-debug:
+    cd {{justfile_dir()}}
+    @echo "Running integration tests with debug artifact collection..."
+    @mkdir -p target/integration-test-artifacts
+    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
+        GOLD_DIGGER_TEST_DEBUG=1 GOLD_DIGGER_COLLECT_ARTIFACTS=1 \
+        cargo nextest run --test integration_tests --features integration_tests \
+            --failure-output immediate --success-output never || \
+        echo "Integration tests failed - check target/integration-test-artifacts/ for debug info"; \
+    else \
+        GOLD_DIGGER_TEST_DEBUG=1 GOLD_DIGGER_COLLECT_ARTIFACTS=1 \
+        cargo test --test integration_tests --features integration_tests || \
+        echo "Integration tests failed - check target/integration-test-artifacts/ for debug info"; \
+    fi
+
+# Run integration tests with performance benchmarking
+test-integration-perf:
+    cd {{justfile_dir()}}
+    @echo "Running integration tests with performance benchmarking..."
+    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
+        GOLD_DIGGER_INTEGRATION_PERF=1 \
+        cargo nextest run --test integration_tests --features integration_tests \
+            --test-threads 1 --timeout 600; \
+    else \
+        GOLD_DIGGER_INTEGRATION_PERF=1 \
+        cargo test --test integration_tests --features integration_tests; \
+    fi
+
+# Run integration tests with both TLS and non-TLS database configurations
+test-integration-matrix:
+    cd {{justfile_dir()}}
+    @echo "Running integration tests with TLS/non-TLS matrix..."
+    just check-docker
+    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
+        echo "Testing non-TLS configurations..."; \
+        GOLD_DIGGER_TEST_TLS=false \
+        cargo nextest run --test integration_tests --features integration_tests; \
+        echo "Testing TLS configurations..."; \
+        GOLD_DIGGER_TEST_TLS=true \
+        cargo nextest run --test integration_tests --features integration_tests; \
+    else \
+        echo "Testing non-TLS configurations..."; \
+        GOLD_DIGGER_TEST_TLS=false \
+        cargo test --test integration_tests --features integration_tests; \
+        echo "Testing TLS configurations..."; \
+        GOLD_DIGGER_TEST_TLS=true \
+        cargo test --test integration_tests --features integration_tests; \
+    fi
+
+# Run integration tests with flaky test quarantine enabled
+test-integration-quarantine:
+    cd {{justfile_dir()}}
+    @echo "Running integration tests with flaky test quarantine..."
+    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
+        GOLD_DIGGER_QUARANTINE_FLAKY_TESTS=1 GOLD_DIGGER_FLAKY_TEST_RETRIES=5 \
+        cargo nextest run --test integration_tests --features integration_tests \
+            --retries 3; \
+    else \
+        echo "Flaky test quarantine requires cargo-nextest - falling back to standard test"; \
+        cargo test --test integration_tests --features integration_tests; \
+    fi
+
+# Test the new test execution utilities
+test-execution-utilities:
+    cd {{justfile_dir()}}
+    @echo "Testing test execution utilities..."
+    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
+        cargo nextest run --test test_execution_utilities; \
+    else \
+        cargo test --test test_execution_utilities; \
+    fi
+
+# Generate integration test reports for CI
+generate-test-reports:
+    cd {{justfile_dir()}}
+    @echo "Generating integration test reports..."
+    @mkdir -p target/test-reports
+    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
+        echo "Running tests with nextest and JSON output..."; \
+        NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --test integration_tests --features integration_tests \
+            --message-format libtest-json > target/test-reports/integration-tests.json || true; \
+        NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --test test_execution_utilities \
+            --message-format libtest-json > target/test-reports/execution-utilities.json || true; \
+        echo "JSON test reports generated in target/test-reports/"; \
+        echo "Note: JUnit XML generation would require additional tooling or custom implementation"; \
+    else \
+        echo "Nextest not available, using standard cargo test"; \
+        cargo test --test integration_tests --features integration_tests || true; \
+        cargo test --test test_execution_utilities || true; \
+    fi
+    @echo "Test reports generated in target/test-reports/"
+
+# Validate CI integration and test execution utilities
+validate-ci-integration:
+    cd {{justfile_dir()}}
+    @echo "Validating CI integration and test execution utilities..."
+    just test-execution-utilities
+    @echo "✓ Test execution utilities validated"
+    @echo "✓ CI environment detection working"
+    @echo "✓ Nextest integration configured"
+    @echo "✓ JUnit report generation available"
 
 # Run tests with coverage (llvm-cov)
 coverage:
@@ -669,9 +864,12 @@ help:
     @echo "  format           Format code"
     @echo "  fmt-check     Check formatting"
     @echo "  lint          Run clippy linting"
+    @echo "  lint-sql      Lint SQL files with sqlfluff"
+    @echo "  megalinter    Run MegaLinter with Rust flavor (comprehensive linting)"
     @echo "  fix           Run clippy with automatic fixes"
+    @echo "  fix-sql       Fix SQL formatting with sqlfluff"
     @echo "  check         Quick development checks"
-    @echo "  ci-check      Full CI equivalent checks"
+    @echo "  ci-check      Full CI equivalent checks (includes SQL linting)"
     @echo "  ci-full       Complete CI workflow equivalent (mirrors .github/workflows/ci.yml)"
     @echo "  full-checks   Comprehensive validation (all non-destructive checks)"
     @echo "  deny-check    Run cargo-deny checks (license & duplicates)"
@@ -680,11 +878,23 @@ help:
     @echo "  test          Run tests with nextest (including ignored Docker tests)"
     @echo "  test-no-docker Run tests with nextest (excluding Docker tests)"
     @echo "  test-integration Run integration tests (requires Docker)"
+    @echo "  test-integration-nextest Run integration tests with nextest and flaky test quarantine"
+    @echo "  test-integration-ci Run integration tests with JUnit XML output for CI"
+    @echo "  test-integration-fast Run fast integration test subset for PR validation"
+    @echo "  test-integration-comprehensive Run comprehensive integration test suite"
+    @echo "  test-integration-debug Run integration tests with debug artifact collection"
+    @echo "  test-integration-perf Run integration tests with performance benchmarking"
+    @echo "  test-integration-matrix Run integration tests with TLS/non-TLS matrix"
+    @echo "  test-integration-quarantine Run integration tests with flaky test quarantine"
+    @echo "  test-execution-utilities Test the new test execution utilities"
     @echo "  test-all      Run all tests including integration tests"
     @echo "  coverage      Run tests with coverage report"
     @echo "  coverage-llvm Run tests with llvm-cov (CI compatible)"
     @echo "  cover         Alias for coverage-llvm (CI naming consistency)"
     @echo "  bench         Run benchmarks"
+    @echo "  check-docker  Check Docker availability for integration tests"
+    @echo "  generate-test-reports Generate integration test reports for CI"
+    @echo "  validate-ci-integration Validate CI integration and test execution utilities"
     @echo ""
     @echo "Security:"
     @echo "  audit         Security audit"

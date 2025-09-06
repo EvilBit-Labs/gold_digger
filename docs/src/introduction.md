@@ -1,10 +1,12 @@
 # Gold Digger Documentation
 
-Welcome to the Gold Digger documentation! Gold Digger is a fast, secure MySQL/MariaDB query tool written in Rust that exports structured data in multiple formats.
+Welcome to the Gold Digger documentation! Gold Digger is a fast, secure MySQL/MariaDB query tool
+written in Rust that exports structured data in multiple formats.
 
 ## What is Gold Digger?
 
-Gold Digger is a command-line tool designed for extracting data from MySQL and MariaDB databases with structured output support. It provides:
+Gold Digger is a command-line tool designed for extracting data from MySQL and MariaDB databases
+with structured output support. It provides:
 
 - **Multiple Output Formats**: Export data as CSV, JSON, or TSV
 - **Security First**: Built-in TLS (rustls) support and credential protection

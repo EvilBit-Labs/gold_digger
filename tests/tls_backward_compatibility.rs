@@ -17,6 +17,10 @@ use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
 
+// Import the new certificate generation functionality
+mod fixtures;
+use fixtures::tls::EphemeralCertificate;
+
 // Test helper function to consolidate to_ssl_opts() calls
 // This makes future API migrations easier by centralizing the call pattern
 fn assert_ssl_opts_available(config: &TlsConfig, context: &str) -> Result<()> {
@@ -48,24 +52,13 @@ fn create_temp_output_path() -> Result<(TempDir, String)> {
     Ok((temp_dir, output_path.to_string_lossy().to_string()))
 }
 
-/// Sample valid PEM certificate for testing
-const VALID_CERT_PEM: &str = r#"-----BEGIN CERTIFICATE-----
-MIIDXTCCAkWgAwIBAgIJAKoK/heBjcOuMA0GCSqGSIb3DQEBBQUAMEUxCzAJBgNV
-BAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBX
-aWRnaXRzIFB0eSBMdGQwHhcNMTcwODI4MTExNzE2WhcNMTgwODI4MTExNzE2WjBF
-MQswCQYDVQQGEwJBVTETMBEGA1UECAwKU29tZS1TdGF0ZTEhMB8GA1UECgwYSW50
-ZXJuZXQgV2lkZ2l0cyBQdHkgTHRkMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIB
-CgKCAQEAuuExKvY1xzHFw4A9J3QnsdTtjScjjQ3WM94I2FtpMRCZDBrT7PN2RQae
-1UBMHall7afNzoglf7Gpir6+sQBaoXI6F0S2ZuuAiYU9zqhxHKjVfz6rZqQkLrZQ
-kOcHXiIhIdOviydpX3MelAwNjGSteHyGA1TqRBxh9obFoAoRQmlHnVkycnARP8qd
-tNatja7VgHd7NuiE5vTaFzCREHk2lQaHdgAIuRs6Z4zw1h5BzHyUK4DqsJqGrRLm
-YehM4wlBOmrsBc7afNdlko/YVFkLJ7AsGQJ1951i6cWQmaq5WZEyLPp1FNRRRyep
-7TqBnLf2xURg5BDVvbhP0A42VpQIDAQABo1AwTjAdBgNVHQ4EFgQUhHf2808b6+RE
-oCgEMWMWgRkH+6wwHwYDVR0jBBgwFoAUhHf2808b6+REoCgEMWMWgRkH+6wwDAYD
-VR0TBAUwAwEB/zANBgkqhkiG9w0BAQUFAAOCAQEAGRuOfQqk5T5OhzgiuLxhQYsy
-XqSR4fNMW7M0PJjdXNzGxhMvKs9vEehxiaUHLjUx7bZT2+WBxNki4NfeCEHeQpZs
------END CERTIFICATE-----
-"#;
+/// Generate a valid PEM certificate for testing using rcgen
+/// This replaces the hardcoded certificate with dynamic generation
+fn generate_test_certificate() -> Result<String> {
+    let (cert_pem, _key_pem) =
+        EphemeralCertificate::generate_self_signed(vec!["localhost".to_string(), "test.local".to_string()])?;
+    Ok(cert_pem)
+}
 
 mod database_url_compatibility_tests {
     use super::*;
@@ -146,7 +139,8 @@ mod database_url_compatibility_tests {
     #[test]
     fn test_cli_tls_flags_precedence_over_url_ssl_params() -> Result<()> {
         // Create a temporary certificate file for testing
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
         // Test cases: (url_with_ssl_params, cli_tls_options, expected_validation_mode)
         let test_cases = vec![
@@ -328,7 +322,8 @@ mod tls_connection_compatibility_tests {
     /// Requirement: 7.1 - Custom CA functionality preserved
     #[test]
     fn test_custom_ca_functionality_unchanged() -> Result<()> {
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
         // Test custom CA configuration
         let config = TlsConfig::with_custom_ca(&cert_path);
@@ -381,7 +376,8 @@ mod tls_connection_compatibility_tests {
         assert_eq!(default_config, new_config, "Default and new configurations should be identical");
 
         // Test builder methods
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
         let custom_ca_config = TlsConfig::with_custom_ca(&cert_path);
         let skip_hostname_config = TlsConfig::with_skip_hostname_verification();
@@ -413,7 +409,8 @@ mod tls_connection_compatibility_tests {
         assert!(matches!(config.validation_mode(), TlsValidationMode::Platform));
 
         // Test custom CA CLI option
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
         let ca_tls_options = TlsOptions {
             tls_ca_file: Some(cert_path.clone()),
             insecure_skip_hostname_verify: false,
@@ -475,7 +472,8 @@ mod cli_flag_behavior_tests {
         assert!(!cli.tls_options.allow_invalid_certificate);
 
         // Test CLI parsing with TLS CA file flag
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
         let cli = Cli::try_parse_from([
             "gold_digger",
             "--db-url",
@@ -531,7 +529,8 @@ mod cli_flag_behavior_tests {
     /// Requirement: 7.4 - Mutual exclusion behavior preserved
     #[test]
     fn test_tls_flag_mutual_exclusion_unchanged() -> Result<()> {
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
         // Test mutual exclusion: CA file + skip hostname
         let result = Cli::try_parse_from([
@@ -674,7 +673,8 @@ mod security_warnings_tests {
         assert!(matches!(config.validation_mode(), TlsValidationMode::Platform));
 
         // Test custom CA mode (no warning)
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM).unwrap();
+        let cert_pem = generate_test_certificate().unwrap();
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem).unwrap();
         let config = TlsConfig::with_custom_ca(&cert_path);
         config.display_security_warnings();
         if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
@@ -759,7 +759,8 @@ mod security_warnings_tests {
         assert!(matches!(config.validation_mode(), TlsValidationMode::Platform));
 
         // Test custom CA mode (secure, no warnings)
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM).unwrap();
+        let cert_pem = generate_test_certificate().unwrap();
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem).unwrap();
         let config = TlsConfig::with_custom_ca(&cert_path);
         config.display_security_warnings(); // Should not display warnings
         if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
@@ -777,7 +778,8 @@ mod security_warnings_tests {
         let skip_hostname_config = TlsConfig::with_skip_hostname_verification();
         let accept_invalid_config = TlsConfig::with_accept_invalid();
         let platform_config = TlsConfig::new();
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
         let custom_ca_config = TlsConfig::with_custom_ca(&cert_path);
 
         // Verify configuration modes are correct
@@ -822,7 +824,8 @@ mod tls_always_available_tests {
         assert_ssl_opts_available(&accept_invalid_config, "Accept invalid config always available")?;
 
         // Test custom CA configuration
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
         let custom_ca_config = TlsConfig::with_custom_ca(&cert_path);
 
         // Custom CA may fail certificate parsing, but configuration should be created

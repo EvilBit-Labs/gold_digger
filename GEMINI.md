@@ -2,7 +2,9 @@
 
 ## Project Overview
 
-Gold Digger is a Rust-based MySQL/MariaDB query tool that outputs structured data (CSV/JSON/TSV) via environment variables. It's designed for headless database automation workflows with CLI-first architecture.
+Gold Digger is a Rust-based MySQL/MariaDB query tool that outputs structured data (CSV/JSON/TSV) via
+environment variables. It's designed for headless database automation workflows with CLI-first
+architecture.
 
 ## Project File Organization
 
@@ -86,9 +88,12 @@ fn mysql_value_to_json(mysql_value: &mysql::Value) -> serde_json::Value {
 
 - **NEVER** log `DATABASE_URL` or credentials - always redact
 - **NEVER** make external service calls at runtime (offline-first)
-- ⚠️ **WARNING**: `CAST(column AS CHAR)` can corrupt binary data or produce mojibake for text in lossy encodings. Use safer alternatives:
-  - **BLOB/BINARY columns**: Use `HEX(column)` or `TO_BASE64(column)` for lossless binary representation
-  - **Text columns**: Use `CAST(column AS CHAR CHARACTER SET utf8mb4)` or `CONVERT(column USING utf8mb4)` to specify explicit encoding
+- ⚠️ **WARNING**: `CAST(column AS CHAR)` can corrupt binary data or produce mojibake for text in
+  lossy encodings. Use safer alternatives:
+  - **BLOB/BINARY columns**: Use `HEX(column)` or `TO_BASE64(column)` for lossless binary
+    representation
+  - **Text columns**: Use `CAST(column AS CHAR CHARACTER SET utf8mb4)` or
+    `CONVERT(column USING utf8mb4)` to specify explicit encoding
   - **Numeric/Date columns**: `CAST(column AS CHAR)` is generally safe for these types
 
 ### Configuration Architecture
@@ -157,10 +162,12 @@ println!("Connecting to database...");
 
 ```toml
 default = ["json", "csv", "additional_mysql_types", "verbose"]
-json = []                                  # JSON output format
-csv = []                                   # CSV output format
-additional_mysql_types = [...]             # BigDecimal, Decimal, etc.
-verbose = []                               # Conditional logging
+json = [] # JSON output format
+csv = [] # CSV output format
+additional_mysql_types = [
+  "mysql_common?/bigdecimal",
+] # BigDecimal, Decimal, etc.
+verbose = [] # Conditional logging
 ```
 
 **TLS Implementation Notes:**
@@ -219,6 +226,7 @@ cargo run --release
 3. **Target small, reviewable changes** for single-maintainer workflow
 4. **Consider streaming implications** for future compatibility
 5. **Maintain offline-first principles** - no external service calls
+6. **Use context7 website or MCP tool** to get current documentation for APIs and crates
 
 ### Testing Recommendations
 

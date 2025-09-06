@@ -3,7 +3,52 @@
 # top-most EditorConfig file
 root = true
 
-# Unix-style newlines with a newline ending every file
+# Rust files
+[*.rs]
+indent_size = 4
+indent_style = space
+end_of_line = lf
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# TOML files
+[*.toml]
+indent_size = 4
+indent_style = space
+end_of_line = lf
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Markdown files
+[*.md]
+indent_size = 2
+indent_style = space
+end_of_line = lf
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = false
+
+# JSON, YAML, and JSONC files
+[*.json,*.jsonc,*.yml,*.yaml]
+indent_size = 2
+indent_style = space
+end_of_line = lf
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Shell scripts
+[*.sh,*.bash,*.zsh]
+indent_size = 2
+indent_style = space
+end_of_line = lf
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Default settings for all other files
 [*]
 charset = utf-8
 end_of_line = lf
@@ -11,28 +56,3 @@ insert_final_newline = true
 trim_trailing_whitespace = true
 indent_style = space
 indent_size = 4
-# Note: max_line_length is not reliably supported by all editors
-# Use language-specific formatters instead:
-# - Rust: rustfmt.toml (max_width = 119)
-# - Markdown: .markdownlint-cli2.jsonc (MD013 disabled)
-# - YAML/JSON: Respect indent_size settings below
-
-# Rust files
-[*.rs]
-indent_size = 4
-
-# TOML files
-[*.toml]
-indent_size = 4
-
-# Markdown files
-[*.md]
-trim_trailing_whitespace = false
-
-# YAML files
-[*.{yml,yaml}]
-indent_size = 2
-
-# JSON files
-[*.json]
-indent_size = 2

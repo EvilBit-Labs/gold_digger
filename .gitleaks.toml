@@ -1,0 +1,40 @@
+
+title = "gitleaks config"
+
+[extend]
+# useDefault will extend the base configuration with the default gitleaks config:
+# https://github.com/zricethezav/gitleaks/blob/master/config/gitleaks.toml
+useDefault = true
+
+[allowlist]
+description = "Allowlisted files and patterns"
+paths = [
+    '''.automation/test''',
+    '''megalinter-reports''',
+    '''.github/linters''',
+    '''node_modules''',
+    '''.mypy_cache''',
+    '''(.*?)gitleaks\.toml$''',
+    '''(?i)\.(bin|pyc|zip|tar|gz|bz2|7z|rar|iso|dmg|pkg|deb|rpm|msi|exe|dll|so|dylib|a|o|obj|class|jar|war|ear|apk|ipa|app|bundle|lock|cache|tmp|temp|log|pid|sock|fifo|dev|proc|sys)$''',
+]
+
+# Precise regex patterns for redacted DSN placeholders
+regexes = [
+    # Redacted database connection strings
+    '''REDACTED_DSN''',
+    '''SANITIZED_DSN''',
+    '''<USERNAME>''',
+    '''<PASSWORD>''',
+    '''<HOST>''',
+    '''<PORT>''',
+    '''<DB_NAME>''',
+    # Template placeholders
+    '''postgres://user:pass@host/db''',
+    '''mysql://user:pass@host/db''',
+    '''sqlite:///path/to/database''',
+    # Generic placeholders
+    '''user:pass@host''',
+    '''192\.168\.x\.x''',
+    '''10\.0\.x\.x''',
+    '''172\.16\.x\.x''',
+]

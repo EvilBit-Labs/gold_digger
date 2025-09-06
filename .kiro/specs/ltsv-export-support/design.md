@@ -2,9 +2,13 @@
 
 ## Overview
 
-This design implements LTSV (Labeled Tab-Separated Values) export support for Gold Digger through a two-tier architecture: a standalone `ltsv-rs` workspace crate that provides general-purpose LTSV reading/writing capabilities, and integration within Gold Digger's existing output format system.
+This design implements LTSV (Labeled Tab-Separated Values) export support for Gold Digger through a
+two-tier architecture: a standalone `ltsv-rs` workspace crate that provides general-purpose LTSV
+reading/writing capabilities, and integration within Gold Digger's existing output format system.
 
-The design follows Gold Digger's established patterns for output formats while creating a reusable library that benefits the broader Rust ecosystem. The LTSV format specification follows the standard where each line contains `label:value` pairs separated by tab characters.
+The design follows Gold Digger's established patterns for output formats while creating a reusable
+library that benefits the broader Rust ecosystem. The LTSV format specification follows the standard
+where each line contains `label:value` pairs separated by tab characters.
 
 ## Architecture
 
@@ -30,7 +34,8 @@ gold_digger/
 ### Integration Points
 
 1. **Workspace Crate (`ltsv-rs`)**: Standalone library following csv crate patterns
-2. **Gold Digger Integration (`src/ltsv.rs`)**: Thin wrapper implementing Gold Digger's format interface
+2. **Gold Digger Integration (`src/ltsv.rs`)**: Thin wrapper implementing Gold Digger's format
+   interface
 3. **CLI Integration**: Extension detection (`.ltsv`) and format flag (`--format ltsv`)
 4. **Feature Flag**: `ltsv` feature included in default features
 

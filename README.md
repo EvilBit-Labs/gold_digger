@@ -1,6 +1,8 @@
 # Gold Digger
 
-Gold Digger is a Rust-based MySQL/MariaDB query tool that exports results to structured data files (CSV, JSON, TSV). Designed for headless operation and automation workflows, it provides CLI-first configuration with environment variable fallbacks.
+Gold Digger is a Rust-based MySQL/MariaDB query tool that exports results to structured data files
+(CSV, JSON, TSV). Designed for headless operation and automation workflows, it provides CLI-first
+configuration with environment variable fallbacks.
 
 [![CI](https://github.com/EvilBit-Labs/gold_digger/actions/workflows/ci.yml/badge.svg)](https://github.com/EvilBit-Labs/gold_digger/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/EvilBit-Labs/gold_digger/actions/workflows/codeql.yml/badge.svg)](https://github.com/EvilBit-Labs/gold_digger/actions/workflows/codeql.yml)
@@ -15,9 +17,12 @@ Gold Digger is a Rust-based MySQL/MariaDB query tool that exports results to str
 
 - **CLI-first design** with environment variable fallbacks and comprehensive command-line interface
 - **Multiple output formats**: CSV (RFC 4180), JSON with pretty-printing, TSV
-- **Safe type handling**: Graceful NULL and type conversion without panics, with intelligent JSON type inference
-- **Secure TLS support**: Built-in rustls implementation with detailed error handling
-- **Comprehensive error handling**: Structured exit codes, intelligent error categorization, and actionable error messages
+- **Safe type handling**: Graceful NULL and type conversion without panics, with intelligent JSON
+  type inference
+- **Secure TLS support**: Built-in rustls implementation with detailed error handling and
+  comprehensive TLS testing framework
+- **Comprehensive error handling**: Structured exit codes, intelligent error categorization, and
+  actionable error messages
 - **Shell completion**: Support for Bash, Zsh, Fish, and PowerShell with easy generation
 - **Configuration debugging**: JSON config dump with automatic credential redaction
 - **Query flexibility**: Support for inline queries or external query files
@@ -27,13 +32,17 @@ Gold Digger is a Rust-based MySQL/MariaDB query tool that exports results to str
 
 ### Why "Gold Digger"?
 
-The name "Gold Digger" refers to the tool's ability to extract valuable data from databases - just as gold miners dig through earth to find precious metal, this tool digs through database tables to extract valuable information and insights. It's designed to help you discover the "golden" data hidden within your database systems.
+The name "Gold Digger" refers to the tool's ability to extract valuable data from databases - just
+as gold miners dig through earth to find precious metal, this tool digs through database tables to
+extract valuable information and insights. It's designed to help you discover the "golden" data
+hidden within your database systems.
 
 ## Installation
 
 ### Pre-built Binaries (Recommended)
 
-Download pre-built binaries from the [GitHub Releases](https://github.com/EvilBit-Labs/gold_digger/releases) page, which include:
+Download pre-built binaries from the
+[GitHub Releases](https://github.com/EvilBit-Labs/gold_digger/releases) page, which include:
 
 - **Cross-platform binaries** for Linux (x86_64, ARM64), macOS (Intel, Apple Silicon), and Windows
 - **Automated installers** for easy setup
@@ -85,15 +94,19 @@ cargo build --release --no-default-features --features "json csv"
 
 Gold Digger includes built-in secure database connections with rustls implementation:
 
-- **Pure Rust TLS**: Consistent cross-platform behavior using rustls with platform certificate store integration
-- **Platform Certificate Store**: Automatic integration with system certificate stores (Windows/macOS/Linux)
-- **Flexible Security Controls**: Four distinct TLS validation modes via mutually exclusive CLI flags
+- **Pure Rust TLS**: Consistent cross-platform behavior using rustls with platform certificate store
+  integration
+- **Platform Certificate Store**: Automatic integration with system certificate stores
+  (Windows/macOS/Linux)
+- **Flexible Security Controls**: Four distinct TLS validation modes via mutually exclusive CLI
+  flags
 - **Enhanced Error Messages**: Intelligent error classification with specific CLI flag suggestions
 - **Security Warnings**: Prominent warnings for insecure TLS modes with clear guidance
 
 ## Usage
 
-Gold Digger supports CLI-first configuration with environment variable fallbacks. CLI flags take precedence over environment variables.
+Gold Digger supports CLI-first configuration with environment variable fallbacks. CLI flags take
+precedence over environment variables.
 
 ### CLI Usage
 
@@ -190,7 +203,8 @@ Supported shells for completion generation:
 
 When CLI flags are not provided, Gold Digger falls back to environment variables:
 
-- `DATABASE_URL`: MySQL/MariaDB connection URL in standard format: `mysql://username:password@host:port/database`
+- `DATABASE_URL`: MySQL/MariaDB connection URL in standard format:
+  `mysql://username:password@host:port/database`
 - `DATABASE_QUERY`: SQL query to execute
 - `OUTPUT_FILE`: Path to output file. Extension determines format:
   - `.csv` → CSV output with RFC 4180 formatting
@@ -222,16 +236,21 @@ Gold Digger uses structured exit codes for better automation and error handling:
 
 - **0**: Success with results (or empty with `--allow-empty`)
 - **1**: Success but no rows returned (use `--allow-empty` to get exit code 0)
-- **2**: Configuration error (missing/invalid parameters, mutually exclusive flags, TLS configuration issues)
-- **3**: Database connection/authentication failure (access denied, connection refused, TLS handshake failures)
+- **2**: Configuration error (missing/invalid parameters, mutually exclusive flags, TLS
+  configuration issues)
+- **3**: Database connection/authentication failure (access denied, connection refused, TLS
+  handshake failures)
 - **4**: Query execution failure (SQL syntax errors, type conversion errors, database-level errors)
-- **5**: File I/O operation failure (cannot read query file, cannot write output file, permission errors)
+- **5**: File I/O operation failure (cannot read query file, cannot write output file, permission
+  errors)
 
-The exit code mapping includes intelligent error detection based on error message patterns, providing consistent behavior across different failure scenarios.
+The exit code mapping includes intelligent error detection based on error message patterns,
+providing consistent behavior across different failure scenarios.
 
 ## Testing
 
-Gold Digger includes comprehensive test suites to ensure reliability and correctness:
+Gold Digger includes comprehensive test suites to ensure reliability and correctness across multiple
+database systems and configurations:
 
 ### Unit Tests
 
@@ -250,34 +269,117 @@ just test-no-docker
 
 ### Integration Tests
 
-For comprehensive testing with real database connections, enable the integration test feature:
+Gold Digger features a comprehensive integration testing framework that validates functionality
+against real MySQL and MariaDB databases using testcontainers for automated container management:
 
 ```bash
 # Run integration tests (requires Docker)
-cargo test --features integration_tests -- --ignored
+cargo test --features integration_tests
 
 # Run all tests including integration tests
-cargo test --features integration_tests -- --include-ignored
+cargo test --features integration_tests
+
+# Run specific integration test categories
+cargo test --features integration_tests --test tls_variants_test
+cargo test --features integration_tests --test integration_tests
+cargo test --features integration_tests --test tls_integration
 
 # Using justfile commands
 just test-integration  # Run only integration tests
 just test-all         # Run all tests including integration tests
 ```
 
+#### Integration Test Architecture
+
+The integration testing framework provides:
+
+- **Multi-Database Support**: Both MySQL (8.0+) and MariaDB (10.11+) testing
+- **TLS/Non-TLS Testing**: Secure and standard connection validation with ephemeral certificates
+- **Container Management**: Automated MySQL/MariaDB container lifecycle with health checks
+- **Test Data Management**: Comprehensive schema and seed data covering all data types
+- **Format Validation**: CSV (RFC4180), JSON, and TSV format compliance testing
+- **Error Scenario Testing**: Connection failures, SQL errors, and file I/O validation
+- **Performance Testing**: Large dataset handling and memory usage validation
+- **Security Testing**: Credential protection and TLS certificate validation
+
+#### Test Module Structure
+
+```
+tests/
+├── integration/
+│   ├── mod.rs              # Common test utilities and setup functions
+│   ├── common.rs           # Shared CLI execution and output parsing utilities
+│   └── containers.rs       # MySQL/MariaDB container management with health checks
+├── fixtures/
+│   ├── schema.sql          # Comprehensive test database schema
+│   ├── seed_data.sql       # Test data covering all data types and edge cases
+│   └── tls/                # TLS certificates for secure connection testing
+├── test_support/           # Shared testing utilities
+│   ├── cli.rs              # CLI execution helpers
+│   ├── containers.rs       # Container management utilities
+│   ├── fixtures.rs         # Test data and schema utilities
+│   └── parsing.rs          # Output parsing and validation
+├── tls_variants_test.rs    # TLS and non-TLS database variant testing
+├── tls_integration.rs      # TLS connection and certificate validation
+├── integration_tests.rs    # Main integration test entry point
+└── database_seeding_test.rs # Database schema and data seeding tests
+```
+
+#### TLS and Non-TLS Testing
+
+The framework supports comprehensive TLS testing with both secure and standard connection modes:
+
+```rust
+// TLS-enabled database testing
+let tls_db = TestDatabaseTls::mysql();
+let container = DatabaseContainer::new_tls(tls_db)?;
+
+// Non-TLS database testing
+let plain_db = TestDatabasePlain::mysql();
+let container = DatabaseContainer::new_plain(plain_db)?;
+
+// Connection validation
+let tls_validation = container.validate_tls_connection()?;
+let plain_validation = container.validate_plain_connection()?;
+```
+
+#### Test Database Systems
+
+Integration tests use testcontainers to provide isolated database environments:
+
+- **MySQL**: Versions 8.0, 8.1 with both TLS and non-TLS configurations
+- **MariaDB**: Version 10.11+ with SSL certificate management
+- **TLS Configuration**: Ephemeral certificate generation with secure defaults
+- **Test Data**: Comprehensive schema covering all MySQL data types
+- **Fixtures**: Pre-seeded test data including edge cases and Unicode content
+
 ### Test Requirements
 
 **Integration Tests:**
 
 - Docker installed and running
-- MariaDB testcontainers module (automatically pulled)
+- MySQL and MariaDB testcontainers modules (automatically pulled)
 - `integration_tests` feature enabled
-- Tests are marked with `#[ignore]` by default
+- Tests are marked with `#[ignore]` by default for CI efficiency
+- Sufficient disk space (~500MB for Docker images)
 
 **Unit Tests:**
 
 - No external dependencies required
 - Run in CI environments
 - Cover configuration, error handling, and format validation
+
+### Test Categories
+
+1. **Unit Tests**: Fast tests without external dependencies
+2. **TLS Variant Tests**: TLS and non-TLS database configuration testing
+3. **TLS Integration Tests**: Certificate validation and secure connections
+4. **Database Integration Tests**: Real database query execution and data validation
+5. **Container Management Tests**: Database container lifecycle and health checks
+6. **Data Seeding Tests**: Schema creation and test data population
+7. **CLI Integration Tests**: Command-line interface and configuration testing
+8. **Performance Tests**: Large dataset handling and memory usage validation
+9. **Cross-Platform Tests**: Consistent behavior across Linux, macOS, and Windows
 
 ### Test Coverage
 
@@ -287,7 +389,34 @@ cargo llvm-cov --html
 
 # Generate coverage for CI
 cargo llvm-cov --lcov --output-path lcov.info
+
+# Coverage with integration tests
+cargo llvm-cov --html -- --include-ignored
 ```
+
+### Running Tests in CI
+
+The integration testing framework is designed for CI environments with:
+
+- **GitHub Actions**: Docker service enabled with appropriate timeouts
+- **Resource Management**: Tests designed for shared CI resources with configurable timeouts
+- **Container Cleanup**: Automatic cleanup prevents resource leaks
+- **Retry Logic**: Adaptive backoff for container startup in CI environments
+- **Cross-Platform Support**: Linux and macOS runners with Docker availability detection
+
+### Development Status
+
+The integration testing framework is actively under development. Current implementation includes:
+
+- ✅ **Core Infrastructure**: MySQL/MariaDB container management with testcontainers
+- ✅ **TLS Support**: TLS and non-TLS database variants with certificate management
+- ✅ **Container Management**: Health checks, resource cleanup, and CI compatibility
+- ✅ **Test Data**: Comprehensive schema and seed data for all MySQL data types
+- 🚧 **Advanced Testing**: Data type validation, output format testing, and performance tests are
+  planned
+
+See the [Integration Testing](docs/src/development/integration-testing.md) and
+[TLS Variants](docs/src/development/tls-variants.md) documentation for detailed information.
 
 ## Security & Quality Assurance
 
@@ -297,8 +426,10 @@ Gold Digger maintains high security and quality standards for all releases:
 
 - **Signed Artifacts:** All release binaries are cryptographically signed using GitHub attestation
 - **Supply Chain Security:** Automated security scanning of all dependencies
-- **Software Bill of Materials (SBOM):** Complete dependency information in CycloneDX format included with each release
-- **Cross-Platform Distribution:** 6 target platforms (ARM64 & x86_64 for macOS/Linux/Windows) via cargo-dist
+- **Software Bill of Materials (SBOM):** Complete dependency information in CycloneDX format
+  included with each release
+- **Cross-Platform Distribution:** 6 target platforms (ARM64 & x86_64 for macOS/Linux/Windows) via
+  cargo-dist
 
 ### Quality Standards
 
@@ -313,11 +444,15 @@ Gold Digger is authored by [@unclesp1d3r](https://www.github.com/EvilBit-Labs)
 
 ## Contributing and Feedback
 
-We welcome your feedback and suggestions for Gold Digger! If you have any ideas for new features, encounter any bugs or issues, or have any other comments, please reach out to us by creating an issue on our [GitHub repository](https://github.com/EvilBit-Labs/gold_digger/issues).
+We welcome your feedback and suggestions for Gold Digger! If you have any ideas for new features,
+encounter any bugs or issues, or have any other comments, please reach out to us by creating an
+issue on our [GitHub repository](https://github.com/EvilBit-Labs/gold_digger/issues).
 
-If you're interested in contributing to Gold Digger, we encourage you to submit a pull request. Please see our `CONTRIBUTING.md` for more information on how to get started.
+If you're interested in contributing to Gold Digger, we encourage you to submit a pull request.
+Please see our `CONTRIBUTING.md` for more information on how to get started.
 
-Our team is committed to providing a welcoming and inclusive environment for all contributors. Please adhere to our `CODE_OF_CONDUCT.md` when contributing to the project.
+Our team is committed to providing a welcoming and inclusive environment for all contributors.
+Please adhere to our `CODE_OF_CONDUCT.md` when contributing to the project.
 
 Thank you for your interest in Gold Digger, and we look forward to hearing from you!
 

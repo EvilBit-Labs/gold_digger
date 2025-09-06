@@ -1,0 +1,31 @@
+# Goodcheck configuration for gold_digger
+# Repository quality checks and custom rules
+
+rules:
+  # Check for hardcoded credentials
+  - id: hardcoded-credentials
+    pattern:
+      - token: "(?i)(password|secret|key|token)\\s*=\\s*['\"][^'\"]+['\"]"
+        message: "Potential hardcoded credential found"
+        severity: error
+
+  # Check for TODO comments in production code
+  - id: todo-comments
+    pattern:
+      - token: "(?i)TODO\\s*:"
+        message: "TODO comment found - should be addressed before production"
+        severity: warning
+
+  # Check for debug/print statements and logging with potential sensitive data
+  - id: debug-statements
+    pattern:
+      - token: "(?i)(println!|print!|dbg!|eprintln!|log::warn!|log::info!|log::error!|log::debug!|tracing::trace!|tracing::debug!|tracing::info!|tracing::warn!|tracing::error!|info!|warn!|error!|debug!|trace!|sqlx::query!|sqlx::query_as!|diesel::debug_query|rusqlite::params!)"
+        message: "Debug statement, logging macro, or database query helper found - review for potential sensitive data exposure"
+        severity: warning
+
+  # Check for unsafe code usage
+  - id: unsafe-usage
+    pattern:
+      - token: "unsafe\\s*\\{"
+        message: "Unsafe code block found - review security implications"
+        severity: error

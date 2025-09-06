@@ -20,7 +20,9 @@ A clear and concise description of what the bug is.
    export DATABASE_QUERY="..."
    ```
 
-   **⚠️ Security Note**: Before posting this issue, please redact or obfuscate any sensitive credentials in your DATABASE_URL. Replace usernames, passwords, and hostnames with `<redacted>` or use a sanitized example like `mysql://user:pass@host:3306/db`.
+   **⚠️ Security Note**: Before posting this issue, please redact or obfuscate any sensitive
+   credentials in your DATABASE_URL. Replace usernames, passwords, and hostnames with `<redacted>`
+   or use a sanitized example like `mysql://user:pass@host:3306/db`.
 
 2. Run the command:
 

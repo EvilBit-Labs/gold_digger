@@ -16,18 +16,10 @@
     ":prConcurrentLimit10"
   ],
   "timezone": "America/New_York",
-  "schedule": [
-    "before 6am on Monday"
-  ],
-  "labels": [
-    "dependencies"
-  ],
-  "assignees": [
-    "UncleSp1d3r"
-  ],
-  "reviewers": [
-    "UncleSp1d3r"
-  ],
+  "schedule": ["before 6am on Monday"],
+  "labels": ["dependencies"],
+  "assignees": ["UncleSp1d3r"],
+  "reviewers": ["UncleSp1d3r"],
   "cargo": {
     "enabled": true,
     "rangeStrategy": "bump"
@@ -35,37 +27,24 @@
   "packageRules": [
     {
       "description": "Auto-merge Cargo dev-dependencies",
-      "matchManagers": [
-        "cargo"
-      ],
-      "matchDepTypes": [
-        "dev-dependencies"
-      ],
-      "matchPackageNames": [
-        "cargo-nextest",
-        "cargo-tarpaulin"
-      ],
+      "matchManagers": ["cargo"],
+      "matchDepTypes": ["dev-dependencies"],
+      "matchPackageNames": ["cargo-nextest", "cargo-tarpaulin"],
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": true
     },
     {
       "description": "Auto-merge pre-commit hooks",
-      "matchManagers": [
-        "pre-commit"
-      ],
-      "matchPackageNames": [
-        "pre-commit"
-      ],
+      "matchManagers": ["pre-commit"],
+      "matchPackageNames": ["pre-commit"],
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": true
     },
     {
       "description": "Auto-merge GitHub Actions",
-      "matchManagers": [
-        "github-actions"
-      ],
+      "matchManagers": ["github-actions"],
       "matchPackageNames": [
         "actions/checkout",
         "actions/setup-node",
@@ -92,91 +71,50 @@
     },
     {
       "description": "Auto-merge justfile dependencies",
-      "matchManagers": [
-        "regex"
-      ],
-      "matchPackageNames": [
-        "just"
-      ],
+      "matchManagers": ["regex"],
+      "matchPackageNames": ["just"],
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": true
     },
     {
       "description": "Group Rust toolchain updates",
-      "matchPackageNames": [
-        "rust",
-        "rustc",
-        "cargo"
-      ],
+      "matchPackageNames": ["rust", "rustc", "cargo"],
       "groupName": "Rust toolchain",
-      "schedule": [
-        "before 6am on Monday"
-      ]
+      "schedule": ["before 6am on Monday"]
     },
     {
       "description": "Group GitHub Actions updates",
-      "matchManagers": [
-        "github-actions"
-      ],
+      "matchManagers": ["github-actions"],
       "groupName": "GitHub Actions",
-      "schedule": [
-        "before 6am on Monday"
-      ],
-      "labels": [
-        "ci"
-      ]
+      "schedule": ["before 6am on Monday"],
+      "labels": ["ci"]
     },
     {
       "description": "Require manual review for production dependencies",
-      "matchManagers": [
-        "cargo"
-      ],
-      "matchDepTypes": [
-        "dependencies"
-      ],
-      "matchPackageNames": [
-        "mysql",
-        "anyhow",
-        "clap",
-        "serde_json",
-        "csv"
-      ],
+      "matchManagers": ["cargo"],
+      "matchDepTypes": ["dependencies"],
+      "matchPackageNames": ["mysql", "anyhow", "clap", "serde_json", "csv"],
       "automerge": false,
       "reviewersFromCodeOwners": true,
-      "addLabels": [
-        "needs-review"
-      ]
+      "addLabels": ["needs-review"]
     },
     {
       "description": "Security updates get high priority",
-      "matchPackageNames": [
-        "mysql",
-        "serde_json",
-        "rustls",
-        "webpki-roots"
-      ],
+      "matchPackageNames": ["mysql", "serde_json", "rustls", "webpki-roots"],
       "priority": 20,
       "automerge": false,
-      "addLabels": [
-        "security",
-        "high-priority"
-      ]
+      "addLabels": ["security", "high-priority"]
     }
   ],
   "vulnerabilityAlerts": {
     "enabled": true,
-    "addLabels": [
-      "security",
-      "vulnerability"
-    ]
+    "addLabels": ["security", "vulnerability"]
   },
   "osvVulnerabilityAlerts": true,
   "lockFileMaintenance": {
     "enabled": true,
-    "schedule": [
-      "before 6am on Monday"
-    ]
+    "schedule": ["before 6am on Monday"]
   },
   "prNotPendingHours": 1,
   "stabilityDays": 3

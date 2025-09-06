@@ -25,9 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          persist-credentials: false # Disable caching to avoid leaking credentials
+        uses: taiki-e/checkout-action@v1
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable

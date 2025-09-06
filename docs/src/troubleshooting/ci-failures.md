@@ -1,6 +1,7 @@
 # CI Failure Troubleshooting Guide
 
-This guide provides detailed troubleshooting steps for common CI/CD pipeline failures in the Gold Digger project.
+This guide provides detailed troubleshooting steps for common CI/CD pipeline failures in the Gold
+Digger project.
 
 ## Quick Reference
 
@@ -469,9 +470,11 @@ When CI failures occur, debug artifacts are automatically collected. Here's how 
 
 For detailed guidance on specific failure types, see:
 
-- **[Build Failures](build-failures.md)** - Comprehensive guide for Rust compilation and build issues
+- **[Build Failures](build-failures.md)** - Comprehensive guide for Rust compilation and build
+  issues
 - **[Test Failures](test-failures.md)** - Detailed solutions for unit and integration test problems
-- **[Security Failures](security-failures.md)** - Vulnerability scanning and license compliance issues
+- **[Security Failures](security-failures.md)** - Vulnerability scanning and license compliance
+  issues
 - **[Format Failures](format-failures.md)** - Code formatting and linting problem resolution
 - **[Dependency Failures](dependency-failures.md)** - Version conflicts and feature flag issues
 

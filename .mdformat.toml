@@ -1,4 +1,4 @@
-# Exclude patterns not supported in python earlier than 3.13
+# mdformat configuration - consistent with Prettier and markdownlint
 exclude = [
     "venv/**",
     "**/node_modules/**",
@@ -6,11 +6,15 @@ exclude = [
     "**/*.mdc",
     "**/*.tpl.md",
     "**/CHANGELOG.md",
+    "docs/src/SUMMARY.md",
+    "docs/src/usage/output-formats.md",
     "rust_migration/index.md",
+    "target/**",
+    "megalinter-reports/**",
 ]
 validate = true
 number = true
-wrap = "keep"
+wrap = 100  # Consistent with Prettier's printWidth
 end_of_line = "lf"
 extensions = [
     "gfm",
@@ -22,7 +26,6 @@ extensions = [
     "toc",
     "wikilink",
 ]
-
 
 [plugin.mkdocs]
 align_semantic_breaks_in_lists = true

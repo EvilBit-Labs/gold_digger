@@ -225,7 +225,8 @@ just deny
 
 ### 3. Cargo-deny Configuration
 
-Gold Digger uses a dual cargo-deny configuration to balance local development flexibility with CI security enforcement:
+Gold Digger uses a dual cargo-deny configuration to balance local development flexibility with CI
+security enforcement:
 
 #### Local Development (Tolerant)
 
@@ -256,9 +257,8 @@ just deny-ci
 
 - `deny.toml` - Local development configuration with tolerant settings
 - `deny.ci.toml` - CI-specific configuration with strict enforcement
-- Both files maintain the same license and security policies, differing only in yanked crate handling
-
-````
+- Both files maintain the same license and security policies, differing only in yanked crate
+  handling
 
 ### 3. Testing
 
@@ -274,7 +274,13 @@ just coverage
 
 # Run specific test
 cargo test test_name
-````
+
+# Integration testing (requires Docker)
+just test-integration
+
+# All tests including integration tests
+just test-all
+```
 
 ### 4. Building
 
@@ -318,10 +324,10 @@ Gold Digger uses Cargo features for conditional compilation:
 default = ["json", "csv", "additional_mysql_types", "verbose"]
 
 # Individual features
-json = []  # Enable JSON output format
-csv = []   # Enable CSV output format
-additional_mysql_types = ["mysql_common?/bigdecimal", ...]
-verbose = []  # Enable verbose logging
+json = []                                             # Enable JSON output format
+csv = []                                              # Enable CSV output format
+additional_mysql_types = ["mysql_common?/bigdecimal"]
+verbose = []                                          # Enable verbose logging
 
 # TLS is always enabled with rustls - no feature flags needed
 ```
@@ -344,7 +350,38 @@ cargo test --no-default-features
 
 ## Database Setup for Testing
 
-### Local MySQL/MariaDB
+### Integration Test Framework
+
+Gold Digger uses testcontainers for automated database testing, eliminating the need for manual
+database setup.
+
+**Prerequisites:**
+
+- Docker daemon must be installed and running on the host system
+- Minimum Docker version 20.10+ (testcontainers requirement)
+- Docker Compose 2.0+ recommended for enhanced container orchestration
+- See [Docker installation documentation](https://docs.docker.com/get-docker/) for setup
+  instructions
+
+**Note:** No local database installation is required - testcontainers automatically spins up
+isolated database containers for testing.
+
+```bash
+# Integration tests automatically manage database containers
+just test-integration
+
+# No manual database setup required - testcontainers handles:
+# - MySQL 8.0/8.1 container startup and configuration
+# - MariaDB 10.11+ container with TLS certificates
+# - Test schema creation and data seeding
+# - Container cleanup after tests complete
+```
+
+### Manual Database Setup (Optional)
+
+For local development and debugging, you can set up databases manually:
+
+#### Local MySQL/MariaDB
 
 ```bash
 # Install MySQL (macOS)
@@ -362,10 +399,10 @@ CREATE USER 'test_user'@'localhost' IDENTIFIED BY 'test_password';
 GRANT ALL PRIVILEGES ON gold_digger_test.* TO 'test_user'@'localhost';
 ```
 
-### Docker Setup
+#### Docker Setup
 
 ```bash
-# Start MySQL container
+# Start MySQL container for manual testing
 docker run --name gold-digger-mysql \
   -e MYSQL_ROOT_PASSWORD=rootpass \
   -e MYSQL_DATABASE=gold_digger_test \
@@ -380,6 +417,17 @@ export DATABASE_QUERY="SELECT 1 as test"
 export OUTPUT_FILE="test.json"
 cargo run
 ```
+
+### Integration Test Database Features
+
+The comprehensive integration testing framework includes:
+
+- **Multi-Database Support**: Both MySQL and MariaDB containers
+- **TLS Configuration**: Both secure and standard connection testing
+- **Comprehensive Schema**: All MySQL/MariaDB data types with edge cases
+- **Test Data Seeding**: Unicode content, NULL values, large datasets
+- **Health Checks**: Container readiness validation with CI-compatible timeouts
+- **Automatic Cleanup**: No manual container management required
 
 ## Code Style Guidelines
 
@@ -407,21 +455,37 @@ use gold_digger::rows_to_strings;
 ### Safe Patterns
 
 ```rust
-// ✅ Safe database value conversion
-match database_value {
-    mysql::Value::NULL => "".to_string(),
-    val => from_value_opt::<String>(val)
-        .unwrap_or_else(|_| format!("{:?}", val))
-}
+use anyhow::Result;
+use mysql::{from_value_opt, Value};
 
-// ✅ Feature-gated compilation
-#[cfg(feature = "verbose")]
-eprintln!("Debug information");
+fn example_function() -> Result<()> {
+    let database_value = Value::NULL; // example value
+
+    // ✅ Safe database value conversion
+    let converted_value = match database_value {
+        Value::NULL => "".to_string(),
+        val => from_value_opt::<String>(val.clone()).unwrap_or_else(|_| format!("{:?}", val)),
+    };
+
+    // ✅ Feature-gated compilation
+    #[cfg(feature = "verbose")]
+    eprintln!("Debug information: {}", converted_value);
+
+    Ok(())
+}
 
 // ✅ Error propagation
 fn process_data() -> anyhow::Result<()> {
     let data = fetch_data()?;
     transform_data(data)?;
+    Ok(())
+}
+
+fn fetch_data() -> anyhow::Result<String> {
+    Ok("data".to_string())
+}
+
+fn transform_data(_data: String) -> anyhow::Result<()> {
     Ok(())
 }
 ```
@@ -482,7 +546,7 @@ just run-safe
 
 ### Commit Message Format
 
-```
+```text
 type(scope): description
 
 feat(csv): add support for custom delimiters

@@ -142,10 +142,10 @@ Fields are quoted only when they contain:
 ### Example Output
 
 ```tsv
-id  name	email	created_at
-1   John Doe	john@example.com	2024-01-15 10:30:00
-2   Jane Smith	jane@example.com	2024-01-16 14:22:33
-3	Bob Johnson		2024-01-17 09:15:45
+id  name email created_at
+1   John Doe john@example.com 2024-01-15 10:30:00
+2   Jane Smith jane@example.com 2024-01-16 14:22:33
+3 Bob Johnson  2024-01-17 09:15:45
 ```
 
 ### When to Use TSV
@@ -166,10 +166,10 @@ id  name	email	created_at
 Different formats handle database NULL values differently:
 
 | Format | NULL Representation | Example                                 |
-| ------ | ------------------- | --------------------------------------- |
+|--------|---------------------|-----------------------------------------|
 | CSV    | Empty string        | `1,John,,2024-01-15`                    |
 | JSON   | JSON `null`         | `{"id":"1","name":"John","email":null}` |
-| TSV    | Empty string        | `1	John		2024-01-15`                                         |
+| TSV    | Empty string        | `1 John  2024-01-15`                    |
 
 ## Type Safety and Data Conversion
 
@@ -188,7 +188,7 @@ FROM products;
 ### Type Conversion Rules
 
 | MySQL Type         | CSV/TSV Output        | JSON Output                        | NULL Handling         |
-| ------------------ | --------------------- | ---------------------------------- | --------------------- |
+|--------------------|-----------------------|------------------------------------|-----------------------|
 | `INT`, `BIGINT`    | String representation | Number (if valid)                  | Empty string / `null` |
 | `DECIMAL`, `FLOAT` | String representation | Number (if valid)                  | Empty string / `null` |
 | `VARCHAR`, `TEXT`  | Direct string         | String                             | Empty string / `null` |

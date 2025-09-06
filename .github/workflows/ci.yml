@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  workflow_run:
+    workflows: ["autofix.ci"]
+    types: [completed]
 
 defaults:
   run:
@@ -24,6 +27,7 @@ jobs:
   # Code quality checks - only need to run once
   quality:
     runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run'
     steps:
       - uses: actions/checkout@v5
       - uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -49,8 +53,9 @@ jobs:
   test-tls:
     runs-on: ubuntu-latest
     needs: quality
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run'
     steps:
-      - uses: actions/checkout@v5
+      - uses: taiki-e/checkout-action@v1
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -114,13 +119,14 @@ jobs:
   test-features:
     runs-on: ubuntu-latest
     needs: quality
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run'
     strategy:
       matrix:
         features:
           - "default"
           - "minimal"
     steps:
-      - uses: actions/checkout@v5
+      - uses: taiki-e/checkout-action@v1
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -161,8 +167,9 @@ jobs:
             platform: "Windows"
     runs-on: ${{ matrix.os }}
     needs: quality
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run'
     steps:
-      - uses: actions/checkout@v5
+      - uses: taiki-e/checkout-action@v1
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -187,6 +194,7 @@ jobs:
   test-tls-validation:
     runs-on: ubuntu-latest
     needs: quality
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run'
     steps:
       - uses: actions/checkout@v5
 
@@ -202,7 +210,7 @@ jobs:
 
       # Build the release binary and run the TLS integration and error handling tests
       - run: cargo build --release
-      - run: cargo nextest run --test tls_integration tls_error_handling_tests
+      - run: cargo nextest run --test tls_integration --test tls_integration_old
 
       - name: Test TLS configuration validation
         run: |
@@ -229,8 +237,9 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     needs: [test-tls, test-features, test-cross-platform]
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run'
     steps:
-      - uses: actions/checkout@v5
+      - uses: taiki-e/checkout-action@v1
 
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -243,17 +252,17 @@ jobs:
           tool: cargo-llvm-cov
 
       - name: Generate coverage (default features with TLS)
-        run: cargo llvm-cov --workspace --lcov --output-path lcov-default.info
+        run: cargo llvm-cov --workspace --no-report
 
       - name: Generate coverage (minimal features with TLS)
         run: |
-          cargo llvm-cov --workspace --lcov --output-path lcov-minimal.info \
-            --no-default-features --features "json csv additional_mysql_types"
+          cargo llvm-cov --workspace --no-report --no-default-features \
+          --features "json csv additional_mysql_types"
 
       - name: Combine coverage reports
         run: |
           # Combine both coverage reports
-          cat lcov-default.info lcov-minimal.info > lcov.info
+          cargo llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload to Codecov
         uses: codecov/codecov-action@v5

@@ -76,7 +76,8 @@
 
   - Replace unsafe MySQL value access in rows_to_strings function with safe iteration
   - Implement safe NULL value handling using match patterns instead of direct indexing
-  - Add comprehensive type conversion for all MySQL Value types (Int, UInt, Float, Date, Time, Bytes)
+  - Add comprehensive type conversion for all MySQL Value types (Int, UInt, Float, Date, Time,
+    Bytes)
   - Create separate JSON value conversion logic to preserve type information
   - Add proper error handling for type conversion failures with meaningful messages
   - _Requirements: 10.1, 10.2, 10.3, 10.4_
@@ -86,7 +87,8 @@
   - Create QueryExecutor struct with execute_streaming() method using mysql::query_iter
   - Implement RowStream iterator with proper column metadata handling
   - Add row count tracking and periodic progress logging in RowStream
-  - Update FormatWriter trait implementations to work with streaming `Iterator<Item = Result<Vec<String>>>`
+  - Update FormatWriter trait implementations to work with streaming
+    `Iterator<Item = Result<Vec<String>>>`
   - Add memory usage validation to ensure O(row_width) scaling not O(row_count)
   - Implement proper query error handling with structured logging and meaningful error messages
   - _Requirements: 6.1, 6.2, 6.3_
@@ -95,7 +97,8 @@
 
   - Add tracing and tracing-subscriber dependencies to Cargo.toml
   - Create LoggingConfig struct with init_tracing() method for verbosity-based configuration
-  - Replace all println!/eprintln! with structured logging using tracing macros (info!, debug!, warn!, error!)
+  - Replace all println!/eprintln! with structured logging using tracing macros (info!, debug!,
+    warn!, error!)
   - Add #[instrument] attributes to key functions (connect_to_database, execute_query)
   - Implement --verbose flag with structured logging levels (warn=0, info=1, debug=2, trace=3+)
   - Add --quiet flag for suppressing all output except errors

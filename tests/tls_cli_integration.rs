@@ -7,6 +7,10 @@ use insta::assert_snapshot;
 use std::fs;
 use tempfile::TempDir;
 
+// Import the new certificate generation functionality
+mod fixtures;
+use fixtures::tls::EphemeralCertificate;
+
 /// Helper function to create a temporary certificate file for testing
 #[allow(dead_code)]
 fn create_temp_cert_file(content: &str) -> Result<(TempDir, std::path::PathBuf), Box<dyn std::error::Error>> {
@@ -23,25 +27,14 @@ fn create_temp_output_path() -> Result<(TempDir, String), Box<dyn std::error::Er
     Ok((temp_dir, output_path.to_string_lossy().to_string()))
 }
 
-/// Sample valid PEM certificate for testing
+/// Generate a valid PEM certificate for testing using rcgen
+/// This replaces the hardcoded certificate with dynamic generation
 #[allow(dead_code)]
-const VALID_CERT_PEM: &str = r#"-----BEGIN CERTIFICATE-----
-MIIDXTCCAkWgAwIBAgIJAKoK/heBjcOuMA0GCSqGSIb3DQEBBQUAMEUxCzAJBgNV
-BAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBX
-aWRnaXRzIFB0eSBMdGQwHhcNMTcwODI4MTExNzE2WhcNMTgwODI4MTExNzE2WjBF
-MQswCQYDVQQGEwJBVTETMBEGA1UECAwKU29tZS1TdGF0ZTEhMB8GA1UECgwYSW50
-ZXJuZXQgV2lkZ2l0cyBQdHkgTHRkMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIB
-CgKCAQEAuuExKvY1xzHFw4A9J3QnsdTtjScjjQ3WM94I2FtpMRCZDBrT7PN2RQae
-1UBMHall7afNzoglf7Gpir6+sQBaoXI6F0S2ZuuAiYU9zqhxHKjVfz6rZqQkLrZQ
-kOcHXiIhIdOviydpX3MelAwNjGSteHyGA1TqRBxh9obFoAoRQmlHnVkycnARP8qd
-tNatja7VgHd7NuiE5vTaFzCREHk2lQaHdgAIuRs6Z4zw1h5BzHyUK4DqsJqGrRLm
-YehM4wlBOmrsBc7afNdlko/YVFkLJ7AsGQJ1951i6cWQmaq5WZEyLPp1FNRRRyep
-7TqBnLf2xURg5BDVvbhP0A42VpQIDAQABo1AwTjAdBgNVHQ4EFgQUhHf2808b6+RE
-oCgEMWMWgRkH+6wwHwYDVR0jBBgwFoAUhHf2808b6+REoCgEMWMWgRkH+6wwDAYD
-VR0TBAUwAwEB/zANBgkqhkiG9w0BAQUFAAOCAQEAGRuOfQqk5T5OhzgiuLxhQYsy
-XqSR4fNMW7M0PJjdXNzGxhMvKs9vEehxiaUHLjUx7bZT2+WBxNki4NfeCEHeQpZs
------END CERTIFICATE-----
-"#;
+fn generate_test_certificate() -> Result<String, Box<dyn std::error::Error>> {
+    let (cert_pem, _key_pem) =
+        EphemeralCertificate::generate_self_signed(vec!["localhost".to_string(), "test.local".to_string()])?;
+    Ok(cert_pem)
+}
 
 mod tls_cli_flag_tests {
     use super::*;
@@ -147,7 +140,8 @@ mod tls_mutual_exclusion_tests {
     /// Requirement: 6.1, 6.2, 6.3 - Mutually exclusive TLS flags
     #[test]
     fn test_ca_file_and_skip_hostname_mutual_exclusion() {
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM).unwrap();
+        let cert_pem = generate_test_certificate().unwrap();
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem).unwrap();
         let (_temp_dir2, output_path) = create_temp_output_path().unwrap();
 
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
@@ -182,7 +176,8 @@ mod tls_mutual_exclusion_tests {
     /// Requirement: 6.2, 6.4 - Mutually exclusive TLS flags
     #[test]
     fn test_ca_file_and_allow_invalid_mutual_exclusion() {
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM).unwrap();
+        let cert_pem = generate_test_certificate().unwrap();
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem).unwrap();
         let (_temp_dir2, output_path) = create_temp_output_path().unwrap();
 
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();

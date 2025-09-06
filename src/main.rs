@@ -9,39 +9,17 @@ use mysql::prelude::Queryable;
 use gold_digger::cli::{Cli, Commands, OutputFormat, Shell};
 use gold_digger::exit::{exit_no_rows, exit_success, exit_with_error};
 use gold_digger::rows_to_strings;
+use gold_digger::utils::redact_sql_error;
 
 use gold_digger::tls::{TlsConfig, create_tls_connection};
-
-/// Redacts sensitive information from SQL error messages
-fn redact_sql_error(message: &str) -> String {
-    // Simple redaction using string replacement for common sensitive patterns
-    let mut redacted = message.to_string();
-    let lower_msg = message.to_lowercase();
-
-    // Redact common sensitive patterns
-    if lower_msg.contains("password") {
-        redacted = redacted.replace("password", "***REDACTED***");
-    }
-    if lower_msg.contains("identified by") {
-        redacted = redacted.replace("identified by", "***REDACTED***");
-    }
-    if lower_msg.contains("token") {
-        redacted = redacted.replace("token", "***REDACTED***");
-    }
-    if lower_msg.contains("secret") {
-        redacted = redacted.replace("secret", "***REDACTED***");
-    }
-    if lower_msg.contains("key") && lower_msg.contains("=") {
-        redacted = redacted.replace("key", "***REDACTED***");
-    }
-
-    redacted
-}
 
 /// Main entry point for the gold_digger CLI tool.
 ///
 /// Parses CLI arguments and environment variables, executes a database query, and writes the output in the specified format.
 fn main() {
+    // Initialize crypto provider for rustls
+    gold_digger::init_crypto_provider();
+
     let cli = Cli::parse();
 
     // Handle subcommands first
@@ -157,7 +135,10 @@ fn main() {
     } else {
         let rows = match rows_to_strings(result) {
             Ok(rows) => rows,
-            Err(e) => exit_with_error(e, Some("Row conversion failed")),
+            Err(e) => exit_with_error(
+                e.context("Failed to convert database rows to string format"),
+                Some("Row conversion failed"),
+            ),
         };
         let output = match File::create(&output_file) {
             Ok(output) => output,
@@ -403,39 +384,6 @@ mod tests {
         let result = create_database_connection("mysql://invalid:invalid@nonexistent:3306/test", &cli);
         // Should fail due to invalid connection details, but TLS config should be processed
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_redact_sql_error() {
-        // Test that sensitive information is redacted from error messages
-        let error_with_password = "Error: Access denied for user 'test' (using password: YES)";
-        let redacted = redact_sql_error(error_with_password);
-        assert!(redacted.contains("***REDACTED***"));
-        assert!(!redacted.contains("password"));
-
-        let error_with_identified_by = "Error: CREATE USER failed with identified by 'secret123'";
-        let redacted = redact_sql_error(error_with_identified_by);
-        assert!(redacted.contains("***REDACTED***"));
-        assert!(!redacted.contains("identified by"));
-
-        let error_with_token = "Error: Invalid token abc123";
-        let redacted = redact_sql_error(error_with_token);
-        assert!(redacted.contains("***REDACTED***"));
-        assert!(!redacted.contains("token"));
-
-        let error_with_secret = "Error: Invalid secret key";
-        let redacted = redact_sql_error(error_with_secret);
-        assert!(redacted.contains("***REDACTED***"));
-        assert!(!redacted.contains("secret"));
-
-        let error_with_key = "Error: api_key=sensitive_value";
-        let redacted = redact_sql_error(error_with_key);
-        assert!(redacted.contains("***REDACTED***"));
-        assert!(!redacted.contains("key"));
-
-        let normal_error = "Error: Table 'test.users' doesn't exist";
-        let redacted = redact_sql_error(normal_error);
-        assert_eq!(redacted, normal_error); // Should be unchanged
     }
 
     #[test]

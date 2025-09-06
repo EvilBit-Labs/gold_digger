@@ -1,7 +1,16 @@
-use std::{env, ffi::OsStr, path::Path};
+use std::{env, ffi::OsStr, path::Path, sync::Once};
 
 use anyhow::{Context, Result};
 use mysql::Row;
+
+static INIT: Once = Once::new();
+
+/// Initialize crypto provider for rustls
+pub fn init_crypto_provider() {
+    INIT.call_once(|| {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    });
+}
 
 /// CLI interface module.
 pub mod cli;
@@ -15,12 +24,29 @@ pub mod json;
 pub mod tab;
 /// TLS configuration module.
 pub mod tls;
+/// Utility functions module.
+pub mod utils;
 
 /// Trait for writing data in different formats
 pub trait FormatWriter {
     fn write_header(&mut self, columns: &[String]) -> Result<()>;
     fn write_row(&mut self, row: &[String]) -> Result<()>;
     fn finalize(self) -> Result<()>;
+}
+
+/// Trait for streaming data processing (future enhancement)
+///
+/// This trait will enable memory-efficient processing of large result sets
+/// by processing rows one at a time instead of loading everything into memory.
+pub trait StreamingProcessor {
+    type Item;
+    type Error;
+
+    /// Process a single item from the stream
+    fn process_item(&mut self, item: Self::Item) -> std::result::Result<(), Self::Error>;
+
+    /// Finalize the streaming operation
+    fn finalize(self) -> std::result::Result<(), Self::Error>;
 }
 
 // TODO: Implement RowStream with correct QueryResult type signature
@@ -52,6 +78,7 @@ pub fn rows_to_strings(rows: Vec<Row>) -> anyhow::Result<Vec<Vec<String>>> {
         return Ok(Vec::new());
     }
 
+    // Pre-allocate with known capacity for better performance
     let mut result_rows = Vec::with_capacity(rows.len() + 1);
 
     // Extract headers from the first row
@@ -63,13 +90,19 @@ pub fn rows_to_strings(rows: Vec<Row>) -> anyhow::Result<Vec<Vec<String>>> {
     result_rows.push(header_row);
 
     // Process each row using safe iteration
-    for row in rows {
+    for (row_index, row) in rows.iter().enumerate() {
         let mut data_row = Vec::with_capacity(row.len());
         for i in 0..row.len() {
             match row.as_ref(i) {
                 Some(value) => match mysql_value_to_string(value) {
                     Ok(string_value) => data_row.push(string_value),
-                    Err(e) => return Err(e.context("Type conversion failed during row processing")),
+                    Err(e) => {
+                        return Err(e.context(format!(
+                            "Type conversion failed at row {} column {}",
+                            row_index + 1,
+                            i + 1
+                        )));
+                    },
                 },
                 None => data_row.push(String::new()),
             }
@@ -104,12 +137,22 @@ fn mysql_value_to_string(value: &mysql::Value) -> anyhow::Result<String> {
     match value {
         mysql::Value::NULL => Ok(String::new()),
         mysql::Value::Bytes(bytes) => {
-            // Try to convert bytes to UTF-8 string, fallback to lossy conversion
-            // Use Cow to avoid unnecessary allocation when bytes are valid UTF-8
-            Ok(match std::str::from_utf8(bytes) {
-                Ok(s) => s.to_string(),
-                Err(_) => String::from_utf8_lossy(bytes).into_owned(),
-            })
+            // Try to convert bytes to UTF-8 string, fallback to hex encoding for binary data
+            match std::str::from_utf8(bytes) {
+                Ok(s) => Ok(s.to_string()),
+                Err(_) => {
+                    // For binary data that's not valid UTF-8, use hex encoding
+                    // This prevents data corruption and provides deterministic output
+                    if bytes.len() > 1024 {
+                        // For large binary data, truncate and indicate
+                        let hex_prefix = bytes.iter().take(32).map(|b| format!("{:02x}", b)).collect::<String>();
+                        Ok(format!("0x{}... ({} bytes)", hex_prefix, bytes.len()))
+                    } else {
+                        let hex_string = bytes.iter().map(|b| format!("{:02x}", b)).collect::<String>();
+                        Ok(format!("0x{}", hex_string))
+                    }
+                },
+            }
         },
         mysql::Value::Int(i) => Ok(i.to_string()),
         mysql::Value::UInt(u) => Ok(u.to_string()),
@@ -239,15 +282,12 @@ mod tests {
 
     #[test]
     fn test_get_required_env_present() {
-        unsafe {
-            std::env::set_var("TEST_ENV_VAR", "test_value");
-        }
-        let result = get_required_env("TEST_ENV_VAR");
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "test_value");
-        unsafe {
-            std::env::remove_var("TEST_ENV_VAR");
-        }
+        // Use temp_env for safer environment variable testing
+        temp_env::with_var("TEST_ENV_VAR", Some("test_value"), || {
+            let result = get_required_env("TEST_ENV_VAR");
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), "test_value");
+        });
     }
 
     #[test]
@@ -275,11 +315,16 @@ mod tests {
         let result = mysql_value_to_string(&mysql::Value::Bytes(bytes)).unwrap();
         assert_eq!(result, "hello world");
 
-        // Test invalid UTF-8 bytes - should use lossy conversion
+        // Test invalid UTF-8 bytes - should use hex encoding
         let invalid_bytes = vec![0xFF, 0xFE, 0xFD];
         let result = mysql_value_to_string(&mysql::Value::Bytes(invalid_bytes)).unwrap();
-        assert!(!result.is_empty()); // Should contain replacement characters
-        assert!(result.contains('\u{FFFD}')); // Explicitly check for Unicode replacement character
+        assert_eq!(result, "0xfffefd");
+
+        // Test large binary data - should truncate with indication
+        let large_bytes = vec![0xAB; 2000];
+        let result = mysql_value_to_string(&mysql::Value::Bytes(large_bytes)).unwrap();
+        assert!(result.starts_with("0x"));
+        assert!(result.contains("... (2000 bytes)"));
     }
 
     #[test]

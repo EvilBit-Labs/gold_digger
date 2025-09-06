@@ -25,7 +25,7 @@ mod tests {
         let mut cursor = Cursor::new(Vec::new());
         let mut writer = JsonWriter::new(&mut cursor, false);
 
-        let columns = vec!["id".to_string(), "name".to_string()];
+        let columns = vec!["id".to_string(), "item_name".to_string()];
         let row = vec!["1".to_string(), "test".to_string()];
 
         writer.write_header(&columns).unwrap();
@@ -37,14 +37,14 @@ mod tests {
         assert!(output.contains(r#"]}"#));
         // With type inference, "1" becomes integer 1, "test" remains string
         assert!(output.contains(r#""id":1"#) || output.contains(r#""id":"1""#));
-        assert!(output.contains(r#""name":"test""#));
+        assert!(output.contains(r#""item_name":"test""#));
     }
 
     #[test]
     fn test_csv_generic_iterators() {
         // Test with Vec<Vec<String>> (backward compatibility)
         let data = vec![
-            vec!["name".to_string(), "age".to_string()],
+            vec!["item_name".to_string(), "age".to_string()],
             vec!["Alice".to_string(), "30".to_string()],
             vec!["Bob".to_string(), "25".to_string()],
         ];
@@ -53,13 +53,13 @@ mod tests {
         csv::write(data, &mut output).unwrap();
         let output_str = String::from_utf8(output).unwrap();
 
-        assert!(output_str.contains("name,age"));
+        assert!(output_str.contains("item_name,age"));
         assert!(output_str.contains("Alice,30"));
         assert!(output_str.contains("Bob,25"));
 
         // Test with iterator of iterators
         let data_iter = vec![
-            vec!["name".to_string(), "age".to_string()],
+            vec!["item_name".to_string(), "age".to_string()],
             vec!["Alice".to_string(), "30".to_string()],
             vec!["Bob".to_string(), "25".to_string()],
         ]
@@ -76,7 +76,7 @@ mod tests {
     fn test_csv_bytes_interface() {
         // Test with bytes interface for better performance
         let data = vec![
-            vec!["name".to_string(), "age".to_string()],
+            vec!["item_name".to_string(), "age".to_string()],
             vec!["Alice".to_string(), "30".to_string()],
             vec!["Bob".to_string(), "25".to_string()],
         ];
@@ -85,7 +85,7 @@ mod tests {
         csv::write_bytes(data, &mut output).unwrap();
         let output_str = String::from_utf8(output).unwrap();
 
-        assert!(output_str.contains("name,age"));
+        assert!(output_str.contains("item_name,age"));
         assert!(output_str.contains("Alice,30"));
         assert!(output_str.contains("Bob,25"));
     }
@@ -93,7 +93,7 @@ mod tests {
     #[test]
     fn test_tsv_generic_iterators() {
         let data = vec![
-            vec!["name".to_string(), "age".to_string()],
+            vec!["item_name".to_string(), "age".to_string()],
             vec!["Alice".to_string(), "30".to_string()],
             vec!["Bob".to_string(), "25".to_string()],
         ];
@@ -102,7 +102,7 @@ mod tests {
         tab::write(data, &mut output).unwrap();
         let output_str = String::from_utf8(output).unwrap();
 
-        assert!(output_str.contains("name\tage"));
+        assert!(output_str.contains("item_name\tage"));
         assert!(output_str.contains("Alice\t30"));
         assert!(output_str.contains("Bob\t25"));
     }
