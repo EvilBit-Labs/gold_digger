@@ -137,7 +137,7 @@ let database_url = cli.db_url
 
 ### Format Selection Logic
 
-```rust
+```rust,ignore
 // Priority: CLI flag > file extension > default TSV
 let format = cli.format.unwrap_or_else(|| {
     OutputFormat::from_extension(&output_file)
@@ -175,7 +175,7 @@ match format {
 
 ### Database Value Conversion
 
-```rust
+```rust,ignore
 // ✅ CORRECT - Use the safe conversion in lib.rs
 let rows = rows_to_strings(mysql_rows)?;  // Always safe
 
@@ -203,7 +203,7 @@ fn mysql_value_to_string(value: &mysql::Value) -> anyhow::Result<String> {
 
 **Credential Protection**:
 
-```rust
+```rust,ignore
 // ✅ ALWAYS redact credentials in error messages
 fn redact_sql_error(message: &str) -> String {
     // Use the regex patterns in main.rs for credential redaction
@@ -418,6 +418,7 @@ just test            # All tests including Docker integration
 - Add appropriate error context with `.context()`
 - Redact credentials in error messages
 - Follow the CLI patterns established in `src/cli.rs`
+- Use context7 website or MCP tool to get current documentation for APIs and crates
 
 **Never**:
 

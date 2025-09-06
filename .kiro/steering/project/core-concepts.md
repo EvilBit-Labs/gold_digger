@@ -126,6 +126,7 @@ just security     # cargo audit (advisory)
 - **Clippy warnings**: Zero tolerance (`-D warnings`)
 - **Error handling**: Use `anyhow` for applications, `thiserror` for libraries
 - **Documentation**: Doc comments (`///`) required for all public functions
+- Use context7 website or MCP tool to get current documentation for APIs and crates
 
 ### Testing Requirements
 

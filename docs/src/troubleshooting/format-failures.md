@@ -72,7 +72,7 @@ Diff in /path/to/file.rs at line 42:
 
 **Error Pattern:**
 
-```
+```text,ignore
 error: line longer than 100 characters
    --> src/main.rs:42:1
     |
@@ -84,7 +84,7 @@ error: line longer than 100 characters
 
 1. **Break Long Lines:**
 
-   ```rust
+   ```rust,ignore
    // Problem: Long line
    let result = some_function_with_many_parameters(param1, param2, param3, param4);
 
@@ -99,7 +99,7 @@ error: line longer than 100 characters
 
 2. **Extract Variables:**
 
-   ```rust
+   ```rust,ignore
    // Problem: Long expression
    let result = calculate_something(data.field1, data.field2, data.field3, other_data.field);
 
@@ -113,7 +113,7 @@ error: line longer than 100 characters
 
 3. **Use Builder Pattern:**
 
-   ```rust
+   ```rust,ignore
    // Problem: Long constructor call
    let config = Configuration::new(param1, param2, param3, param4, param5, param6);
 
@@ -212,14 +212,22 @@ error: this expression can be simplified
 
    **Boolean Comparisons:**
 
-   ```rust
+   ```rust,ignore
    // Problem
-   if x == true { }
-   if y == false { }
+   if x == true {
+       // do something
+   }
+   if y == false {
+       // do something
+   }
 
    // Solution
-   if x { }
-   if !y { }
+   if x {
+       // do something
+   }
+   if !y {
+       // do something
+   }
    ```
 
    **Unnecessary Returns:**
@@ -238,17 +246,21 @@ error: this expression can be simplified
 
    **String Comparisons:**
 
-   ```rust
+   ```rust,ignore
    // Problem
-   if name == "test".to_string() { }
+   if name == "test".to_string() {
+       // do something
+   }
 
    // Solution
-   if name == "test" { }
+   if name == "test" {
+       // do something
+   }
    ```
 
    **Option/Result Handling:**
 
-   ```rust
+   ```rust,ignore
    // Problem
    match result {
        Ok(value) => Some(value),
@@ -273,7 +285,7 @@ error: consider using `retain` instead of this pattern
 
 1. **Avoid Unnecessary Cloning:**
 
-   ```rust
+   ```rust,ignore
    // Problem
    let x = 42;
    let y = x.clone();  // i32 is Copy, not Clone
@@ -285,17 +297,21 @@ error: consider using `retain` instead of this pattern
 
 2. **Optimize Iterations:**
 
-   ```rust
+   ```rust,ignore
    // Problem
-   for item in vec.into_iter() { }  // Redundant into_iter()
+   for item in vec.into_iter() {
+       // process item
+   }  // Redundant into_iter()
 
    // Solution
-   for item in vec { }  // Direct iteration
+   for item in vec {
+       // process item
+   }  // Direct iteration
    ```
 
 3. **Use Efficient Methods:**
 
-   ```rust
+   ```rust,ignore
    // Problem
    let mut vec = vec![1, 2, 3, 4, 5];
    vec = vec.into_iter().filter(|&x| x > 2).collect();
@@ -318,7 +334,7 @@ error: this comparison involving the minimum or maximum element for this type co
 
 1. **Proper Swapping:**
 
-   ```rust
+   ```rust,ignore
    // Problem
    let temp = a;
    a = b;
@@ -330,12 +346,16 @@ error: this comparison involving the minimum or maximum element for this type co
 
 2. **Correct Comparisons:**
 
-   ```rust
+   ```rust,ignore
    // Problem
-   if x >= std::i32::MIN { }  // Always true
+   if x >= std::i32::MIN {
+       // Always true
+   }
 
-   // Solution
-   // Remove unnecessary comparison or use proper bounds
+   // Solution: Remove unnecessary comparison or use proper bounds
+   if x > some_meaningful_value {
+       // do something
+   }
    ```
 
 ### Style Lints
@@ -352,7 +372,7 @@ error: consider using an `if let` instead of a `match`
 
 1. **Simplify Match Statements:**
 
-   ```rust
+   ```rust,ignore
    // Problem
    match option {
        Some(value) => {
@@ -374,7 +394,7 @@ error: consider using an `if let` instead of a `match`
 
 2. **Use if let for Simple Matches:**
 
-   ```rust
+   ```rust,ignore
    // Problem
    match option {
        Some(value) => println!("Value: {}", value),
@@ -483,34 +503,46 @@ error: clippy not installed
 
 1. **Long Function Signatures:**
 
-   ```rust
+   ```rust,ignore
    // Problem: Long function signature
-   pub fn process_database_query(connection: &mut Connection, query: &str, parameters: &[Value]) -> Result<Vec<Row>, DatabaseError> {
-
-   // Solution: Break into multiple lines
    pub fn process_database_query(
        connection: &mut Connection,
        query: &str,
        parameters: &[Value],
    ) -> Result<Vec<Row>, DatabaseError> {
+       // implementation
+       Ok(vec![])
+   }
+
+   // Solution: Break into multiple lines (same as above)
+   pub fn process_database_query(
+       connection: &mut Connection,
+       query: &str,
+       parameters: &[Value],
+   ) -> Result<Vec<Row>, DatabaseError> {
+       // implementation
+       Ok(vec![])
+   }
    ```
 
 2. **Complex Generic Constraints:**
 
-   ```rust
+   ```rust,ignore
+   use std::fmt::{Debug, Display};
+   use std::str::FromStr;
+
+   trait MyTrait {}
+
    // Problem: Long generic constraints
-   impl<T: Clone + Debug + Send + Sync + 'static> MyTrait for T where T: Display + FromStr {
+   impl<T: Clone + Debug + Send + Sync + 'static> MyTrait for T where T: Display + FromStr {}
 
    // Solution: Break constraints
-   impl<T> MyTrait for T
-   where
-       T: Clone + Debug + Send + Sync + 'static + Display + FromStr,
-   {
+   impl<T> MyTrait for T where T: Clone + Debug + Send + Sync + 'static + Display + FromStr {}
    ```
 
 3. **Long Chain Calls:**
 
-   ```rust
+   ```rust,ignore
    // Problem: Long method chain
    let result = data.iter().filter(|x| x.is_valid()).map(|x| x.process()).collect::<Vec<_>>();
 

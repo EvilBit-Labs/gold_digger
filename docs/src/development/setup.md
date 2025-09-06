@@ -260,8 +260,6 @@ just deny-ci
 - Both files maintain the same license and security policies, differing only in yanked crate
   handling
 
-````
-
 ### 3. Testing
 
 ```bash
@@ -282,7 +280,7 @@ just test-integration
 
 # All tests including integration tests
 just test-all
-````
+```
 
 ### 4. Building
 
@@ -326,10 +324,10 @@ Gold Digger uses Cargo features for conditional compilation:
 default = ["json", "csv", "additional_mysql_types", "verbose"]
 
 # Individual features
-json = []  # Enable JSON output format
-csv = []   # Enable CSV output format
-additional_mysql_types = ["mysql_common?/bigdecimal", ...]
-verbose = []  # Enable verbose logging
+json = []                                             # Enable JSON output format
+csv = []                                              # Enable CSV output format
+additional_mysql_types = ["mysql_common?/bigdecimal"]
+verbose = []                                          # Enable verbose logging
 
 # TLS is always enabled with rustls - no feature flags needed
 ```
@@ -457,21 +455,37 @@ use gold_digger::rows_to_strings;
 ### Safe Patterns
 
 ```rust
-// ✅ Safe database value conversion
-match database_value {
-    mysql::Value::NULL => "".to_string(),
-    val => from_value_opt::<String>(val)
-        .unwrap_or_else(|_| format!("{:?}", val))
-}
+use anyhow::Result;
+use mysql::{from_value_opt, Value};
 
-// ✅ Feature-gated compilation
-#[cfg(feature = "verbose")]
-eprintln!("Debug information");
+fn example_function() -> Result<()> {
+    let database_value = Value::NULL; // example value
+
+    // ✅ Safe database value conversion
+    let converted_value = match database_value {
+        Value::NULL => "".to_string(),
+        val => from_value_opt::<String>(val.clone()).unwrap_or_else(|_| format!("{:?}", val)),
+    };
+
+    // ✅ Feature-gated compilation
+    #[cfg(feature = "verbose")]
+    eprintln!("Debug information: {}", converted_value);
+
+    Ok(())
+}
 
 // ✅ Error propagation
 fn process_data() -> anyhow::Result<()> {
     let data = fetch_data()?;
     transform_data(data)?;
+    Ok(())
+}
+
+fn fetch_data() -> anyhow::Result<String> {
+    Ok("data".to_string())
+}
+
+fn transform_data(_data: String) -> anyhow::Result<()> {
     Ok(())
 }
 ```
@@ -532,7 +546,7 @@ just run-safe
 
 ### Commit Message Format
 
-```
+```text
 type(scope): description
 
 feat(csv): add support for custom delimiters

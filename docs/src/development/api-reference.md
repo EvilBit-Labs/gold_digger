@@ -32,20 +32,23 @@ of this site.
 ### Basic Library Usage
 
 ```rust
-use gold_digger::{rows_to_strings, csv};
+use gold_digger::{csv, rows_to_strings};
 use mysql::{Pool, Row};
 use std::fs::File;
 
-// Convert database rows and write CSV
-let rows: Vec<Row> = /* query results */;
-let string_rows = rows_to_strings(rows)?;
-let output = File::create("output.csv")?;
-csv::write(string_rows, output)?;
+fn example() -> anyhow::Result<()> {
+    // Convert database rows and write CSV
+    let rows: Vec<Row> = vec![]; // query results would go here
+    let string_rows = rows_to_strings(rows)?;
+    let output = File::create("output.csv")?;
+    csv::write(string_rows, output)?;
+    Ok(())
+}
 ```
 
 ### Custom Format Implementation
 
-```rust
+```rust,ignore
 use anyhow::Result;
 use std::io::Write;
 

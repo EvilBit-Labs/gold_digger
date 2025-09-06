@@ -26,7 +26,7 @@ Gold Digger handles special floating-point values:
 
 When outputting to JSON format, Gold Digger attempts to preserve data types:
 
-```json
+```json,ignore
 {
   "data": [
     {

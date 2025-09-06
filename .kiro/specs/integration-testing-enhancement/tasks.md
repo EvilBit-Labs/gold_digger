@@ -84,7 +84,7 @@
   - Add support for generating certificates using LibreSSL on macOS and Linux
   - _Requirements: 1.1, 1.2, 1.3, 1.5, 9.3_
 
-- [x] 1.3 Create TLS certificate management and test database schema system
+- [ ] 1.3 Create TLS certificate management and test database schema system
 
   - ✓ Basic TLS certificate handling exists in `tests/tls_integration.rs` (need to move to fixtures)
   - Create `tests/fixtures/tls/` directory with test SSL certificates for TLS-enabled containers
@@ -96,7 +96,7 @@
   - Add database-specific compatibility handling for MySQL vs MariaDB differences
   - _Requirements: 1.2, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 9.3_
 
-- [ ] 1.3.1 Set up TLS certificate fixtures and management
+- [x] 1.3.1 Set up TLS certificate fixtures and management
 
   - Create `tests/fixtures/tls/` directory structure
   - Move existing TLS certificate constants from `tests/tls_integration.rs` to fixture files
@@ -104,7 +104,7 @@
   - Create certificate loading utilities for container configuration
   - Add certificate validation helpers for TLS connection tests
 
-- [ ] 1.3.1.1 Replace certificate generation logic with rcgen crate
+- [x] 1.3.1.1 Replace certificate generation logic with rcgen crate
 
   - Add `rcgen` crate to dev-dependencies in `Cargo.toml` for X.509 certificate generation
   - Replace existing hardcoded certificate constants with `rcgen::generate_simple_self_signed()`
@@ -114,6 +114,16 @@
     names
   - Use `rcgen` to generate certificates with localhost and container hostnames for TLS testing
   - Ensure generated certificates are compatible with MySQL/MariaDB TLS requirements
+  - _Requirements: 1.2, 1.3, 9.3_
+
+- [ ] 1.3.1.2 Replace libc disk space check with sysinfo crate
+
+  - Replace unsafe `libc::statvfs()` calls in `tests/integration/containers.rs::check_disk_space()`
+    with `sysinfo` crate
+  - Remove platform-specific conditionals and manual `df` command parsing fallback
+  - Add `sysinfo = "0.36"` to `[dev-dependencies]` and remove `libc = "0.2"`
+  - Use `sysinfo::System::new_all()` with `refresh_disks()` for cross-platform disk space checking
+  - Look for `/tmp` mount point first, fallback to first available disk
   - _Requirements: 1.2, 1.3, 9.3_
 
 - [ ] 1.3.2 Create comprehensive test database schema

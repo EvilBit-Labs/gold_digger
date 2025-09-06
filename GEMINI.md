@@ -162,10 +162,12 @@ println!("Connecting to database...");
 
 ```toml
 default = ["json", "csv", "additional_mysql_types", "verbose"]
-json = []                                  # JSON output format
-csv = []                                   # CSV output format
-additional_mysql_types = [...]             # BigDecimal, Decimal, etc.
-verbose = []                               # Conditional logging
+json = [] # JSON output format
+csv = [] # CSV output format
+additional_mysql_types = [
+  "mysql_common?/bigdecimal",
+] # BigDecimal, Decimal, etc.
+verbose = [] # Conditional logging
 ```
 
 **TLS Implementation Notes:**
@@ -224,6 +226,7 @@ cargo run --release
 3. **Target small, reviewable changes** for single-maintainer workflow
 4. **Consider streaming implications** for future compatibility
 5. **Maintain offline-first principles** - no external service calls
+6. **Use context7 website or MCP tool** to get current documentation for APIs and crates
 
 ### Testing Recommendations
 

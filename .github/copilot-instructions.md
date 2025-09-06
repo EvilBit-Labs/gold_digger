@@ -224,6 +224,7 @@ cargo test
 - [ ] Use conventional commit format
 - [ ] Suggest small, focused diffs for single-maintainer workflow
 - [ ] Use `gh` CLI for GitHub interactions
+- [ ] Use context7 website or MCP tool to get current documentation for APIs and crates
 - [ ] Link to WARP.md/AGENTS.md for comprehensive context
 
 ## References

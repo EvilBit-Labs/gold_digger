@@ -245,21 +245,27 @@ Test TLS certificates (`tests/fixtures/tls/`) provide:
 Common utilities provide consistent testing patterns:
 
 ```rust
-// Container management
-let db = TestDatabase::new(DatabaseType::MySQL, true)?;
-let connection_url = db.connection_url();
+use anyhow::Result;
 
-// CLI execution
-let result = GoldDiggerCli::new()
-    .db_url(&connection_url)
-    .query("SELECT * FROM test_table")
-    .output_file(&temp_file)
-    .execute()?;
+fn test_example() -> Result<()> {
+    // Container management
+    let db = TestDatabase::new(DatabaseType::MySQL, true)?;
+    let connection_url = db.connection_url();
 
-// Output validation
-let validator = CsvValidator::new();
-validator.validate_file(&temp_file)?;
-validator.validate_row_count(expected_rows)?;
+    // CLI execution
+    let result = GoldDiggerCli::new()
+        .db_url(&connection_url)
+        .query("SELECT * FROM test_table")
+        .output_file(&temp_file)
+        .execute()?;
+
+    // Output validation
+    let validator = CsvValidator::new();
+    validator.validate_file(&temp_file)?;
+    validator.validate_row_count(expected_rows)?;
+
+    Ok(())
+}
 ```
 
 ### Debugging Integration Tests

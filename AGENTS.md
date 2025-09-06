@@ -1,20 +1,67 @@
 # AGENTS.md
 
-This file provides guidance for AI assistants working with the Gold Digger codebase.
+This file provides guidance for AI coding assistants working with the Gold Digger Rust codebase.
+
+## Rules of Engagement for AI Assistants
+
+### File Priority Order
+
+Always consult these files in order when working with this codebase:
+
+1. **AGENTS.md** (this file) - Primary AI assistant guidance
+2. **GEMINI.md** - Gemini-specific overrides (if present)
+3. **.cursor/rules/**/\*.mdc\*\* - Cursor-specific rules (if present)
+
+### Critical Restrictions
+
+- **NEVER** commit code, switch branches, or alter git settings without explicit maintainer
+  permission
+- **NEVER** log raw `DATABASE_URL`, connection strings, or credentials
+- **NEVER** use direct MySQL row indexing: `row[index]` or `mysql::from_value::<String>()`
+- **ALWAYS** ask clarifying questions before making risky changes
+- **ALWAYS** run `just check` and validate changes before proposing them
+
+### Change Proposals
+
+- Present changes as unified diffs, not direct file modifications
+- Include test updates when adding features
+- Run `just ci-full` locally when feasible to validate changes
+- Use context7 website or MCP tool to get current documentation for APIs and crates
+
+### Review Process
+
+- This project prefers **CodeRabbit.ai** for code review
+- Do **NOT** enable GitHub Copilot auto-review in pull requests
+- Maintainer: **UncleSp1d3r** (single-maintainer workflow)
 
 ## Project Overview
 
-Gold Digger is a Rust-based MySQL/MariaDB query tool that outputs results in CSV, JSON, or TSV
-formats. It's designed for headless operation via environment variables, making it ideal for
-database automation workflows.
+Gold Digger is a production-ready Rust CLI tool for MySQL/MariaDB database queries with structured
+output (CSV, JSON, TSV). It features comprehensive CLI interface, rustls-only TLS, and safe data
+type handling.
 
-**Key Characteristics:**
+**Current Architecture (v0.2.6):**
 
-- CLI-first (uses Clap) with environment variable overrides
-- Outputs to structured formats based on file extension
-- Fully materialized result sets (no streaming)
-- Single-maintainer project by UncleSp1d3r
-- Under active development toward v1.0
+- CLI-first with environment variable fallbacks using `clap`
+- Rustls-only TLS implementation (no OpenSSL dependencies)
+- Safe MySQL value conversion with NULL handling
+- Structured exit codes and error handling
+- Modular output format system
+
+**Command Examples:**
+
+```bash
+# CLI interface (preferred)
+gold_digger --db-url "mysql://user:pass@host:3306/db" \
+            --query "SELECT id, name FROM users" \
+            --output results.json --pretty
+
+# Environment variables (legacy support)
+DATABASE_URL="mysql://user:pass@host:3306/db" \
+DATABASE_QUERY="SELECT * FROM table" \
+OUTPUT_FILE="/tmp/data.csv" \
+cargo run --release
+```
 
 ## 🚨 Critical Safety Rules
 
