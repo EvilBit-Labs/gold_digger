@@ -2,6 +2,7 @@
 //!
 //! These tests verify core functionality using real database containers.
 
+mod fixtures;
 mod integration;
 mod test_support;
 

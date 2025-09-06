@@ -10,153 +10,9 @@ use std::path::PathBuf;
 use tempfile::TempDir;
 
 use super::containers::DatabaseContainer;
-// TODO: Fix TLS fixtures import path
-// The TLS fixtures need to be accessible from this submodule
-// For now, we'll create local stubs to get compilation working
 
-/// Ephemeral certificate generation for testing
-#[allow(dead_code)]
-struct EphemeralCertificate {
-    pub ca_cert_pem: String,
-    pub ca_key_pem: String,
-    pub server_cert_pem: String,
-    pub server_key_pem: String,
-}
-
-impl EphemeralCertificate {
-    #[allow(dead_code)]
-    fn generate(_name: Option<&str>) -> Result<Self> {
-        // Simple stub implementation - just return placeholder certificates
-        // This avoids the complexity of real certificate generation for compilation
-        Ok(Self {
-            ca_cert_pem: "-----BEGIN CERTIFICATE-----\nstub-ca\n-----END CERTIFICATE-----".to_string(),
-            ca_key_pem: "-----BEGIN PRIVATE KEY-----\nstub-ca-key\n-----END PRIVATE KEY-----".to_string(),
-            server_cert_pem: "-----BEGIN CERTIFICATE-----\nstub-server\n-----END CERTIFICATE-----".to_string(),
-            server_key_pem: "-----BEGIN PRIVATE KEY-----\nstub-server-key\n-----END PRIVATE KEY-----".to_string(),
-        })
-    }
-
-    #[allow(dead_code)]
-    fn generate_self_signed(_hostnames: Vec<String>) -> Result<(String, String)> {
-        // Simple stub implementation - just return placeholder certificates
-        Ok((
-            "-----BEGIN CERTIFICATE-----\nstub\n-----END CERTIFICATE-----".to_string(),
-            "-----BEGIN PRIVATE KEY-----\nstub\n-----END PRIVATE KEY-----".to_string(),
-        ))
-    }
-}
-
-/// Certificate validation utilities for testing
-#[allow(dead_code)]
-struct CertificateValidator;
-
-impl CertificateValidator {
-    /// Validates that an ephemeral certificate has valid structure and content
-    #[allow(dead_code)]
-    fn validate_ephemeral_certificate(cert: &EphemeralCertificate) -> Result<()> {
-        // Validate CA certificate
-        Self::validate_cert_pem(&cert.ca_cert_pem).context("Invalid CA certificate PEM format")?;
-
-        // Validate server certificate
-        Self::validate_cert_pem(&cert.server_cert_pem).context("Invalid server certificate PEM format")?;
-
-        // Validate private keys
-        Self::validate_key_pem(&cert.ca_key_pem).context("Invalid CA private key PEM format")?;
-        Self::validate_key_pem(&cert.server_key_pem).context("Invalid server private key PEM format")?;
-
-        Ok(())
-    }
-
-    /// Validates that a certificate and key pair are properly formatted
-    #[allow(dead_code)]
-    fn validate_certificate_pair(cert_pem: &str, key_pem: &str) -> Result<()> {
-        Self::validate_cert_pem(cert_pem)?;
-        Self::validate_key_pem(key_pem)?;
-        Ok(())
-    }
-
-    /// Checks if a certificate contains the specified hostname in SAN or CN
-    #[allow(dead_code)]
-    fn certificate_contains_hostname(cert_pem: &str, hostname: &str) -> bool {
-        // Basic validation - in real implementation would parse certificate
-        cert_pem.contains("BEGIN CERTIFICATE") && !hostname.is_empty()
-    }
-
-    /// Validates that a certificate PEM is properly formatted
-    #[allow(dead_code)]
-    fn validate_cert_pem(_cert_pem: &str) -> Result<()> {
-        Ok(())
-    }
-
-    /// Validates that a private key PEM is properly formatted
-    #[allow(dead_code)]
-    fn validate_key_pem(_key_pem: &str) -> Result<()> {
-        Ok(())
-    }
-}
-
-/// Temporary stub for CertificateLoader
-#[allow(dead_code)]
-struct CertificateLoader;
-
-impl CertificateLoader {
-    #[allow(dead_code)]
-    fn create_temp_files(cert_pem: &str, key_pem: &str) -> Result<(tempfile::NamedTempFile, tempfile::NamedTempFile)> {
-        let mut cert_file = tempfile::NamedTempFile::new()?;
-        let mut key_file = tempfile::NamedTempFile::new()?;
-
-        // Write the actual content to the files so load_cert_from_file can read it back
-        use std::io::Write;
-        cert_file.write_all(cert_pem.as_bytes())?;
-        key_file.write_all(key_pem.as_bytes())?;
-
-        Ok((cert_file, key_file))
-    }
-
-    #[allow(dead_code)]
-    fn load_cert_from_file(path: &std::path::Path) -> Result<String> {
-        // Actually read the file content to make the test work correctly
-        std::fs::read_to_string(path).map_err(|e| anyhow::anyhow!("Failed to read file: {}", e))
-    }
-
-    #[allow(dead_code)]
-    fn validate_cert_pem(cert_pem: &str) -> Result<()> {
-        if !cert_pem.contains("-----BEGIN CERTIFICATE-----") {
-            anyhow::bail!("Certificate PEM missing BEGIN marker");
-        }
-        if !cert_pem.contains("-----END CERTIFICATE-----") {
-            anyhow::bail!("Certificate PEM missing END marker");
-        }
-        if cert_pem.trim().is_empty() {
-            anyhow::bail!("Certificate PEM is empty");
-        }
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    fn validate_key_pem(key_pem: &str) -> Result<()> {
-        let has_private_key = key_pem.contains("-----BEGIN PRIVATE KEY-----")
-            || key_pem.contains("-----BEGIN RSA PRIVATE KEY-----")
-            || key_pem.contains("-----BEGIN EC PRIVATE KEY-----");
-
-        if !has_private_key {
-            anyhow::bail!("Private key PEM missing BEGIN marker");
-        }
-
-        let has_end_marker = key_pem.contains("-----END PRIVATE KEY-----")
-            || key_pem.contains("-----END RSA PRIVATE KEY-----")
-            || key_pem.contains("-----END EC PRIVATE KEY-----");
-
-        if !has_end_marker {
-            anyhow::bail!("Private key PEM missing END marker");
-        }
-
-        if key_pem.trim().is_empty() {
-            anyhow::bail!("Private key PEM is empty");
-        }
-        Ok(())
-    }
-}
+// Import the proper TLS fixtures from the parent module
+use super::super::fixtures::tls::{CertificateLoader, CertificateValidator, EphemeralCertificate};
 use super::{TestDatabase, TestDatabasePlain, TestDatabaseTls, is_ci_environment, is_docker_available};
 
 /// Helper function to create a temporary certificate file for testing
@@ -599,7 +455,7 @@ mod container_integration_tests {
     /// Test basic TLS connection establishment with MySQL container using new abstraction
     /// Requirement: 1.1, 1.2 - TLS connection with MySQL using TestDatabase
     #[test]
-    #[ignore]
+    #[cfg(feature = "tls_container_tests")]
     fn test_basic_tls_connection_mysql() -> Result<()> {
         skip_if_no_docker();
 
@@ -625,7 +481,7 @@ mod container_integration_tests {
     /// Test basic TLS connection establishment with MariaDB container using new abstraction
     /// Requirement: 1.1, 1.2 - TLS connection with MariaDB using TestDatabase
     #[test]
-    #[ignore]
+    #[cfg(feature = "tls_container_tests")]
     fn test_basic_tls_connection_mariadb() -> Result<()> {
         skip_if_no_docker();
 

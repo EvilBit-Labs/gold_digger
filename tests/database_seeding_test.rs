@@ -6,6 +6,7 @@
 use anyhow::Result;
 use gold_digger::init_crypto_provider;
 
+mod fixtures;
 mod integration;
 use integration::{TestDatabase, containers::DatabaseContainer};
 

@@ -26,7 +26,7 @@
     fixtures
   - _Requirements: 1.1, 1.2_
 
-- [-] 1.2 Implement MySQL and MariaDB container setup with TLS and non-TLS configurations
+- [x] 1.2 Implement MySQL and MariaDB container setup with TLS and non-TLS configurations
 
   - ✓ Basic MariaDB container setup exists in `tests/tls_integration.rs` (needs expansion)
   - Write `TestDatabase::new()` method using `testcontainers-modules` crate with `mysql` and

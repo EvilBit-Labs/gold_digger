@@ -4,6 +4,7 @@
 //! variants for secure and standard connection testing.
 
 use anyhow::Result;
+mod fixtures;
 mod integration;
 
 use integration::{TestDatabasePlain, TestDatabaseTls, TlsContainerConfig};

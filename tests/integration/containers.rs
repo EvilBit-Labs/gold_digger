@@ -653,6 +653,8 @@ impl DatabaseContainer {
         // For now, create a basic MySQL container
         // TODO: Mount certificates and configure TLS settings
         let container = Mysql::default()
+            .with_env_var("MYSQL_ALLOW_EMPTY_PASSWORD", "yes")
+            .with_env_var("MYSQL_ROOT_HOST", "%")
             .start()
             .context("Failed to start MySQL TLS container")?;
 
@@ -709,6 +711,8 @@ impl DatabaseContainer {
         // For now, create a basic MariaDB container
         // TODO: Mount certificates and configure TLS settings
         let container = Mariadb::default()
+            .with_env_var("MARIADB_ALLOW_EMPTY_ROOT_PASSWORD", "yes")
+            .with_env_var("MARIADB_ROOT_HOST", "%")
             .start()
             .context("Failed to start MariaDB TLS container")?;
 
@@ -728,6 +732,8 @@ impl DatabaseContainer {
     /// Create a MySQL container for standard unencrypted connection testing
     fn create_mysql_container_plain() -> Result<MySqlContainer> {
         let container = Mysql::default()
+            .with_env_var("MYSQL_ALLOW_EMPTY_PASSWORD", "yes")
+            .with_env_var("MYSQL_ROOT_HOST", "%")
             .start()
             .context("Failed to start MySQL plain container")?;
 
@@ -747,6 +753,8 @@ impl DatabaseContainer {
     /// Create a MariaDB container for standard unencrypted connection testing
     fn create_mariadb_container_plain() -> Result<MariaDbContainer> {
         let container = Mariadb::default()
+            .with_env_var("MARIADB_ALLOW_EMPTY_ROOT_PASSWORD", "yes")
+            .with_env_var("MARIADB_ROOT_HOST", "%")
             .start()
             .context("Failed to start MariaDB plain container")?;
 
