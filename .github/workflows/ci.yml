@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  workflow_run:
+    workflows: ["autofix.ci"]
+    types: [completed]
 
 defaults:
   run:
@@ -24,6 +27,7 @@ jobs:
   # Code quality checks - only need to run once
   quality:
     runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run'
     steps:
       - uses: actions/checkout@v5
       - uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -49,6 +53,7 @@ jobs:
   test-tls:
     runs-on: ubuntu-latest
     needs: quality
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run'
     steps:
       - uses: taiki-e/checkout-action@v1
 
@@ -114,6 +119,7 @@ jobs:
   test-features:
     runs-on: ubuntu-latest
     needs: quality
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run'
     strategy:
       matrix:
         features:
@@ -161,6 +167,7 @@ jobs:
             platform: "Windows"
     runs-on: ${{ matrix.os }}
     needs: quality
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run'
     steps:
       - uses: taiki-e/checkout-action@v1
 
@@ -187,6 +194,7 @@ jobs:
   test-tls-validation:
     runs-on: ubuntu-latest
     needs: quality
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run'
     steps:
       - uses: actions/checkout@v5
 
@@ -229,6 +237,7 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     needs: [test-tls, test-features, test-cross-platform]
+    if: github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run'
     steps:
       - uses: taiki-e/checkout-action@v1
 
