@@ -12,6 +12,7 @@ use tempfile::TempDir;
 // Re-export submodules
 pub mod common;
 pub mod containers;
+pub mod tls_tests;
 
 // Re-export commonly used types and functions
 // Note: Specific re-exports to avoid unused import warnings

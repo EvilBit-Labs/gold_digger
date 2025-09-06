@@ -12,7 +12,7 @@ use tempfile::TempDir;
 use testcontainers_modules::{
     mariadb::Mariadb,
     mysql::Mysql,
-    testcontainers::{Container, runners::SyncRunner},
+    testcontainers::{Container, ImageExt, runners::SyncRunner},
 };
 
 use super::{TestDatabase, is_ci_environment};
@@ -574,6 +574,8 @@ impl DatabaseContainer {
         // For now, use a simple MySQL container without TLS configuration
         // TODO: Add TLS configuration once the basic container setup is working
         let container = Mysql::default()
+            .with_env_var("MYSQL_ALLOW_EMPTY_PASSWORD", "yes")
+            .with_env_var("MYSQL_ROOT_HOST", "%")
             .start()
             .with_context(|| format!("Failed to start MySQL container with TLS={}", tls_enabled))?;
 
@@ -594,6 +596,8 @@ impl DatabaseContainer {
         // For now, use a simple MariaDB container without TLS configuration
         // TODO: Add TLS configuration once the basic container setup is working
         let container = Mariadb::default()
+            .with_env_var("MARIADB_ALLOW_EMPTY_ROOT_PASSWORD", "yes")
+            .with_env_var("MARIADB_ROOT_HOST", "%")
             .start()
             .with_context(|| format!("Failed to start MariaDB container with TLS={}", tls_enabled))?;
 
@@ -779,8 +783,9 @@ impl DatabaseContainer {
             // CI environment: longer timeout, more aggressive retries
             (Duration::from_secs(300), RetryConfig::ci())
         } else {
-            // Local environment: shorter timeout, gentler retries
-            (Duration::from_secs(60), RetryConfig::local())
+            // Local environment: Both MySQL and MariaDB need more time on some systems
+            let base_timeout = Duration::from_secs(180); // 3 minutes for all containers locally
+            (base_timeout, RetryConfig::local())
         };
 
         let start_time = Instant::now();

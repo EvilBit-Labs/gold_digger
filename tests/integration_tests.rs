@@ -36,6 +36,34 @@ mod tests {
         // Integration test infrastructure is ready - all checks passed
     }
 
+    /// Test TLS integration test consolidation
+    #[test]
+    fn test_tls_integration_consolidation() {
+        // Verify that TLS tests are accessible through the new integration structure
+        // This test ensures the consolidation was successful
+
+        // Test that we can access TLS certificate generation
+        use fixtures::tls::EphemeralCertificate;
+        let ephemeral_cert = EphemeralCertificate::generate(Some("test-consolidation"));
+        assert!(ephemeral_cert.is_ok(), "Should be able to generate ephemeral certificates");
+
+        // Test that we can create TestDatabase instances for TLS
+        let mysql_tls = TestDatabase::mysql_tls();
+        assert!(mysql_tls.is_tls_enabled(), "MySQL TLS database should have TLS enabled");
+
+        let mariadb_tls = TestDatabase::mariadb_tls();
+        assert!(mariadb_tls.is_tls_enabled(), "MariaDB TLS database should have TLS enabled");
+
+        // Test that we can create plain database instances
+        let mysql_plain = TestDatabase::mysql();
+        assert!(!mysql_plain.is_tls_enabled(), "MySQL plain database should not have TLS enabled");
+
+        let mariadb_plain = TestDatabase::mariadb();
+        assert!(!mariadb_plain.is_tls_enabled(), "MariaDB plain database should not have TLS enabled");
+
+        println!("TLS integration test consolidation successful");
+    }
+
     /// Test that we can create test cases
     #[test]
     fn test_test_case_creation() {

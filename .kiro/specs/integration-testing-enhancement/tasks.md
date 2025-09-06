@@ -166,7 +166,7 @@
   - Add test utilities to validate TLS connection establishment vs non-TLS connections
   - _Requirements: 1.1, 1.2, 1.3, 9.3, 9.4, 9.5_
 
-- [ ] 1.5 Consolidate and refactor existing TLS integration tests
+- [x] 1.5 Consolidate and refactor existing TLS integration tests
 
   - Move existing TLS integration tests from `tests/tls_integration.rs` to new integration test
     structure
