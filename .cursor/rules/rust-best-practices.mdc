@@ -49,6 +49,7 @@ This zero-copy API accepts:
 - **Clippy warnings**: Zero tolerance (`-D warnings`)
 - **Error handling**: Use `anyhow` for applications, `thiserror` for libraries
 - **Documentation**: Doc comments (`///`) required for all public functions
+- **Code length**: Rust files should be no longer than 1000 lines of code, and no more than 500 lines of code, if possible.
 
 ### Essential Commands
 

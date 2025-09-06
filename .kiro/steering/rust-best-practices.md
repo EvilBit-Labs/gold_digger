@@ -57,6 +57,8 @@ row.get_opt::<String, _>(column.name_str().as_ref())
 - Prefer iterators and combinators over manual loops where possible.
 - Use explicit types for function signatures, especially for public APIs.
 - Group imports by standard library, external crates, and local modules, separated by newlines.
+- Rust files should be no longer than 1000 lines of code, and no more than 500 lines of code, if
+  possible.
 
 ## Features and Conditional Compilation
 
