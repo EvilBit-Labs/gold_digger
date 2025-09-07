@@ -67,7 +67,7 @@ repos:
 
   # 📝 Commit message linting (commit-msg only, not blocking push)
   - repo: https://github.com/commitizen-tools/commitizen
-    rev: v4.8.3
+    rev: v4.8.4
     hooks:
       - id: commitizen
         stages: [commit-msg]
@@ -106,3 +106,7 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+  - repo: https://github.com/DevinR528/cargo-sort
+    rev: v2.0.2
+    hooks:
+      - id: cargo-sort
