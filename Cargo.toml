@@ -53,7 +53,7 @@ regex = "1.11.1"
 
 [dev-dependencies]
 testcontainers-modules = { version = "0.13.0", features = ["mariadb", "mysql", "blocking"] }
-tempfile = "3.21.0"
+tempfile = "3.22.0"
 assert_cmd = "2.0.17"
 predicates = "3.1.2"
 process_control = "5.2.0"
