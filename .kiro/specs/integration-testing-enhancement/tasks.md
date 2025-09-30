@@ -237,7 +237,7 @@
   - Create performance tests for data type conversion with large datasets
   - Implement regression tests for data type handling edge cases
 
-- [ ] 2.2 Add temporal and binary data type tests
+- [-] 2.2 Add temporal and binary data type tests
 
   - Implement tests for DATE, DATETIME, TIMESTAMP, TIME data types
   - Create tests for BINARY, VARBINARY, BLOB data types

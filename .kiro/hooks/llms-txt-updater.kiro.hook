@@ -6,11 +6,13 @@
   "when": {
     "type": "fileEdited",
     "patterns": [
-      ".kiro/**/*",
       "docs/src/**/*.md",
       "docs/*.md",
       "project_spec/requirements.md",
-      "**/README.md"
+      "**/README.md",
+      ".kiro/steering/**/*.md",
+      ".kiro/**/requirements.md",
+      ".kiro/**/design.md"
     ]
   },
   "then": {

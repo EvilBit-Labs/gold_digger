@@ -1,0 +1,386 @@
+# Gold Digger - MySQL/MariaDB Query Tool
+
+Gold Digger is a Rust-based MySQL/MariaDB query tool that exports results to structured data files (CSV, JSON, TSV). Designed for headless operation and automation workflows, it provides CLI-first configuration with environment variable fallbacks.
+
+## Project Status
+
+- **Version**: 0.2.6 (active development toward v1.0)
+- **Language**: Rust 2024 Edition
+- **Architecture**: Single-threaded, fully materialized results, offline-first
+- **License**: MIT
+
+## Core Features
+
+- **CLI-first design** with environment variable fallbacks
+- **Multiple output formats**: CSV (RFC 4180), JSON with deterministic ordering, TSV
+- **Safe type handling**: Graceful NULL and type conversion without panics
+- **Secure TLS support**: Built-in rustls implementation with comprehensive error handling
+- **Comprehensive error handling**: Structured exit codes and intelligent error categorization
+- **Shell completion**: Support for Bash, Zsh, Fish, and PowerShell
+- **Configuration debugging**: JSON config dump with automatic credential redaction
+- **Cross-platform**: Linux, macOS, and Windows support
+
+## Architecture
+
+### Module Structure
+
+```
+src/
+├── main.rs     # CLI entry, config resolution, format dispatch
+├── lib.rs      # Public API, shared utilities, safe MySQL value conversion
+├── cli.rs      # Clap CLI definitions and validation
+├── csv.rs      # RFC4180 compliant CSV output
+├── json.rs     # JSON output with {"data": [...]} structure
+├── tab.rs      # TSV fallback format
+├── tls.rs      # TLS configuration and connection handling
+├── exit.rs     # Exit code mapping and error handling
+└── utils.rs    # Utility functions
+```
+
+### Configuration Resolution
+
+Priority: CLI flags → Environment variables → Error
+
+Required configuration:
+- Database URL: `--db-url` / `DATABASE_URL`
+- Query: `--query` or `--query-file` / `DATABASE_QUERY`
+- Output: `--output` / `OUTPUT_FILE`
+
+### Output Formats
+
+- **CSV**: RFC4180 compliant with `QuoteStyle::Necessary`
+- **JSON**: `{"data": [...]}` wrapper with BTreeMap for deterministic field ordering
+- **TSV**: Tab-delimited fallback format
+
+Format detection by file extension (.csv, .json, fallback to TSV) with `--format` override.
+
+## Technology Stack
+
+### Core Dependencies
+
+- **clap**: CLI parsing with derive and env features
+- **mysql**: MySQL/MariaDB driver with rustls-tls (always enabled)
+- **serde_json**: JSON output with deterministic ordering
+- **csv**: RFC4180-compliant CSV output
+- **anyhow**: Error propagation and context
+- **rustls**: Pure Rust TLS implementation
+
+### Feature Flags
+
+```toml
+default = ["json", "csv", "additional_mysql_types", "verbose"]
+json = []                    # Enable JSON output format
+csv = []                     # Enable CSV output format
+additional_mysql_types = [   # Extended MySQL type support
+  "mysql_common",
+  "mysql_common?/bigdecimal",
+  "mysql_common?/rust_decimal",
+  "mysql_common?/time",
+  "mysql_common?/frunk"
+]
+verbose = []                 # Conditional logging
+integration_tests = []       # Heavy integration tests
+```
+
+**Note**: TLS is always available via rustls - no feature flags needed.
+
+## Security & Safety
+
+### Critical Requirements (NON-NEGOTIABLE)
+
+- **NEVER** log `DATABASE_URL` or credentials - automatic redaction implemented
+- **NEVER** make external network calls at runtime (offline-first design)
+- **ALWAYS** validate and sanitize user inputs
+
+### Airgap Compatibility
+
+- **Allowed**: Direct TCP to configured MySQL/MariaDB hosts only
+- **Prohibited**: All other outbound connections (DNS, HTTP, telemetry, etc.)
+- **Runtime**: No external dependencies during execution
+
+### Safe Database Value Handling
+
+The `mysql_value_to_string` function in `src/lib.rs` safely converts all MySQL value types:
+
+```rust
+// Safe NULL handling pattern
+match database_value {
+    mysql::Value::NULL => "".to_string(),
+    val => mysql_value_to_string(val)
+        .unwrap_or_else(|_| format!("{:?}", val))
+}
+```
+
+Handles special cases:
+- NULL values → empty strings (CSV/TSV) or null (JSON)
+- Binary data → hex encoding for non-UTF8 content
+- Special float values (NaN, Infinity)
+- Date/time validation with error handling
+- Large binary data truncation with size indication
+
+## Exit Codes
+
+Structured exit codes for automation:
+
+- **0**: Success with results (or empty with `--allow-empty`)
+- **1**: Success but no rows returned
+- **2**: Configuration error (missing params, mutually exclusive flags)
+- **3**: Database connection/authentication failure
+- **4**: Query execution failure (SQL errors, type conversion)
+- **5**: File I/O operation failure
+
+## Testing Framework
+
+### Current Test Structure
+
+```
+tests/
+├── integration/
+│   ├── mod.rs              # Common utilities and test infrastructure
+│   ├── common.rs           # CLI execution and output parsing
+│   ├── containers.rs       # MySQL/MariaDB container management
+│   └── data_types.rs       # Data type validation tests
+├── fixtures/
+│   ├── schema.sql          # Comprehensive test database schema
+│   ├── seed_data.sql       # Test data covering all MySQL data types
+│   └── tls/                # TLS certificates for secure connection testing
+├── test_support/           # Shared testing utilities
+├── integration_tests.rs    # Main integration test entry point
+├── tls_integration.rs      # TLS connection and certificate validation
+└── [various test files]    # Unit and integration tests
+```
+
+### Integration Testing Enhancement (In Progress)
+
+**Status**: Core infrastructure completed, comprehensive testing framework in development
+
+**Completed Tasks**:
+- ✅ Core integration test infrastructure with MySQL/MariaDB container support
+- ✅ TLS and non-TLS database variants with ephemeral certificate generation
+- ✅ Container management with health checks and CI compatibility
+- ✅ Comprehensive test database schema and seed data
+- ✅ Data type validation tests for all MySQL/MariaDB types
+- ✅ Test execution utilities with assert_cmd and predicates
+- ✅ Temporary file management with tempfile crate
+
+**In Development**:
+- 🚧 Output format validation framework (CSV, JSON, TSV compliance)
+- 🚧 Error handling and exit code validation tests
+- 🚧 CLI integration and configuration tests
+- 🚧 Large result set and performance tests
+- 🚧 Security validation tests
+- 🚧 Cross-platform validation and CI integration
+
+### Test Categories
+
+1. **Unit Tests**: Fast tests without external dependencies
+2. **TLS Integration Tests**: Certificate validation and secure connections
+3. **Database Integration Tests**: Real database query execution with testcontainers
+4. **Data Type Tests**: Comprehensive MySQL/MariaDB data type handling
+5. **Format Validation Tests**: CSV/JSON/TSV compliance testing
+6. **Error Scenario Tests**: Connection failures, SQL errors, file I/O validation
+7. **Performance Tests**: Large dataset handling and memory usage validation
+
+### Running Tests
+
+```bash
+# Unit tests only (no Docker required)
+cargo test --lib
+
+# Integration tests (requires Docker)
+cargo test --features integration_tests -- --ignored
+
+# All tests including integration
+cargo test --features integration_tests -- --include-ignored
+
+# Using nextest (preferred)
+cargo nextest run
+cargo nextest run --features integration_tests -- --ignored
+```
+
+## CLI Usage
+
+### Basic Usage
+
+```bash
+# CLI flags (highest priority)
+gold_digger --db-url "mysql://user:pass@localhost:3306/db" \
+  --query "SELECT id, name FROM users LIMIT 10" \
+  --output /tmp/results.json
+
+# Environment variables (fallback)
+DATABASE_URL="mysql://user:pass@localhost:3306/db" \
+DATABASE_QUERY="SELECT id, name FROM users LIMIT 10" \
+OUTPUT_FILE="/tmp/results.json" \
+gold_digger
+```
+
+### TLS Options (Mutually Exclusive)
+
+```bash
+# Custom CA certificate
+gold_digger --tls-ca-file /path/to/ca.pem --db-url "..." --query "..." --output results.json
+
+# Skip hostname verification (keeps chain validation)
+gold_digger --insecure-skip-hostname-verify --db-url "..." --query "..." --output results.json
+
+# Disable certificate validation (DANGEROUS)
+gold_digger --allow-invalid-certificate --db-url "..." --query "..." --output results.json
+```
+
+### Additional Options
+
+```bash
+# Pretty-print JSON
+gold_digger --pretty --format json --db-url "..." --query "..." --output results.json
+
+# Verbose logging
+gold_digger -v --db-url "..." --query "..." --output results.json
+
+# Allow empty results (exit code 0)
+gold_digger --allow-empty --db-url "..." --query "..." --output results.json
+
+# Query from file
+gold_digger --query-file query.sql --db-url "..." --output results.csv
+
+# Generate shell completions
+gold_digger completion bash > ~/.bash_completion.d/gold_digger
+```
+
+## Development
+
+### Code Quality Standards
+
+Required before commits:
+
+```bash
+just fmt-check    # cargo fmt --check (100-char line limit)
+just lint         # cargo clippy -- -D warnings (ZERO tolerance)
+just test         # cargo nextest run (preferred)
+just security     # cargo audit (advisory)
+```
+
+### Build Variations
+
+```bash
+# Standard build (all features, TLS always available)
+cargo build --release
+
+# Minimal build (TLS still available)
+cargo build --no-default-features --features "csv json"
+
+# Development build with integration tests
+cargo build --features integration_tests
+```
+
+### Essential Just Commands
+
+```bash
+just setup        # Install development dependencies
+just fmt          # Auto-format code
+just lint         # Run clippy with strict warnings
+just test         # Run tests
+just ci-check     # Full CI validation locally
+just build        # Build release artifacts
+```
+
+## Memory & Performance
+
+### Current Characteristics
+
+- **Memory model**: Fully materialized results - O(row_count × row_width)
+- **Connection model**: Single database connection per execution
+- **No streaming**: All query results loaded into memory before processing
+
+### Known Limitations
+
+1. **Memory usage**: No streaming support for large result sets (high priority fix)
+2. **Single-threaded**: No parallel processing
+3. **Connection pooling**: Basic mysql::Pool usage without optimization
+
+## Error Handling
+
+### Intelligent Error Classification
+
+The `map_error_to_exit_code` function in `src/exit.rs` provides intelligent error classification:
+
+- Pattern matching on error messages for appropriate exit codes
+- TLS-specific error handling with CLI flag suggestions
+- Database connection vs. query execution error distinction
+- File I/O error detection and handling
+
+### TLS Error Handling
+
+Comprehensive TLS error types in `src/tls.rs`:
+
+- Certificate validation failures with specific error types
+- Hostname verification errors
+- TLS handshake failures
+- Configuration errors with helpful suggestions
+
+## Known Issues & Technical Debt
+
+### Immediate Issues
+
+- Non-standard exit codes in some error paths
+- Memory usage scales linearly with result set size
+- No streaming support for large datasets
+
+### Architecture Limitations
+
+- Single-threaded execution model
+- No configuration file support
+- Fully materialized result sets
+
+## Installation
+
+### Pre-built Binaries
+
+Available from GitHub Releases with:
+- Cross-platform binaries (Linux, macOS, Windows)
+- Signed artifacts with Cosign
+- Complete SBOMs for security auditing
+
+### Package Managers
+
+```bash
+# Homebrew
+brew install EvilBit-Labs/tap/gold-digger
+
+# Shell installer
+curl --proto '=https' --tlsv1.2 -LsSf \
+  https://github.com/EvilBit-Labs/gold_digger/releases/latest/download/gold_digger-installer.sh | sh
+```
+
+### Build from Source
+
+```bash
+git clone https://github.com/EvilBit-Labs/gold_digger.git
+cd gold_digger
+cargo install --path .
+```
+
+## Contributing
+
+- **Format**: Conventional commits (`feat:`, `fix:`, `docs:`)
+- **Scopes**: Use `(cli)`, `(db)`, `(output)`, `(tls)`, `(config)`
+- **Reviews**: CodeRabbit.ai preferred
+- **Testing**: All tests must pass, including integration tests where applicable
+- **Documentation**: Doc comments required for all public functions
+
+## Repository Structure
+
+```
+├── src/                    # Source code
+├── tests/                  # Test suite with integration framework
+├── docs/                   # Documentation (mdBook)
+├── .github/workflows/      # CI/CD pipelines
+├── .kiro/                  # Kiro IDE configuration and specifications
+│   ├── specs/             # Feature specifications
+│   └── steering/          # Project guidance documents
+├── Cargo.toml             # Project configuration
+├── justfile               # Development automation
+└── README.md              # Project overview
+```
+
+This project follows Rust best practices with comprehensive testing, security-first design, and automation-friendly CLI interface. The integration testing framework provides robust validation against real MySQL/MariaDB instances using testcontainers for isolated, reproducible testing environments.
