@@ -15,6 +15,6 @@
   },
   "then": {
     "type": "askAgent",
-    "prompt": "Source code or project configuration has been modified. Please review the entire codebase and update the README.md to reflect any new features, API changes, or usage patterns. Also update the mdbook \"user guide\" in /docs/src/ to cover architecture changes, new usage patterns, and best practices. Focus on keeping the high-level introduction in README current while ensuring the user guide accurately reflects the tool structure and capabilities."
+    "prompt": "Source code or project configuration has been modified. Please review the entire codebase and update the README.md to reflect any new features, API changes, or usage patterns. Also update the mdbook \"user guide\" in /docs/src/ to cover architecture changes, new usage patterns, and best practices. Focus on keeping the high-level introduction in README.md current while ensuring the user guide accurately reflects the tool structure and capabilities."
   }
 }

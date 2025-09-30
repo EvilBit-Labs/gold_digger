@@ -4,17 +4,13 @@
   "description": "Automatically updates the llms.txt file when documentation, specifications, or repository structure changes to maintain accuracy for LLM consumption. Treats kiro specifications and steering documents as authoritative, but considers actual code as gospel.",
   "version": "1",
   "when": {
-    "type": "userTriggered",
+    "type": "fileEdited",
     "patterns": [
-      "concept.md",
-      "README.md",
-      "docs/**/*.md",
       ".kiro/**/*",
-      "src/**/*.rs",
-      "Cargo.toml",
-      "tech.md",
-      "structure.md",
-      "product.md"
+      "docs/src/**/*.md",
+      "docs/*.md",
+      "project_spec/requirements.md",
+      "**/README.md"
     ]
   },
   "then": {
