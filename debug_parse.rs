@@ -7,7 +7,10 @@ fn main() -> anyhow::Result<()> {
     println!("Total dependencies found: {}", dependencies.len());
     println!(
         "Dependencies containing 'rustls': {:?}",
-        dependencies.iter().filter(|d| d.contains("rustls")).collect::<Vec<_>>()
+        dependencies
+            .iter()
+            .filter(|d| d.contains("rustls"))
+            .collect::<Vec<_>>()
     );
 
     // Check if rustls is directly present
@@ -18,7 +21,10 @@ fn main() -> anyhow::Result<()> {
     }
 
     // Show first 20 dependencies
-    println!("First 20 dependencies: {:?}", &dependencies[..std::cmp::min(20, dependencies.len())]);
+    println!(
+        "First 20 dependencies: {:?}",
+        &dependencies[..std::cmp::min(20, dependencies.len())]
+    );
 
     Ok(())
 }

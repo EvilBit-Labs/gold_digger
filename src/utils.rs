@@ -45,12 +45,15 @@ pub fn redact_sql_error(message: &str) -> String {
         match Regex::new(pattern) {
             Ok(re) => {
                 redacted = re.replace_all(&redacted, *replacement).to_string();
-            },
+            }
             Err(_e) => {
                 // Log regex compilation errors in debug builds for development
                 #[cfg(debug_assertions)]
-                eprintln!("Warning: Failed to compile regex pattern '{}': {}", pattern, _e);
-            },
+                eprintln!(
+                    "Warning: Failed to compile regex pattern '{}': {}",
+                    pattern, _e
+                );
+            }
         }
     }
 

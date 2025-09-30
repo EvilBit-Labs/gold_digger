@@ -37,11 +37,18 @@ mod tests {
         assert!(result.is_ok(), "check_disk_space should not fail");
 
         let disk_space = result.unwrap();
-        assert!(disk_space > 0, "Available disk space should be greater than 0");
+        assert!(
+            disk_space > 0,
+            "Available disk space should be greater than 0"
+        );
 
         // Disk space should be at least 1GB (reasonable minimum)
         let min_expected = 1024 * 1024 * 1024; // 1GB
-        assert!(disk_space >= min_expected, "Available disk space should be at least 1GB, got {} bytes", disk_space);
+        assert!(
+            disk_space >= min_expected,
+            "Available disk space should be at least 1GB, got {} bytes",
+            disk_space
+        );
     }
 
     #[test]
@@ -55,8 +62,16 @@ mod tests {
         let min_bytes = 1024 * 1024; // 1MB minimum
         let max_bytes = 100 * 1024 * 1024 * 1024 * 1024; // 100TB maximum (reasonable upper bound for CI/CD servers)
 
-        assert!(disk_space >= min_bytes, "Disk space too small: {} bytes", disk_space);
-        assert!(disk_space <= max_bytes, "Disk space too large (likely error): {} bytes", disk_space);
+        assert!(
+            disk_space >= min_bytes,
+            "Disk space too small: {} bytes",
+            disk_space
+        );
+        assert!(
+            disk_space <= max_bytes,
+            "Disk space too large (likely error): {} bytes",
+            disk_space
+        );
     }
 
     #[test]
@@ -96,7 +111,10 @@ mod tests {
             );
 
             if let Some(env) = &preflight.environment {
-                assert!(env.available_disk_space > 0, "Available disk space should be greater than 0");
+                assert!(
+                    env.available_disk_space > 0,
+                    "Available disk space should be greater than 0"
+                );
 
                 // Should be at least 1GB
                 let min_disk = 1024 * 1024 * 1024;
@@ -112,18 +130,27 @@ mod tests {
     #[test]
     fn test_resource_availability_check() {
         let result = utils::ContainerManager::check_resource_availability();
-        assert!(result.is_ok(), "Resource availability check should not fail");
+        assert!(
+            result.is_ok(),
+            "Resource availability check should not fail"
+        );
 
         let sufficient = result.unwrap();
 
         // If resources are sufficient, disk space should be at least 1GB
         if sufficient {
             let disk_result = utils::ContainerManager::check_disk_space();
-            assert!(disk_result.is_ok(), "Disk space check should succeed when resources are sufficient");
+            assert!(
+                disk_result.is_ok(),
+                "Disk space check should succeed when resources are sufficient"
+            );
 
             let disk_space = disk_result.unwrap();
             let min_disk = 1024 * 1024 * 1024; // 1GB
-            assert!(disk_space >= min_disk, "When resources are sufficient, disk space should be at least 1GB");
+            assert!(
+                disk_space >= min_disk,
+                "When resources are sufficient, disk space should be at least 1GB"
+            );
         }
     }
 
@@ -138,8 +165,14 @@ mod tests {
         let gb = disk_space as f64 / (1024.0 * 1024.0 * 1024.0);
         let formatted = format!("{:.2} GB", gb);
 
-        assert!(!formatted.is_empty(), "Formatted disk space should not be empty");
-        assert!(formatted.contains("GB"), "Formatted disk space should contain 'GB'");
+        assert!(
+            !formatted.is_empty(),
+            "Formatted disk space should not be empty"
+        );
+        assert!(
+            formatted.contains("GB"),
+            "Formatted disk space should contain 'GB'"
+        );
         assert!(gb > 0.0, "Disk space in GB should be greater than 0");
     }
 
@@ -185,7 +218,10 @@ mod tests {
             );
         } else {
             // In local environments, expect at least one disk with available space
-            assert!(found_accessible_disk, "Should have at least one accessible disk with space");
+            assert!(
+                found_accessible_disk,
+                "Should have at least one accessible disk with space"
+            );
         }
     }
 }

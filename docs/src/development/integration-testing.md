@@ -40,7 +40,7 @@ The integration testing framework is actively under development with the followi
 
 ### Test Module Structure
 
-```
+```text
 tests/
 ├── integration/
 │   ├── mod.rs              # Common test utilities and setup functions (✅ Implemented)

@@ -186,7 +186,7 @@ pub fn escape_value(value: &str, style: EscapeStyle) -> String {
             .replace(':', "\\:"),
         EscapeStyle::Minimal => {
             // Only escape if value contains problematic characters
-        },
+        }
         EscapeStyle::None => value.to_string(),
     }
 }
@@ -219,16 +219,24 @@ pub enum LtsvError {
 
 // Gold Digger integration uses anyhow for application errors
 pub fn write<W: Write>(rows: Vec<Vec<String>>, output: W) -> anyhow::Result<()> {
-    let mut writer = WriterBuilder::new().escape_style(EscapeStyle::Standard).build(output);
+    let mut writer = WriterBuilder::new()
+        .escape_style(EscapeStyle::Standard)
+        .build(output);
 
     // Convert and handle errors with context
     for row in rows {
         writer
-            .write_record(row.into_iter().enumerate().map(|(i, v)| (format!("field_{}", i), v)))
+            .write_record(
+                row.into_iter()
+                    .enumerate()
+                    .map(|(i, v)| (format!("field_{}", i), v)),
+            )
             .with_context(|| "Failed to write LTSV record")?;
     }
 
-    writer.flush().with_context(|| "Failed to flush LTSV output")?;
+    writer
+        .flush()
+        .with_context(|| "Failed to flush LTSV output")?;
 
     Ok(())
 }
@@ -260,7 +268,10 @@ mod tests {
     #[test]
     fn test_escaping() {
         let mut output = Vec::new();
-        let records = vec![vec![("field".to_string(), "val:ue\twith\ttabs".to_string())]];
+        let records = vec![vec![(
+            "field".to_string(),
+            "val:ue\twith\ttabs".to_string(),
+        )]];
 
         write_records(&mut output, records).unwrap();
 

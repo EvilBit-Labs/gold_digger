@@ -19,7 +19,10 @@ mod tests {
     fn test_integration_infrastructure() {
         // Test that we can create test setup
         let setup = TestSetup::new().expect("Failed to create test setup");
-        assert!(setup.temp_path().exists(), "Temporary directory should exist");
+        assert!(
+            setup.temp_path().exists(),
+            "Temporary directory should exist"
+        );
 
         // Test Docker availability check
         let docker_available = is_docker_available();
@@ -45,21 +48,36 @@ mod tests {
         // Test that we can access TLS certificate generation
         use fixtures::tls::EphemeralCertificate;
         let ephemeral_cert = EphemeralCertificate::generate(Some("test-consolidation"));
-        assert!(ephemeral_cert.is_ok(), "Should be able to generate ephemeral certificates");
+        assert!(
+            ephemeral_cert.is_ok(),
+            "Should be able to generate ephemeral certificates"
+        );
 
         // Test that we can create TestDatabase instances for TLS
         let mysql_tls = TestDatabase::mysql_tls();
-        assert!(mysql_tls.is_tls_enabled(), "MySQL TLS database should have TLS enabled");
+        assert!(
+            mysql_tls.is_tls_enabled(),
+            "MySQL TLS database should have TLS enabled"
+        );
 
         let mariadb_tls = TestDatabase::mariadb_tls();
-        assert!(mariadb_tls.is_tls_enabled(), "MariaDB TLS database should have TLS enabled");
+        assert!(
+            mariadb_tls.is_tls_enabled(),
+            "MariaDB TLS database should have TLS enabled"
+        );
 
         // Test that we can create plain database instances
         let mysql_plain = TestDatabase::mysql();
-        assert!(!mysql_plain.is_tls_enabled(), "MySQL plain database should not have TLS enabled");
+        assert!(
+            !mysql_plain.is_tls_enabled(),
+            "MySQL plain database should not have TLS enabled"
+        );
 
         let mariadb_plain = TestDatabase::mariadb();
-        assert!(!mariadb_plain.is_tls_enabled(), "MariaDB plain database should not have TLS enabled");
+        assert!(
+            !mariadb_plain.is_tls_enabled(),
+            "MariaDB plain database should not have TLS enabled"
+        );
 
         println!("TLS integration test consolidation successful");
     }
@@ -79,7 +97,10 @@ mod tests {
         assert_eq!(test_case.expected_format, OutputFormat::Json);
         assert_eq!(test_case.expected_exit_code, 0);
         assert!(test_case.cli_args.contains(&"--verbose".to_string()));
-        assert_eq!(test_case.env_vars.get("TEST_VAR"), Some(&"test_value".to_string()));
+        assert_eq!(
+            test_case.env_vars.get("TEST_VAR"),
+            Some(&"test_value".to_string())
+        );
         assert_eq!(test_case.validation_rules.len(), 1);
     }
 

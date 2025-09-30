@@ -47,8 +47,8 @@ fn test_safe_mysql_value_handling() -> Result<()> {
 
     // Test type conversion safety
     let int_value = mysql::Value::Int(42);
-    let safe_conversion =
-        mysql::from_value_opt::<String>(int_value).unwrap_or_else(|_| "conversion_failed".to_string());
+    let safe_conversion = mysql::from_value_opt::<String>(int_value)
+        .unwrap_or_else(|_| "conversion_failed".to_string());
     assert_eq!(safe_conversion, "42");
 
     Ok(())
@@ -83,7 +83,9 @@ impl Write for TestWriter {
 #[test]
 fn test_security_warnings_captured() {
     let buffer = Arc::new(Mutex::new(Vec::new()));
-    let writer = TestWriter { buffer: buffer.clone() };
+    let writer = TestWriter {
+        buffer: buffer.clone(),
+    };
 
     // Redirect stderr to capture warnings
     // Test that warnings are actually written
@@ -106,7 +108,11 @@ fn test_certificate_generation_performance() -> Result<()> {
     let duration = start.elapsed();
 
     // Certificate generation should complete within reasonable time
-    assert!(duration.as_millis() < 1000, "Certificate generation too slow: {:?}", duration);
+    assert!(
+        duration.as_millis() < 1000,
+        "Certificate generation too slow: {:?}",
+        duration
+    );
     Ok(())
 }
 ```
@@ -164,7 +170,9 @@ fn test_gold_digger_cli_with_tls() -> Result<()> {
         .arg("test_output.json")
         .arg("--allow-invalid-certificate"); // For test certificates
 
-    cmd.assert().success().stdout(predicate::str::contains("test"));
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("test"));
 
     Ok(())
 }
@@ -241,7 +249,11 @@ fn test_credential_redaction_in_errors() -> Result<()> {
 assert!(ssl_opts.is_some());
 
 // Use descriptive assertions
-assert!(ssl_opts.is_some(), "SSL options should be generated for TLS configuration: {:?}", config.validation_mode());
+assert!(
+    ssl_opts.is_some(),
+    "SSL options should be generated for TLS configuration: {:?}",
+    config.validation_mode()
+);
 ```
 
 ### 3. **Add Proper Test Cleanup**

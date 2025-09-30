@@ -102,7 +102,7 @@ pub fn rows_to_strings(rows: Vec<Row>) -> anyhow::Result<Vec<Vec<String>>> {
                             row_index + 1,
                             i + 1
                         )));
-                    },
+                    }
                 },
                 None => data_row.push(String::new()),
             }
@@ -145,15 +145,22 @@ fn mysql_value_to_string(value: &mysql::Value) -> anyhow::Result<String> {
                     // This prevents data corruption and provides deterministic output
                     if bytes.len() > 1024 {
                         // For large binary data, truncate and indicate
-                        let hex_prefix = bytes.iter().take(32).map(|b| format!("{:02x}", b)).collect::<String>();
+                        let hex_prefix = bytes
+                            .iter()
+                            .take(32)
+                            .map(|b| format!("{:02x}", b))
+                            .collect::<String>();
                         Ok(format!("0x{}... ({} bytes)", hex_prefix, bytes.len()))
                     } else {
-                        let hex_string = bytes.iter().map(|b| format!("{:02x}", b)).collect::<String>();
+                        let hex_string = bytes
+                            .iter()
+                            .map(|b| format!("{:02x}", b))
+                            .collect::<String>();
                         Ok(format!("0x{}", hex_string))
                     }
-                },
+                }
             }
-        },
+        }
         mysql::Value::Int(i) => Ok(i.to_string()),
         mysql::Value::UInt(u) => Ok(u.to_string()),
         mysql::Value::Float(f) => {
@@ -161,40 +168,65 @@ fn mysql_value_to_string(value: &mysql::Value) -> anyhow::Result<String> {
             if f.is_nan() {
                 Ok("NaN".to_string())
             } else if f.is_infinite() {
-                Ok(if f.is_sign_positive() { "Infinity" } else { "-Infinity" }.to_string())
+                Ok(if f.is_sign_positive() {
+                    "Infinity"
+                } else {
+                    "-Infinity"
+                }
+                .to_string())
             } else {
                 Ok(f.to_string())
             }
-        },
+        }
         mysql::Value::Double(d) => {
             // Handle special double values
             if d.is_nan() {
                 Ok("NaN".to_string())
             } else if d.is_infinite() {
-                Ok(if d.is_sign_positive() { "Infinity" } else { "-Infinity" }.to_string())
+                Ok(if d.is_sign_positive() {
+                    "Infinity"
+                } else {
+                    "-Infinity"
+                }
+                .to_string())
             } else {
                 Ok(d.to_string())
             }
-        },
+        }
         mysql::Value::Date(year, month, day, hour, minute, second, microsecond) => {
             // Add validation for date values (requirement 10.3)
             if *month == 0 || *month > 12 {
-                anyhow::bail!("Type conversion error: Invalid month value {} in date", month);
+                anyhow::bail!(
+                    "Type conversion error: Invalid month value {} in date",
+                    month
+                );
             }
             if *day == 0 || *day > 31 {
                 anyhow::bail!("Type conversion error: Invalid day value {} in date", day);
             }
             if *hour > 23 {
-                anyhow::bail!("Type conversion error: Invalid hour value {} in datetime", hour);
+                anyhow::bail!(
+                    "Type conversion error: Invalid hour value {} in datetime",
+                    hour
+                );
             }
             if *minute > 59 {
-                anyhow::bail!("Type conversion error: Invalid minute value {} in datetime", minute);
+                anyhow::bail!(
+                    "Type conversion error: Invalid minute value {} in datetime",
+                    minute
+                );
             }
             if *second > 59 {
-                anyhow::bail!("Type conversion error: Invalid second value {} in datetime", second);
+                anyhow::bail!(
+                    "Type conversion error: Invalid second value {} in datetime",
+                    second
+                );
             }
             if *microsecond > 999999 {
-                anyhow::bail!("Type conversion error: Invalid microsecond value {} in datetime", microsecond);
+                anyhow::bail!(
+                    "Type conversion error: Invalid microsecond value {} in datetime",
+                    microsecond
+                );
             }
 
             if *hour == 0 && *minute == 0 && *second == 0 && *microsecond == 0 {
@@ -205,20 +237,32 @@ fn mysql_value_to_string(value: &mysql::Value) -> anyhow::Result<String> {
                     year, month, day, hour, minute, second, microsecond
                 ))
             }
-        },
+        }
         mysql::Value::Time(negative, days, hours, minutes, seconds, microseconds) => {
             // Add validation for time values (requirement 10.3)
             if *hours > 23 {
-                anyhow::bail!("Type conversion error: Invalid hour value {} in time", hours);
+                anyhow::bail!(
+                    "Type conversion error: Invalid hour value {} in time",
+                    hours
+                );
             }
             if *minutes > 59 {
-                anyhow::bail!("Type conversion error: Invalid minute value {} in time", minutes);
+                anyhow::bail!(
+                    "Type conversion error: Invalid minute value {} in time",
+                    minutes
+                );
             }
             if *seconds > 59 {
-                anyhow::bail!("Type conversion error: Invalid second value {} in time", seconds);
+                anyhow::bail!(
+                    "Type conversion error: Invalid second value {} in time",
+                    seconds
+                );
             }
             if *microseconds > 999999 {
-                anyhow::bail!("Type conversion error: Invalid microsecond value {} in time", microseconds);
+                anyhow::bail!(
+                    "Type conversion error: Invalid microsecond value {} in time",
+                    microseconds
+                );
             }
 
             let sign = if *negative { "-" } else { "" };
@@ -232,9 +276,12 @@ fn mysql_value_to_string(value: &mysql::Value) -> anyhow::Result<String> {
                     microseconds
                 ))
             } else {
-                Ok(format!("{}{:02}:{:02}:{:02}.{:06}", sign, hours, minutes, seconds, microseconds))
+                Ok(format!(
+                    "{}{:02}:{:02}:{:02}.{:06}",
+                    sign, hours, minutes, seconds, microseconds
+                ))
             }
-        },
+        }
     }
 }
 
@@ -261,7 +308,8 @@ pub fn get_extension_from_filename(filename: &str) -> Option<&str> {
 ///
 /// A Result containing the environment variable value as a String, or an error with context.
 pub fn get_required_env(var_name: &str) -> Result<String> {
-    env::var(var_name).with_context(|| format!("Missing required environment variable: {}", var_name))
+    env::var(var_name)
+        .with_context(|| format!("Missing required environment variable: {}", var_name))
 }
 
 #[cfg(test)]
@@ -299,14 +347,26 @@ mod tests {
     #[test]
     fn test_mysql_value_to_string_integers() {
         assert_eq!(mysql_value_to_string(&mysql::Value::Int(42)).unwrap(), "42");
-        assert_eq!(mysql_value_to_string(&mysql::Value::Int(-42)).unwrap(), "-42");
-        assert_eq!(mysql_value_to_string(&mysql::Value::UInt(123)).unwrap(), "123");
+        assert_eq!(
+            mysql_value_to_string(&mysql::Value::Int(-42)).unwrap(),
+            "-42"
+        );
+        assert_eq!(
+            mysql_value_to_string(&mysql::Value::UInt(123)).unwrap(),
+            "123"
+        );
     }
 
     #[test]
     fn test_mysql_value_to_string_floats() {
-        assert_eq!(mysql_value_to_string(&mysql::Value::Float(3.5)).unwrap(), "3.5");
-        assert_eq!(mysql_value_to_string(&mysql::Value::Double(2.5)).unwrap(), "2.5");
+        assert_eq!(
+            mysql_value_to_string(&mysql::Value::Float(3.5)).unwrap(),
+            "3.5"
+        );
+        assert_eq!(
+            mysql_value_to_string(&mysql::Value::Double(2.5)).unwrap(),
+            "2.5"
+        );
     }
 
     #[test]
@@ -330,16 +390,34 @@ mod tests {
     #[test]
     fn test_mysql_value_to_string_special_floats() {
         // Test NaN
-        assert_eq!(mysql_value_to_string(&mysql::Value::Float(f32::NAN)).unwrap(), "NaN");
-        assert_eq!(mysql_value_to_string(&mysql::Value::Double(f64::NAN)).unwrap(), "NaN");
+        assert_eq!(
+            mysql_value_to_string(&mysql::Value::Float(f32::NAN)).unwrap(),
+            "NaN"
+        );
+        assert_eq!(
+            mysql_value_to_string(&mysql::Value::Double(f64::NAN)).unwrap(),
+            "NaN"
+        );
 
         // Test Infinity
-        assert_eq!(mysql_value_to_string(&mysql::Value::Float(f32::INFINITY)).unwrap(), "Infinity");
-        assert_eq!(mysql_value_to_string(&mysql::Value::Double(f64::INFINITY)).unwrap(), "Infinity");
+        assert_eq!(
+            mysql_value_to_string(&mysql::Value::Float(f32::INFINITY)).unwrap(),
+            "Infinity"
+        );
+        assert_eq!(
+            mysql_value_to_string(&mysql::Value::Double(f64::INFINITY)).unwrap(),
+            "Infinity"
+        );
 
         // Test Negative Infinity
-        assert_eq!(mysql_value_to_string(&mysql::Value::Float(f32::NEG_INFINITY)).unwrap(), "-Infinity");
-        assert_eq!(mysql_value_to_string(&mysql::Value::Double(f64::NEG_INFINITY)).unwrap(), "-Infinity");
+        assert_eq!(
+            mysql_value_to_string(&mysql::Value::Float(f32::NEG_INFINITY)).unwrap(),
+            "-Infinity"
+        );
+        assert_eq!(
+            mysql_value_to_string(&mysql::Value::Double(f64::NEG_INFINITY)).unwrap(),
+            "-Infinity"
+        );
     }
 
     #[test]
@@ -347,13 +425,15 @@ mod tests {
         let result = mysql_value_to_string(&mysql::Value::Date(2023, 12, 25, 0, 0, 0, 0)).unwrap();
         assert_eq!(result, "2023-12-25");
 
-        let result = mysql_value_to_string(&mysql::Value::Date(2023, 12, 25, 14, 30, 45, 123456)).unwrap();
+        let result =
+            mysql_value_to_string(&mysql::Value::Date(2023, 12, 25, 14, 30, 45, 123456)).unwrap();
         assert_eq!(result, "2023-12-25 14:30:45.123456");
     }
 
     #[test]
     fn test_mysql_value_to_string_time() {
-        let result = mysql_value_to_string(&mysql::Value::Time(false, 0, 14, 30, 45, 123456)).unwrap();
+        let result =
+            mysql_value_to_string(&mysql::Value::Time(false, 0, 14, 30, 45, 123456)).unwrap();
         assert_eq!(result, "14:30:45.123456");
 
         let result = mysql_value_to_string(&mysql::Value::Time(true, 1, 2, 30, 45, 0)).unwrap();

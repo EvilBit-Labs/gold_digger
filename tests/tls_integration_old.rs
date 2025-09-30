@@ -29,8 +29,10 @@ fn create_temp_cert_file(content: &str) -> Result<(TempDir, PathBuf)> {
 /// Generate a valid PEM certificate for testing using rcgen
 /// This replaces the hardcoded certificate with dynamic generation
 fn generate_test_certificate() -> Result<String> {
-    let (cert_pem, _key_pem) =
-        EphemeralCertificate::generate_self_signed(vec!["localhost".to_string(), "test.local".to_string()])?;
+    let (cert_pem, _key_pem) = EphemeralCertificate::generate_self_signed(vec![
+        "localhost".to_string(),
+        "test.local".to_string(),
+    ])?;
     Ok(cert_pem)
 }
 
@@ -54,7 +56,10 @@ mod platform_certificate_tests {
 
         let config = TlsConfig::new(); // Uses platform certificate store
 
-        assert!(matches!(config.validation_mode(), TlsValidationMode::Platform));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::Platform
+        ));
 
         // Test SSL opts generation
         let ssl_opts = config.to_ssl_opts()?;
@@ -118,7 +123,7 @@ mod custom_ca_tests {
             Err(_) => {
                 // Certificate parsing failure is acceptable for this test
                 // We're testing configuration creation, not certificate validation
-            },
+            }
         }
 
         Ok(())
@@ -171,7 +176,10 @@ mod hostname_verification_tests {
     fn test_hostname_verification_bypass() -> Result<()> {
         let config = TlsConfig::with_skip_hostname_verification();
 
-        assert!(matches!(config.validation_mode(), TlsValidationMode::SkipHostnameVerification));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::SkipHostnameVerification
+        ));
 
         // Test SSL opts generation
         let ssl_opts = config.to_ssl_opts()?;
@@ -210,7 +218,10 @@ mod invalid_certificate_tests {
     fn test_invalid_certificate_acceptance() -> Result<()> {
         let config = TlsConfig::with_accept_invalid();
 
-        assert!(matches!(config.validation_mode(), TlsValidationMode::AcceptInvalid));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::AcceptInvalid
+        ));
 
         // Test SSL opts generation
         let ssl_opts = config.to_ssl_opts()?;
@@ -284,7 +295,10 @@ mod tls_error_handling_tests {
         let error = result.unwrap_err();
 
         // Should be a MutuallyExclusiveFlags error
-        assert!(matches!(error, gold_digger::tls::TlsError::MutuallyExclusiveFlags { .. }));
+        assert!(matches!(
+            error,
+            gold_digger::tls::TlsError::MutuallyExclusiveFlags { .. }
+        ));
 
         Ok(())
     }
@@ -365,7 +379,9 @@ mod integration_tests {
             .expect("Failed to start MariaDB container");
 
         // Get the connection URL from the running container
-        let host = mariadb_container.get_host().expect("Failed to get container host");
+        let host = mariadb_container
+            .get_host()
+            .expect("Failed to get container host");
         let port = mariadb_container
             .get_host_port_ipv4(3306)
             .expect("Failed to get container port");
@@ -401,7 +417,9 @@ mod integration_tests {
             .start()
             .expect("Failed to start MariaDB container");
 
-        let host = mariadb_container.get_host().expect("Failed to get container host");
+        let host = mariadb_container
+            .get_host()
+            .expect("Failed to get container host");
         let port = mariadb_container
             .get_host_port_ipv4(3306)
             .expect("Failed to get container port");
@@ -419,7 +437,9 @@ mod integration_tests {
         assert!(ssl_opts.is_some());
 
         // Test that the configuration is properly set for custom CA
-        if let gold_digger::tls::TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
+        if let gold_digger::tls::TlsValidationMode::CustomCa { ca_file_path } =
+            config.validation_mode()
+        {
             assert_eq!(ca_file_path, &ca_cert_path);
         } else {
             panic!("Expected CustomCa validation mode");
@@ -456,7 +476,9 @@ mod integration_tests {
             .start()
             .expect("Failed to start MariaDB container");
 
-        let host = mariadb_container.get_host().expect("Failed to get container host");
+        let host = mariadb_container
+            .get_host()
+            .expect("Failed to get container host");
         let port = mariadb_container
             .get_host_port_ipv4(3306)
             .expect("Failed to get container port");
@@ -471,7 +493,10 @@ mod integration_tests {
         assert!(ssl_opts.is_some());
 
         // Test that the configuration is properly set for skip hostname verification
-        assert!(matches!(config.validation_mode(), gold_digger::tls::TlsValidationMode::SkipHostnameVerification));
+        assert!(matches!(
+            config.validation_mode(),
+            gold_digger::tls::TlsValidationMode::SkipHostnameVerification
+        ));
 
         // Test that security warnings are displayed for skip hostname mode
         // This validates that the configuration properly identifies insecure modes
@@ -501,12 +526,20 @@ mod integration_tests {
 
         // Log the test scenario for clarity
         eprintln!("Configuration test for skip hostname verification:");
-        eprintln!("  - localhost connection: {}", redact_url(&localhost_connection_string));
+        eprintln!(
+            "  - localhost connection: {}",
+            redact_url(&localhost_connection_string)
+        );
         eprintln!("  - IP connection: {}", redact_url(&ip_connection_string));
-        eprintln!("  - Container hostname connection: {}", redact_url(&container_connection_string));
+        eprintln!(
+            "  - Container hostname connection: {}",
+            redact_url(&container_connection_string)
+        );
         eprintln!("  - Skip hostname verification enabled: true");
         eprintln!("  - Configuration validation: PASSED");
-        eprintln!("  - Note: Actual TLS hostname verification not tested (MariaDB not TLS-enabled)");
+        eprintln!(
+            "  - Note: Actual TLS hostname verification not tested (MariaDB not TLS-enabled)"
+        );
 
         // TODO: To properly test skip hostname verification, we would need:
         // 1. A TLS-enabled MariaDB container with certificates valid for "localhost"
@@ -538,7 +571,10 @@ mod integration_tests {
         assert!(ssl_opts.is_some());
 
         // Test that the configuration is properly set for accept invalid mode
-        assert!(matches!(config.validation_mode(), gold_digger::tls::TlsValidationMode::AcceptInvalid));
+        assert!(matches!(
+            config.validation_mode(),
+            gold_digger::tls::TlsValidationMode::AcceptInvalid
+        ));
 
         // Test that security warnings are displayed for accept invalid mode
         // This validates that the configuration properly identifies dangerous modes
@@ -579,7 +615,10 @@ mod integration_tests {
         assert!(ssl_opts.is_some());
 
         // Test that the configuration is properly set for pooling
-        assert!(matches!(config.validation_mode(), gold_digger::tls::TlsValidationMode::Platform));
+        assert!(matches!(
+            config.validation_mode(),
+            gold_digger::tls::TlsValidationMode::Platform
+        ));
 
         eprintln!("Configuration test for TLS connection pooling:");
         eprintln!("  - TLS enabled: true");
@@ -610,13 +649,15 @@ mod integration_tests {
             .start()
             .expect("Failed to start MariaDB container");
 
-        let host = mariadb_container.get_host().expect("Failed to get container host");
+        let host = mariadb_container
+            .get_host()
+            .expect("Failed to get container host");
         let port = match mariadb_container.get_host_port_ipv4(3306) {
             Ok(port) => port,
             Err(e) => {
                 eprintln!("Container port not available, skipping test: {}", e);
                 return Ok(());
-            },
+            }
         };
         let valid_connection_string = format!("mysql://test:test@{}:{}", host, port);
 
@@ -650,7 +691,9 @@ mod integration_tests {
             .start()
             .expect("Failed to start MariaDB container");
 
-        let host = mariadb_container.get_host().expect("Failed to get container host");
+        let host = mariadb_container
+            .get_host()
+            .expect("Failed to get container host");
         let port = mariadb_container
             .get_host_port_ipv4(3306)
             .expect("Failed to get container port");

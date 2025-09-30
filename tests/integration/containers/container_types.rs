@@ -71,7 +71,9 @@ fn test_database_connection_detailed(connection_url: &str) -> Result<bool> {
 
     let pool = mysql::Pool::new(opts).context("Failed to create connection pool")?;
 
-    let mut conn = pool.get_conn().context("Failed to get database connection")?;
+    let mut conn = pool
+        .get_conn()
+        .context("Failed to get database connection")?;
 
     // Use a more comprehensive health check query
     let result: Option<i32> = conn
@@ -83,10 +85,10 @@ fn test_database_connection_detailed(connection_url: &str) -> Result<bool> {
         Some(other) => {
             eprintln!("Unexpected health check result: {}", other);
             Ok(false)
-        },
+        }
         None => {
             eprintln!("Health check query returned no results");
             Ok(false)
-        },
+        }
     }
 }

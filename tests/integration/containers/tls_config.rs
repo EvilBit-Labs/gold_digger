@@ -85,8 +85,11 @@ impl ContainerTlsConfig {
             "TLSv1.2" | "TLSv1.3" => {
                 self.min_tls_version = version.to_string();
                 Ok(self)
-            },
-            _ => Err(anyhow::anyhow!("Invalid TLS version: {}. Must be TLSv1.2 or TLSv1.3", version)),
+            }
+            _ => Err(anyhow::anyhow!(
+                "Invalid TLS version: {}. Must be TLSv1.2 or TLSv1.3",
+                version
+            )),
         }
     }
 
@@ -116,7 +119,10 @@ impl ContainerTlsConfig {
     pub fn with_ca_cert<P: AsRef<std::path::Path>>(mut self, path: P) -> Result<Self> {
         let path_ref = path.as_ref();
         if !path_ref.exists() {
-            return Err(anyhow::anyhow!("CA certificate file does not exist: {}", path_ref.display()));
+            return Err(anyhow::anyhow!(
+                "CA certificate file does not exist: {}",
+                path_ref.display()
+            ));
         }
         self.ca_cert_path = Some(path_ref.to_path_buf());
         Ok(self)
@@ -127,25 +133,30 @@ impl ContainerTlsConfig {
         if self.enabled {
             // Validate TLS version
             match self.min_tls_version.as_str() {
-                "TLSv1.2" | "TLSv1.3" => {},
+                "TLSv1.2" | "TLSv1.3" => {}
                 _ => {
                     return Err(anyhow::anyhow!(
                         "Invalid TLS version: {}. Must be TLSv1.2 or TLSv1.3",
                         self.min_tls_version
                     ));
-                },
+                }
             }
 
             // Validate cipher suites are not empty for secure configurations
             if self.cipher_suites.is_empty() && self.require_secure_transport {
-                return Err(anyhow::anyhow!("Cipher suites cannot be empty when secure transport is required"));
+                return Err(anyhow::anyhow!(
+                    "Cipher suites cannot be empty when secure transport is required"
+                ));
             }
 
             // Validate CA certificate path if provided
             if let Some(ca_path) = &self.ca_cert_path
                 && !ca_path.exists()
             {
-                return Err(anyhow::anyhow!("CA certificate file does not exist: {}", ca_path.display()));
+                return Err(anyhow::anyhow!(
+                    "CA certificate file does not exist: {}",
+                    ca_path.display()
+                ));
             }
         }
         Ok(())

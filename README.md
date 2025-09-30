@@ -283,7 +283,7 @@ The integration testing framework provides:
 
 #### Test Module Structure
 
-```
+```text
 tests/
 ├── integration/
 │   ├── mod.rs              # Common test utilities and setup functions
@@ -302,6 +302,7 @@ tests/
 ├── tls_integration.rs      # TLS connection and certificate validation
 ├── integration_tests.rs    # Main integration test entry point
 └── database_seeding_test.rs # Database schema and data seeding tests
+
 ```
 
 #### TLS and Non-TLS Testing

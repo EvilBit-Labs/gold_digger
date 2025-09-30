@@ -579,10 +579,16 @@ error: clippy not installed
 
    ```rust
    // Problem: Long macro call
-   println!("Processing item {} with value {} and status {}", item.id, item.value, item.status);
+   println!(
+       "Processing item {} with value {} and status {}",
+       item.id, item.value, item.status
+   );
 
    // Solution: Break into multiple lines
-   println!("Processing item {} with value {} and status {}", item.id, item.value, item.status,);
+   println!(
+       "Processing item {} with value {} and status {}",
+       item.id, item.value, item.status,
+   );
    ```
 
 ## Configuration Management

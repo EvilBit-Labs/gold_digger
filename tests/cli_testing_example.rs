@@ -78,7 +78,10 @@ fn test_error_scenario() -> Result<()> {
     // Test with missing required arguments
     cmd.assert()
         .failure() // Expect non-zero exit code
-        .stderr(predicate::str::contains("Missing database URL").or(predicate::str::contains("required")));
+        .stderr(
+            predicate::str::contains("Missing database URL")
+                .or(predicate::str::contains("required")),
+        );
 
     Ok(())
 }
@@ -211,9 +214,9 @@ fn test_mutually_exclusive_options() -> Result<()> {
         .arg("--verbose")
         .arg("--quiet"); // This should cause an error
 
-    cmd.assert()
-        .failure()
-        .stderr(predicate::str::contains("cannot be used with").or(predicate::str::contains("conflict")));
+    cmd.assert().failure().stderr(
+        predicate::str::contains("cannot be used with").or(predicate::str::contains("conflict")),
+    );
 
     Ok(())
 }

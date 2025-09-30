@@ -30,7 +30,11 @@ pub struct DatabaseVersion {
 impl DatabaseVersion {
     /// Create a new database version
     pub fn new(major: u32, minor: u32, patch: u32) -> Self {
-        Self { major, minor, patch }
+        Self {
+            major,
+            minor,
+            patch,
+        }
     }
 }
 
@@ -65,9 +69,15 @@ impl DatabaseInfo {
 
         let parts: Vec<&str> = version_part.split('.').take(3).collect();
 
-        let major = parts.first().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+        let major = parts
+            .first()
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(0);
 
-        let minor = parts.get(1).and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+        let minor = parts
+            .get(1)
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(0);
 
         let patch = parts
             .get(2)
@@ -88,23 +98,23 @@ impl DatabaseInfo {
     pub fn detect_mysql_features(version: &DatabaseVersion) -> DatabaseFeatures {
         DatabaseFeatures {
             supports_json: version >= &DatabaseVersion::new(5, 7, 8),
-            supports_window_functions: version >= &DatabaseVersion::new(8, 0, 0),
+            supports_window_functions: version >= &DatabaseVersion::new(8, 0, 2),
             supports_cte: version >= &DatabaseVersion::new(8, 0, 1),
             supports_generated_columns: version >= &DatabaseVersion::new(5, 7, 6),
-            supports_fulltext: version >= &DatabaseVersion::new(5, 6, 0),
-            supports_spatial: version >= &DatabaseVersion::new(5, 7, 0),
+            supports_fulltext: version >= &DatabaseVersion::new(5, 6, 4),
+            supports_spatial: version >= &DatabaseVersion::new(5, 7, 5),
         }
     }
 
     /// Detect MariaDB-specific features based on version
     pub fn detect_mariadb_features(version: &DatabaseVersion) -> DatabaseFeatures {
         DatabaseFeatures {
-            supports_json: version >= &DatabaseVersion::new(10, 2, 7),
+            supports_json: version >= &DatabaseVersion::new(10, 2, 0),
             supports_window_functions: version >= &DatabaseVersion::new(10, 2, 0),
-            supports_cte: version >= &DatabaseVersion::new(10, 2, 1),
+            supports_cte: version >= &DatabaseVersion::new(10, 2, 0),
             supports_generated_columns: version >= &DatabaseVersion::new(10, 2, 0),
             supports_fulltext: version >= &DatabaseVersion::new(10, 0, 0),
-            supports_spatial: version >= &DatabaseVersion::new(10, 0, 0),
+            supports_spatial: version >= &DatabaseVersion::new(10, 2, 0),
         }
     }
 }

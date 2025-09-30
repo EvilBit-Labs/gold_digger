@@ -125,7 +125,10 @@ Error: Database connection failed: Access denied for user 'test'@'localhost'
        fn test_with_real_mariadb() {
            let docker = clients::Cli::default();
            let mariadb = docker.run(images::mariadb::MariaDb::default());
-           let connection_string = format!("mysql://root@127.0.0.1:{}/test", mariadb.get_host_port_ipv4(3306));
+           let connection_string = format!(
+               "mysql://root@127.0.0.1:{}/test",
+               mariadb.get_host_port_ipv4(3306)
+           );
            // Test with real MariaDB container
        }
    }
@@ -222,7 +225,7 @@ Error: No such file or directory (os error 2)
            Ok(_) => {
                // Test successful file creation
                std::fs::remove_file("test_file.txt").ok();
-           },
+           }
            Err(e) => panic!("Failed to create test file: {}", e),
        }
    }
@@ -323,11 +326,14 @@ predicates = "3.0"
    #[test]
    fn test_cli_with_env_vars() {
        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
-       cmd.env("DATABASE_URL", "mysql://test:password@127.0.0.1:3306/test_db")
-           .env("DATABASE_QUERY", "SELECT 1")
-           .env("OUTPUT_FILE", "/tmp/test.json")
-           .assert()
-           .success();
+       cmd.env(
+           "DATABASE_URL",
+           "mysql://test:password@127.0.0.1:3306/test_db",
+       )
+       .env("DATABASE_QUERY", "SELECT 1")
+       .env("OUTPUT_FILE", "/tmp/test.json")
+       .assert()
+       .success();
    }
    ```
 
@@ -375,7 +381,8 @@ Error: CSV format validation failed
    #[test]
    fn test_json_validity() {
        let output = generate_json_output(test_data());
-       let parsed: serde_json::Value = serde_json::from_str(&output).expect("Generated JSON should be valid");
+       let parsed: serde_json::Value =
+           serde_json::from_str(&output).expect("Generated JSON should be valid");
 
        assert!(parsed.is_object());
        assert!(parsed["data"].is_array());
@@ -462,7 +469,9 @@ Error: Stack overflow
    #[test]
    fn test_with_limited_data() {
        const MAX_TEST_ROWS: usize = 1000;
-       let test_data: Vec<_> = (0..MAX_TEST_ROWS).map(|i| format!("test_row_{}", i)).collect();
+       let test_data: Vec<_> = (0..MAX_TEST_ROWS)
+           .map(|i| format!("test_row_{}", i))
+           .collect();
 
        // Test with limited dataset
    }

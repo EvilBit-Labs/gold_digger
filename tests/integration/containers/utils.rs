@@ -7,7 +7,9 @@ use anyhow::{Context, Result};
 use std::time::Duration;
 
 use super::{
-    container_manager::{CiResourceLimits, ContainerResourceUsage, DockerEnvironment, DockerPreflightResult},
+    container_manager::{
+        CiResourceLimits, ContainerResourceUsage, DockerEnvironment, DockerPreflightResult,
+    },
     database_container::DatabaseContainer,
 };
 use crate::integration::TestDatabase;
@@ -58,7 +60,7 @@ impl ContainerManager {
             Ok(docker_info) => {
                 result.docker_available = true;
                 result.environment = Some(docker_info);
-            },
+            }
             Err(e) => {
                 result
                     .error_messages
@@ -70,7 +72,7 @@ impl ContainerManager {
                         .to_string(),
                 );
                 return result;
-            },
+            }
         }
 
         // Check platform support (restrict to Linux for container tests)
@@ -78,9 +80,10 @@ impl ContainerManager {
             result.platform_supported = true;
         } else {
             let platform = std::env::consts::OS;
-            result
-                .error_messages
-                .push(format!("Platform {} not supported for container tests", platform));
+            result.error_messages.push(format!(
+                "Platform {} not supported for container tests",
+                platform
+            ));
             result.skip_messages.push(format!(
                 "Container-based tests are supported on Linux and macOS only. \
                         Current platform: {}. Run tests on a Linux or macOS system.",
@@ -103,15 +106,16 @@ impl ContainerManager {
                             .to_string(),
                     );
                 }
-            },
+            }
             Err(e) => {
                 result
                     .error_messages
                     .push(format!("Failed to check system resources: {}", e));
-                result
-                    .skip_messages
-                    .push("Unable to verify system resources. Ensure sufficient RAM and disk space.".to_string());
-            },
+                result.skip_messages.push(
+                    "Unable to verify system resources. Ensure sufficient RAM and disk space."
+                        .to_string(),
+                );
+            }
         }
 
         result
@@ -136,18 +140,22 @@ impl ContainerManager {
                      - Start Docker Desktop from Applications or run 'open -a Docker'\n\
                      - Wait for Docker Desktop to fully start (whale icon in menu bar)\n\
                      - Verify with 'docker version' in terminal"
-                },
+                }
                 "linux" => {
                     "On Linux, ensure Docker daemon is running:\n\
                      - Start daemon: 'sudo systemctl start docker' or 'sudo service docker start'\n\
                      - Enable on boot: 'sudo systemctl enable docker'\n\
                      - Add user to docker group: 'sudo usermod -aG docker $USER' (requires logout/login)\n\
                      - Verify with 'docker version'"
-                },
+                }
                 _ => "Ensure Docker is installed and the daemon is running.",
             };
 
-            return Err(anyhow::anyhow!("Docker daemon not responding. {}\nError: {}", platform_hint, stderr));
+            return Err(anyhow::anyhow!(
+                "Docker daemon not responding. {}\nError: {}",
+                platform_hint,
+                stderr
+            ));
         }
 
         // Get Docker version
@@ -157,7 +165,9 @@ impl ContainerManager {
             .context("Failed to get Docker version")?;
 
         let docker_version = if version_output.status.success() {
-            String::from_utf8_lossy(&version_output.stdout).trim().to_string()
+            String::from_utf8_lossy(&version_output.stdout)
+                .trim()
+                .to_string()
         } else {
             "unknown".to_string()
         };
@@ -216,13 +226,16 @@ impl ContainerManager {
             "linux" => {
                 // Use /proc/meminfo on Linux
                 if std::path::Path::new("/proc/meminfo").exists() {
-                    let meminfo = std::fs::read_to_string("/proc/meminfo").context("Failed to read /proc/meminfo")?;
+                    let meminfo = std::fs::read_to_string("/proc/meminfo")
+                        .context("Failed to read /proc/meminfo")?;
 
                     for line in meminfo.lines() {
                         if line.starts_with("MemAvailable:") {
                             let parts: Vec<&str> = line.split_whitespace().collect();
                             if parts.len() >= 2 {
-                                let kb = parts[1].parse::<u64>().context("Failed to parse memory value")?;
+                                let kb = parts[1]
+                                    .parse::<u64>()
+                                    .context("Failed to parse memory value")?;
                                 return Ok(kb * 1024); // Convert KB to bytes
                             }
                         }
@@ -230,7 +243,7 @@ impl ContainerManager {
                 }
                 // Fallback for Linux
                 Ok(4 * 1024 * 1024 * 1024)
-            },
+            }
             "macos" => {
                 // Use sysctl on macOS to get memory information
                 let output = std::process::Command::new("sysctl")
@@ -296,11 +309,11 @@ impl ContainerManager {
 
                 // Fallback for macOS (assume 8GB available, typical for macOS systems)
                 Ok(8 * 1024 * 1024 * 1024)
-            },
+            }
             _ => {
                 // Fallback for other platforms
                 Ok(4 * 1024 * 1024 * 1024)
-            },
+            }
         }
     }
 
@@ -328,6 +341,13 @@ impl ContainerManager {
 
     /// Create and add a database container
     pub fn create_container(&mut self, db_type: TestDatabase) -> Result<&DatabaseContainer> {
+        if self.containers.len() >= self.max_containers {
+            return Err(anyhow::anyhow!(
+                "Maximum container limit reached ({}). Cannot create more containers.",
+                self.max_containers
+            ));
+        }
+
         let container = DatabaseContainer::new(db_type)?;
         self.containers.push(container);
         Ok(self.containers.last().unwrap())
@@ -356,7 +376,10 @@ impl ContainerManager {
         self.containers.clear();
 
         if !cleanup_errors.is_empty() {
-            return Err(anyhow::anyhow!("Failed to clean up some containers: {}", cleanup_errors.join(", ")));
+            return Err(anyhow::anyhow!(
+                "Failed to clean up some containers: {}",
+                cleanup_errors.join(", ")
+            ));
         }
 
         Ok(())
@@ -367,22 +390,26 @@ impl ContainerManager {
         let container_id = container.health_info().container_id;
 
         // Log cleanup attempt with platform info
-        eprintln!("Cleaning up container: {} (platform: {})", container_id, std::env::consts::OS);
+        eprintln!(
+            "Cleaning up container: {} (platform: {})",
+            container_id,
+            std::env::consts::OS
+        );
 
         // Platform-specific cleanup optimizations
         match std::env::consts::OS {
             "macos" => {
                 // On macOS, Docker Desktop may need more time for cleanup
                 self.cleanup_container_macos(&container_id)?;
-            },
+            }
             "linux" => {
                 // Standard Linux cleanup
                 self.cleanup_container_linux(&container_id)?;
-            },
+            }
             _ => {
                 // Fallback cleanup for other platforms
                 self.cleanup_container_generic(&container_id)?;
-            },
+            }
         }
 
         // Verify container is actually removed
@@ -393,7 +420,10 @@ impl ContainerManager {
 
     /// macOS-specific container cleanup with Docker Desktop considerations
     fn cleanup_container_macos(&self, container_id: &str) -> Result<()> {
-        eprintln!("Using macOS-optimized cleanup for container: {}", container_id);
+        eprintln!(
+            "Using macOS-optimized cleanup for container: {}",
+            container_id
+        );
 
         // First, try graceful stop with longer timeout for Docker Desktop
         let stop_output = std::process::Command::new("docker")
@@ -403,7 +433,7 @@ impl ContainerManager {
         match stop_output {
             Ok(output) if output.status.success() => {
                 eprintln!("Successfully stopped container: {}", container_id);
-            },
+            }
             Ok(output) => {
                 eprintln!(
                     "Failed to gracefully stop container {}: {}",
@@ -427,10 +457,10 @@ impl ContainerManager {
                         );
                     }
                 }
-            },
+            }
             Err(e) => {
                 eprintln!("Error stopping container {} on macOS: {}", container_id, e);
-            },
+            }
         }
 
         // Remove container with force flag
@@ -440,14 +470,21 @@ impl ContainerManager {
 
         match rm_output {
             Ok(output) if output.status.success() => {
-                eprintln!("Successfully removed container and volumes: {}", container_id);
-            },
+                eprintln!(
+                    "Successfully removed container and volumes: {}",
+                    container_id
+                );
+            }
             Ok(output) => {
-                eprintln!("Failed to remove container {}: {}", container_id, String::from_utf8_lossy(&output.stderr));
-            },
+                eprintln!(
+                    "Failed to remove container {}: {}",
+                    container_id,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
             Err(e) => {
                 eprintln!("Error removing container {} on macOS: {}", container_id, e);
-            },
+            }
         }
 
         Ok(())
@@ -455,7 +492,10 @@ impl ContainerManager {
 
     /// Linux-specific container cleanup
     fn cleanup_container_linux(&self, container_id: &str) -> Result<()> {
-        eprintln!("Using Linux-optimized cleanup for container: {}", container_id);
+        eprintln!(
+            "Using Linux-optimized cleanup for container: {}",
+            container_id
+        );
 
         // Standard stop with shorter timeout for Linux
         let stop_output = std::process::Command::new("docker")
@@ -465,13 +505,17 @@ impl ContainerManager {
         match stop_output {
             Ok(output) if output.status.success() => {
                 eprintln!("Successfully stopped container: {}", container_id);
-            },
+            }
             Ok(output) => {
-                eprintln!("Failed to stop container {}: {}", container_id, String::from_utf8_lossy(&output.stderr));
-            },
+                eprintln!(
+                    "Failed to stop container {}: {}",
+                    container_id,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
             Err(e) => {
                 eprintln!("Error stopping container {} on Linux: {}", container_id, e);
-            },
+            }
         }
 
         // Remove container
@@ -481,14 +525,21 @@ impl ContainerManager {
 
         match rm_output {
             Ok(output) if output.status.success() => {
-                eprintln!("Successfully removed container and volumes: {}", container_id);
-            },
+                eprintln!(
+                    "Successfully removed container and volumes: {}",
+                    container_id
+                );
+            }
             Ok(output) => {
-                eprintln!("Failed to remove container {}: {}", container_id, String::from_utf8_lossy(&output.stderr));
-            },
+                eprintln!(
+                    "Failed to remove container {}: {}",
+                    container_id,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
             Err(e) => {
                 eprintln!("Error removing container {} on Linux: {}", container_id, e);
-            },
+            }
         }
 
         Ok(())
@@ -522,16 +573,22 @@ impl ContainerManager {
                 // Container doesn't exist - cleanup successful
                 eprintln!("Verified container {} has been removed", container_id);
                 Ok(())
-            },
+            }
             Ok(_) => {
                 // Container still exists
-                eprintln!("Warning: Container {} may still exist after cleanup", container_id);
+                eprintln!(
+                    "Warning: Container {} may still exist after cleanup",
+                    container_id
+                );
                 Ok(()) // Don't fail the test, just warn
-            },
+            }
             Err(e) => {
-                eprintln!("Error verifying container cleanup for {}: {}", container_id, e);
+                eprintln!(
+                    "Error verifying container cleanup for {}: {}",
+                    container_id, e
+                );
                 Ok(()) // Don't fail the test for verification errors
-            },
+            }
         }
     }
 
@@ -548,7 +605,7 @@ impl ContainerManager {
                         container.health_info().container_id,
                         e
                     );
-                },
+                }
             }
         }
 
@@ -556,7 +613,10 @@ impl ContainerManager {
     }
 
     /// Get resource usage for a specific container
-    fn get_container_resource_usage(&self, container: &DatabaseContainer) -> Result<ContainerResourceUsage> {
+    fn get_container_resource_usage(
+        &self,
+        container: &DatabaseContainer,
+    ) -> Result<ContainerResourceUsage> {
         let container_id = &container.health_info().container_id;
 
         let stats_output = std::process::Command::new("docker")
@@ -661,13 +721,20 @@ pub fn create_test_database(db_type: TestDatabase) -> Result<DatabaseContainer> 
     skip_if_no_docker()?;
 
     // Log container creation attempt
-    eprintln!("Creating {} container with TLS={}", db_type.name(), db_type.is_tls_enabled());
+    eprintln!(
+        "Creating {} container with TLS={}",
+        db_type.name(),
+        db_type.is_tls_enabled()
+    );
 
     let start_time = std::time::Instant::now();
     let container = DatabaseContainer::new(db_type)?;
     let creation_time = start_time.elapsed();
 
-    eprintln!("Container created successfully in {:.2}s", creation_time.as_secs_f64());
+    eprintln!(
+        "Container created successfully in {:.2}s",
+        creation_time.as_secs_f64()
+    );
 
     Ok(container)
 }
@@ -679,13 +746,19 @@ pub fn create_test_database_with_tls(
 ) -> Result<DatabaseContainer> {
     skip_if_no_docker()?;
 
-    eprintln!("Creating {} container with custom TLS configuration", db_type.name());
+    eprintln!(
+        "Creating {} container with custom TLS configuration",
+        db_type.name()
+    );
 
     let start_time = std::time::Instant::now();
     let container = DatabaseContainer::new_with_tls(db_type, tls_config)?;
     let creation_time = start_time.elapsed();
 
-    eprintln!("Container with custom TLS created successfully in {:.2}s", creation_time.as_secs_f64());
+    eprintln!(
+        "Container with custom TLS created successfully in {:.2}s",
+        creation_time.as_secs_f64()
+    );
 
     Ok(container)
 }
@@ -718,7 +791,9 @@ pub fn check_macos_docker_setup() -> Result<()> {
     eprintln!("Detected macOS platform - checking Docker Desktop setup...");
 
     // Check if Docker Desktop is running
-    let docker_info = std::process::Command::new("docker").args(["system", "info"]).output();
+    let docker_info = std::process::Command::new("docker")
+        .args(["system", "info"])
+        .output();
 
     match docker_info {
         Ok(output) if output.status.success() => {
@@ -732,7 +807,9 @@ pub fn check_macos_docker_setup() -> Result<()> {
             }
 
             // Check available resources on macOS
-            if let Ok(memory_output) = std::process::Command::new("sysctl").args(["-n", "hw.memsize"]).output()
+            if let Ok(memory_output) = std::process::Command::new("sysctl")
+                .args(["-n", "hw.memsize"])
+                .output()
                 && let Ok(memory_str) = String::from_utf8(memory_output.stdout)
                 && let Ok(total_memory) = memory_str.trim().parse::<u64>()
             {
@@ -740,12 +817,14 @@ pub fn check_macos_docker_setup() -> Result<()> {
                 eprintln!("✓ System memory: {} GB", memory_gb);
 
                 if memory_gb < 8 {
-                    eprintln!("⚠ Warning: Less than 8GB RAM detected. Container tests may be slower.");
+                    eprintln!(
+                        "⚠ Warning: Less than 8GB RAM detected. Container tests may be slower."
+                    );
                 }
             }
 
             Ok(())
-        },
+        }
         Ok(output) => {
             let stderr = String::from_utf8_lossy(&output.stderr);
             Err(anyhow::anyhow!(
@@ -757,7 +836,7 @@ pub fn check_macos_docker_setup() -> Result<()> {
                      Error: {}",
                 stderr
             ))
-        },
+        }
         Err(e) => Err(anyhow::anyhow!(
             "Failed to check Docker on macOS: {}\n\
                      Please ensure Docker Desktop is installed and running.",
@@ -818,7 +897,7 @@ pub fn optimize_docker_for_platform() -> Result<()> {
             eprintln!("   - Set Disk image size to at least 64GB");
 
             Ok(())
-        },
+        }
         "linux" => {
             eprintln!("Applying Linux Docker optimizations...");
 
@@ -828,16 +907,18 @@ pub fn optimize_docker_for_platform() -> Result<()> {
                 if groups.contains("docker") {
                     eprintln!("✓ User is in docker group");
                 } else {
-                    eprintln!("⚠ Consider adding user to docker group: sudo usermod -aG docker $USER");
+                    eprintln!(
+                        "⚠ Consider adding user to docker group: sudo usermod -aG docker $USER"
+                    );
                 }
             }
 
             Ok(())
-        },
+        }
         _ => {
             eprintln!("No platform-specific optimizations available");
             Ok(())
-        },
+        }
     }
 }
 
@@ -853,11 +934,20 @@ pub fn validate_ci_environment() -> Result<()> {
         eprintln!("CI Docker Environment:");
         eprintln!("  Docker version: {}", env.docker_version);
         eprintln!("  Platform: {}", env.platform);
-        eprintln!("  Available memory: {:.2} GB", env.available_memory as f64 / (1024.0 * 1024.0 * 1024.0));
-        eprintln!("  Available disk: {:.2} GB", env.available_disk_space as f64 / (1024.0 * 1024.0 * 1024.0));
+        eprintln!(
+            "  Available memory: {:.2} GB",
+            env.available_memory as f64 / (1024.0 * 1024.0 * 1024.0)
+        );
+        eprintln!(
+            "  Available disk: {:.2} GB",
+            env.available_disk_space as f64 / (1024.0 * 1024.0 * 1024.0)
+        );
     }
 
-    if !preflight.docker_available || !preflight.platform_supported || !preflight.sufficient_resources {
+    if !preflight.docker_available
+        || !preflight.platform_supported
+        || !preflight.sufficient_resources
+    {
         for error in &preflight.error_messages {
             eprintln!("ERROR: {}", error);
         }

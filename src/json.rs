@@ -154,13 +154,19 @@ mod tests {
         let mut writer = JsonWriter::new(&mut cursor, false);
 
         // Test header
-        writer.write_header(&["col1".to_string(), "col2".to_string()]).unwrap();
+        writer
+            .write_header(&["col1".to_string(), "col2".to_string()])
+            .unwrap();
 
         // Test first row
-        writer.write_row(&["val1".to_string(), "val2".to_string()]).unwrap();
+        writer
+            .write_row(&["val1".to_string(), "val2".to_string()])
+            .unwrap();
 
         // Test second row
-        writer.write_row(&["val3".to_string(), "val4".to_string()]).unwrap();
+        writer
+            .write_row(&["val3".to_string(), "val4".to_string()])
+            .unwrap();
 
         // Test finalize
         writer.finalize().unwrap();

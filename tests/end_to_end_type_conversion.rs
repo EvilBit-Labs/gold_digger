@@ -8,7 +8,8 @@ fn test_end_to_end_type_conversion_error_flow() {
     // Since we can't easily mock MySQL Row objects, we test the error propagation path
 
     // 1. Create an anyhow error that would come from mysql_value_to_string
-    let type_conversion_error = anyhow::anyhow!("Type conversion error: Invalid month value 13 in date");
+    let type_conversion_error =
+        anyhow::anyhow!("Type conversion error: Invalid month value 13 in date");
 
     // 2. Wrap it as it would be in rows_to_strings
     let rows_error = type_conversion_error.context("Type conversion failed during row processing");
@@ -26,7 +27,11 @@ fn test_end_to_end_type_conversion_error_flow() {
         || rows_error
             .chain()
             .any(|e| e.to_string().contains("Type conversion error"));
-    assert!(has_type_conversion, "Should contain type conversion error: {}", error_msg);
+    assert!(
+        has_type_conversion,
+        "Should contain type conversion error: {}",
+        error_msg
+    );
 }
 
 #[test]
@@ -35,17 +40,47 @@ fn test_type_conversion_error_categories() {
 
     let test_cases = vec![
         // Date validation errors
-        ("Invalid month", "Type conversion error: Invalid month value 13 in date"),
-        ("Invalid day", "Type conversion error: Invalid day value 32 in date"),
-        ("Invalid datetime hour", "Type conversion error: Invalid hour value 25 in datetime"),
-        ("Invalid datetime minute", "Type conversion error: Invalid minute value 60 in datetime"),
-        ("Invalid datetime second", "Type conversion error: Invalid second value 60 in datetime"),
-        ("Invalid datetime microsecond", "Type conversion error: Invalid microsecond value 1000000 in datetime"),
+        (
+            "Invalid month",
+            "Type conversion error: Invalid month value 13 in date",
+        ),
+        (
+            "Invalid day",
+            "Type conversion error: Invalid day value 32 in date",
+        ),
+        (
+            "Invalid datetime hour",
+            "Type conversion error: Invalid hour value 25 in datetime",
+        ),
+        (
+            "Invalid datetime minute",
+            "Type conversion error: Invalid minute value 60 in datetime",
+        ),
+        (
+            "Invalid datetime second",
+            "Type conversion error: Invalid second value 60 in datetime",
+        ),
+        (
+            "Invalid datetime microsecond",
+            "Type conversion error: Invalid microsecond value 1000000 in datetime",
+        ),
         // Time validation errors
-        ("Invalid time hour", "Type conversion error: Invalid hour value 24 in time"),
-        ("Invalid time minute", "Type conversion error: Invalid minute value 60 in time"),
-        ("Invalid time second", "Type conversion error: Invalid second value 60 in time"),
-        ("Invalid time microsecond", "Type conversion error: Invalid microsecond value 1000000 in time"),
+        (
+            "Invalid time hour",
+            "Type conversion error: Invalid hour value 24 in time",
+        ),
+        (
+            "Invalid time minute",
+            "Type conversion error: Invalid minute value 60 in time",
+        ),
+        (
+            "Invalid time second",
+            "Type conversion error: Invalid second value 60 in time",
+        ),
+        (
+            "Invalid time microsecond",
+            "Type conversion error: Invalid microsecond value 1000000 in time",
+        ),
     ];
 
     for (description, error_msg) in test_cases {
@@ -53,7 +88,13 @@ fn test_type_conversion_error_categories() {
         let wrapped_error = error.context("Type conversion failed during row processing");
 
         // Should map to exit code 4
-        assert_eq!(map_error_to_exit_code(&wrapped_error), 4, "Failed for {}: {}", description, error_msg);
+        assert_eq!(
+            map_error_to_exit_code(&wrapped_error),
+            4,
+            "Failed for {}: {}",
+            description,
+            error_msg
+        );
 
         // Should have meaningful error messages
         let full_msg = wrapped_error.to_string();
@@ -67,10 +108,20 @@ fn test_type_conversion_error_categories() {
         let has_type_conversion = wrapped_error
             .chain()
             .any(|e| e.to_string().contains("Type conversion error"));
-        assert!(has_type_conversion, "Missing 'Type conversion error' in error chain for {}", description);
+        assert!(
+            has_type_conversion,
+            "Missing 'Type conversion error' in error chain for {}",
+            description
+        );
 
-        let has_invalid = wrapped_error.chain().any(|e| e.to_string().contains("Invalid"));
-        assert!(has_invalid, "Missing 'Invalid' in error chain for {}", description);
+        let has_invalid = wrapped_error
+            .chain()
+            .any(|e| e.to_string().contains("Invalid"));
+        assert!(
+            has_invalid,
+            "Missing 'Invalid' in error chain for {}",
+            description
+        );
     }
 }
 

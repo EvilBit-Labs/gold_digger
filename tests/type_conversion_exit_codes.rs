@@ -21,7 +21,8 @@ fn test_type_conversion_error_mapping() {
     let error = anyhow::anyhow!("Type conversion error: Invalid second value 61 in time");
     assert_eq!(map_error_to_exit_code(&error), EXIT_QUERY_ERROR);
 
-    let error = anyhow::anyhow!("Type conversion error: Invalid microsecond value 1000000 in datetime");
+    let error =
+        anyhow::anyhow!("Type conversion error: Invalid microsecond value 1000000 in datetime");
     assert_eq!(map_error_to_exit_code(&error), EXIT_QUERY_ERROR);
 
     // Test context-enhanced errors from rows_to_strings

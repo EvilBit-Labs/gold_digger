@@ -59,12 +59,15 @@ impl DatabaseContainer {
                 let mysql_container = Self::create_mysql_container(*tls_enabled, &tls_config)?;
                 let url = mysql_container.connection_url().to_string();
                 (Box::new(mysql_container) as Box<dyn ContainerInstance>, url)
-            },
+            }
             TestDatabase::MariaDB { tls_enabled } => {
                 let mariadb_container = Self::create_mariadb_container(*tls_enabled, &tls_config)?;
                 let url = mariadb_container.connection_url().to_string();
-                (Box::new(mariadb_container) as Box<dyn ContainerInstance>, url)
-            },
+                (
+                    Box::new(mariadb_container) as Box<dyn ContainerInstance>,
+                    url,
+                )
+            }
         };
 
         let db_container = Self {
@@ -100,12 +103,15 @@ impl DatabaseContainer {
                 let mysql_container = Self::create_mysql_container_with_tls(&tls_config)?;
                 let url = mysql_container.connection_url().to_string();
                 (Box::new(mysql_container) as Box<dyn ContainerInstance>, url)
-            },
+            }
             TestDatabase::MariaDB { .. } => {
                 let mariadb_container = Self::create_mariadb_container_with_tls(&tls_config)?;
                 let url = mariadb_container.connection_url().to_string();
-                (Box::new(mariadb_container) as Box<dyn ContainerInstance>, url)
-            },
+                (
+                    Box::new(mariadb_container) as Box<dyn ContainerInstance>,
+                    url,
+                )
+            }
         };
 
         let db_container = Self {
@@ -137,12 +143,15 @@ impl DatabaseContainer {
                 let mysql_container = Self::create_mysql_container_plain()?;
                 let url = mysql_container.connection_url().to_string();
                 (Box::new(mysql_container) as Box<dyn ContainerInstance>, url)
-            },
+            }
             TestDatabase::MariaDB { .. } => {
                 let mariadb_container = Self::create_mariadb_container_plain()?;
                 let url = mariadb_container.connection_url().to_string();
-                (Box::new(mariadb_container) as Box<dyn ContainerInstance>, url)
-            },
+                (
+                    Box::new(mariadb_container) as Box<dyn ContainerInstance>,
+                    url,
+                )
+            }
         };
 
         let db_container = Self {
@@ -171,15 +180,20 @@ impl DatabaseContainer {
 
         let (container, connection_url) = match &db_type {
             TestDatabase::MySQL { .. } => {
-                let mysql_container = Self::create_mysql_container(tls_config.enabled, &tls_config)?;
+                let mysql_container =
+                    Self::create_mysql_container(tls_config.enabled, &tls_config)?;
                 let url = mysql_container.connection_url().to_string();
                 (Box::new(mysql_container) as Box<dyn ContainerInstance>, url)
-            },
+            }
             TestDatabase::MariaDB { .. } => {
-                let mariadb_container = Self::create_mariadb_container(tls_config.enabled, &tls_config)?;
+                let mariadb_container =
+                    Self::create_mariadb_container(tls_config.enabled, &tls_config)?;
                 let url = mariadb_container.connection_url().to_string();
-                (Box::new(mariadb_container) as Box<dyn ContainerInstance>, url)
-            },
+                (
+                    Box::new(mariadb_container) as Box<dyn ContainerInstance>,
+                    url,
+                )
+            }
         };
 
         let db_container = Self {
@@ -197,7 +211,10 @@ impl DatabaseContainer {
     }
 
     /// Create a MySQL container with optional TLS configuration
-    fn create_mysql_container(tls_enabled: bool, _tls_config: &ContainerTlsConfig) -> Result<MySqlContainer> {
+    fn create_mysql_container(
+        tls_enabled: bool,
+        _tls_config: &ContainerTlsConfig,
+    ) -> Result<MySqlContainer> {
         // For now, use a simple MySQL container without TLS configuration
         // TODO: Add TLS configuration once the basic container setup is working
         let container = testcontainers_modules::mysql::Mysql::default()
@@ -219,14 +236,19 @@ impl DatabaseContainer {
     }
 
     /// Create a MariaDB container with optional TLS configuration
-    fn create_mariadb_container(tls_enabled: bool, _tls_config: &ContainerTlsConfig) -> Result<MariaDbContainer> {
+    fn create_mariadb_container(
+        tls_enabled: bool,
+        _tls_config: &ContainerTlsConfig,
+    ) -> Result<MariaDbContainer> {
         // For now, use a simple MariaDB container without TLS configuration
         // TODO: Add TLS configuration once the basic container setup is working
         let container = testcontainers_modules::mariadb::Mariadb::default()
             .with_env_var("MARIADB_ALLOW_EMPTY_ROOT_PASSWORD", "yes")
             .with_env_var("MARIADB_ROOT_HOST", "%")
             .start()
-            .with_context(|| format!("Failed to start MariaDB container with TLS={}", tls_enabled))?;
+            .with_context(|| {
+                format!("Failed to start MariaDB container with TLS={}", tls_enabled)
+            })?;
 
         let host_port = container
             .get_host_port_ipv4(3306)
@@ -254,24 +276,36 @@ impl DatabaseContainer {
         } else {
             // Use provided certificate paths
             let ca_cert = if let Some(ca_path) = &tls_config.ca_cert_path {
-                std::fs::read_to_string(ca_path)
-                    .with_context(|| format!("Failed to read CA certificate from {}", ca_path.display()))?
+                std::fs::read_to_string(ca_path).with_context(|| {
+                    format!("Failed to read CA certificate from {}", ca_path.display())
+                })?
             } else {
-                return Err(anyhow::anyhow!("CA certificate path required for non-ephemeral TLS configuration"));
+                return Err(anyhow::anyhow!(
+                    "CA certificate path required for non-ephemeral TLS configuration"
+                ));
             };
 
             let server_cert = if let Some(cert_path) = &tls_config.server_cert_path {
-                std::fs::read_to_string(cert_path)
-                    .with_context(|| format!("Failed to read server certificate from {}", cert_path.display()))?
+                std::fs::read_to_string(cert_path).with_context(|| {
+                    format!(
+                        "Failed to read server certificate from {}",
+                        cert_path.display()
+                    )
+                })?
             } else {
-                return Err(anyhow::anyhow!("Server certificate path required for non-ephemeral TLS configuration"));
+                return Err(anyhow::anyhow!(
+                    "Server certificate path required for non-ephemeral TLS configuration"
+                ));
             };
 
             let server_key = if let Some(key_path) = &tls_config.server_key_path {
-                std::fs::read_to_string(key_path)
-                    .with_context(|| format!("Failed to read server key from {}", key_path.display()))?
+                std::fs::read_to_string(key_path).with_context(|| {
+                    format!("Failed to read server key from {}", key_path.display())
+                })?
             } else {
-                return Err(anyhow::anyhow!("Server key path required for non-ephemeral TLS configuration"));
+                return Err(anyhow::anyhow!(
+                    "Server key path required for non-ephemeral TLS configuration"
+                ));
             };
 
             (ca_cert, server_cert, server_key)
@@ -300,7 +334,9 @@ impl DatabaseContainer {
     }
 
     /// Create a MariaDB container with TLS configuration and SSL certificate mounting
-    fn create_mariadb_container_with_tls(tls_config: &ContainerTlsConfig) -> Result<MariaDbContainer> {
+    fn create_mariadb_container_with_tls(
+        tls_config: &ContainerTlsConfig,
+    ) -> Result<MariaDbContainer> {
         // Generate ephemeral certificates if configured
         let (_ca_cert, _server_cert, _server_key) = if tls_config.use_ephemeral_certs {
             // For now, use placeholder certificates
@@ -313,24 +349,36 @@ impl DatabaseContainer {
         } else {
             // Use provided certificate paths
             let ca_cert = if let Some(ca_path) = &tls_config.ca_cert_path {
-                std::fs::read_to_string(ca_path)
-                    .with_context(|| format!("Failed to read CA certificate from {}", ca_path.display()))?
+                std::fs::read_to_string(ca_path).with_context(|| {
+                    format!("Failed to read CA certificate from {}", ca_path.display())
+                })?
             } else {
-                return Err(anyhow::anyhow!("CA certificate path required for non-ephemeral TLS configuration"));
+                return Err(anyhow::anyhow!(
+                    "CA certificate path required for non-ephemeral TLS configuration"
+                ));
             };
 
             let server_cert = if let Some(cert_path) = &tls_config.server_cert_path {
-                std::fs::read_to_string(cert_path)
-                    .with_context(|| format!("Failed to read server certificate from {}", cert_path.display()))?
+                std::fs::read_to_string(cert_path).with_context(|| {
+                    format!(
+                        "Failed to read server certificate from {}",
+                        cert_path.display()
+                    )
+                })?
             } else {
-                return Err(anyhow::anyhow!("Server certificate path required for non-ephemeral TLS configuration"));
+                return Err(anyhow::anyhow!(
+                    "Server certificate path required for non-ephemeral TLS configuration"
+                ));
             };
 
             let server_key = if let Some(key_path) = &tls_config.server_key_path {
-                std::fs::read_to_string(key_path)
-                    .with_context(|| format!("Failed to read server key from {}", key_path.display()))?
+                std::fs::read_to_string(key_path).with_context(|| {
+                    format!("Failed to read server key from {}", key_path.display())
+                })?
             } else {
-                return Err(anyhow::anyhow!("Server key path required for non-ephemeral TLS configuration"));
+                return Err(anyhow::anyhow!(
+                    "Server key path required for non-ephemeral TLS configuration"
+                ));
             };
 
             (ca_cert, server_cert, server_key)
@@ -450,16 +498,16 @@ impl DatabaseContainer {
                         consecutive_failures
                     );
                     return Ok(());
-                },
+                }
                 Ok(false) => {
                     consecutive_failures += 1;
-                },
+                }
                 Err(e) => {
                     consecutive_failures += 1;
                     if attempt % 20 == 0 {
                         eprintln!("Connection error (attempt {}): {}", attempt, e);
                     }
-                },
+                }
             }
 
             // Adaptive backoff based on consecutive failures
@@ -478,7 +526,9 @@ impl DatabaseContainer {
 
             // Reset consecutive failures if we've been trying for a while
             if consecutive_failures > retry_config.max_consecutive_failures {
-                eprintln!("Too many consecutive failures, resetting counter and increasing backoff");
+                eprintln!(
+                    "Too many consecutive failures, resetting counter and increasing backoff"
+                );
                 consecutive_failures = 0;
             }
         }
@@ -493,7 +543,10 @@ impl DatabaseContainer {
     }
 
     /// Test database connection with enhanced retry logic
-    fn test_connection_with_retry(&self, retry_config: &super::container_manager::RetryConfig) -> Result<bool> {
+    fn test_connection_with_retry(
+        &self,
+        retry_config: &super::container_manager::RetryConfig,
+    ) -> Result<bool> {
         for retry_attempt in 0..retry_config.connection_retries {
             match self.test_connection_detailed() {
                 Ok(true) => return Ok(true),
@@ -501,13 +554,13 @@ impl DatabaseContainer {
                     if retry_attempt < retry_config.connection_retries - 1 {
                         std::thread::sleep(Duration::from_millis(retry_config.retry_delay_ms));
                     }
-                },
+                }
                 Err(e) => {
                     if retry_attempt == retry_config.connection_retries - 1 {
                         return Err(e);
                     }
                     std::thread::sleep(Duration::from_millis(retry_config.retry_delay_ms));
-                },
+                }
             }
         }
         Ok(false)
@@ -517,10 +570,11 @@ impl DatabaseContainer {
     fn test_connection_detailed(&self) -> Result<bool> {
         use mysql::prelude::*;
 
-        let opts =
-            mysql::Opts::from_url(&self.connection_url).context("Failed to parse database URL for connection test")?;
+        let opts = mysql::Opts::from_url(&self.connection_url)
+            .context("Failed to parse database URL for connection test")?;
 
-        let pool = mysql::Pool::new(opts).context("Failed to create connection pool for connection test")?;
+        let pool = mysql::Pool::new(opts)
+            .context("Failed to create connection pool for connection test")?;
 
         match pool.get_conn() {
             Ok(mut conn) => {
@@ -530,18 +584,18 @@ impl DatabaseContainer {
                     Ok(Some(val)) => {
                         eprintln!("Unexpected value from connection test: {}", val);
                         Ok(false)
-                    },
+                    }
                     Ok(None) => {
                         eprintln!("Connection test returned no results");
                         Ok(false)
-                    },
+                    }
                     Err(e) => {
                         // Log specific SQL errors for debugging
                         eprintln!("SQL query failed during connection test: {}", e);
                         Ok(false)
-                    },
+                    }
                 }
-            },
+            }
             Err(e) => {
                 // Distinguish between different connection error types
                 let error_msg = e.to_string();
@@ -559,7 +613,7 @@ impl DatabaseContainer {
                     eprintln!("Connection error during test: {}", e);
                     Ok(false)
                 }
-            },
+            }
         }
     }
 
@@ -581,7 +635,9 @@ impl DatabaseContainer {
     /// Generate a TLS-enabled connection URL with SSL parameters
     pub fn tls_connection_url(&self) -> Result<String> {
         if !self.db_type.is_tls_enabled() {
-            return Err(anyhow::anyhow!("Cannot generate TLS connection URL for non-TLS container"));
+            return Err(anyhow::anyhow!(
+                "Cannot generate TLS connection URL for non-TLS container"
+            ));
         }
 
         // Parse the base connection URL
@@ -604,9 +660,9 @@ impl DatabaseContainer {
 
         // Add SSL disabled parameters to the connection URL
         let plain_url = if base_url.contains('?') {
-            format!("{}&ssl-mode=DISABLED", base_url)
+            format!("{}&sslmode=disabled", base_url)
         } else {
-            format!("{}?ssl-mode=DISABLED", base_url)
+            format!("{}?sslmode=disabled", base_url)
         };
 
         Ok(plain_url)
@@ -616,13 +672,13 @@ impl DatabaseContainer {
     pub fn connection_url_with_ssl_mode(&self, ssl_mode: &str) -> Result<String> {
         // Validate SSL mode
         match ssl_mode {
-            "DISABLED" | "PREFERRED" | "REQUIRED" | "VERIFY_CA" | "VERIFY_IDENTITY" => {},
+            "DISABLED" | "PREFERRED" | "REQUIRED" | "VERIFY_CA" | "VERIFY_IDENTITY" => {}
             _ => {
                 return Err(anyhow::anyhow!(
                     "Invalid SSL mode: {}. Must be one of: DISABLED, PREFERRED, REQUIRED, VERIFY_CA, VERIFY_IDENTITY",
                     ssl_mode
                 ));
-            },
+            }
         }
 
         // Add SSL mode parameter to the connection URL
@@ -648,15 +704,21 @@ impl DatabaseContainer {
     /// 2. DML (Data Manipulation Language) - Data seeding executed inside transactions
     /// 3. Database compatibility detection and handling for MySQL vs MariaDB differences
     pub fn seed_data(&self) -> Result<()> {
-        let opts = mysql::Opts::from_url(&self.connection_url).context("Failed to parse database URL")?;
+        let opts =
+            mysql::Opts::from_url(&self.connection_url).context("Failed to parse database URL")?;
         let pool = mysql::Pool::new(opts).context("Failed to create database connection pool")?;
 
-        let mut conn = pool.get_conn().context("Failed to get database connection")?;
+        let mut conn = pool
+            .get_conn()
+            .context("Failed to get database connection")?;
 
         // Detect database version and type for compatibility handling
         let db_info = self.detect_database_version(&mut conn)?;
 
-        eprintln!("Seeding database: {} version {}", db_info.db_type, db_info.version);
+        eprintln!(
+            "Seeding database: {} version {}",
+            db_info.db_type, db_info.version
+        );
 
         // Phase 1: DDL execution (outside transactions - auto-committed by MySQL/MariaDB)
         self.execute_schema_ddl(&mut conn, &db_info)?;
@@ -699,14 +761,21 @@ impl DatabaseContainer {
     }
 
     /// Execute DDL statements for schema creation (outside transactions)
-    fn execute_schema_ddl(&self, conn: &mut mysql::PooledConn, db_info: &DatabaseInfo) -> Result<()> {
+    fn execute_schema_ddl(
+        &self,
+        conn: &mut mysql::PooledConn,
+        db_info: &DatabaseInfo,
+    ) -> Result<()> {
         use mysql::prelude::*;
         use std::fs;
 
         // Load schema.sql file
         let schema_path = std::path::Path::new("tests/fixtures/schema.sql");
         if !schema_path.exists() {
-            return Err(anyhow::anyhow!("Schema file not found: {}", schema_path.display()));
+            return Err(anyhow::anyhow!(
+                "Schema file not found: {}",
+                schema_path.display()
+            ));
         }
 
         let schema_sql = fs::read_to_string(schema_path)
@@ -732,8 +801,15 @@ impl DatabaseContainer {
             // Execute DDL statement (auto-committed, not wrapped in transaction)
             if let Err(e) = conn.exec_drop(&adjusted_statement, ()) {
                 // Log the error but continue with other statements for idempotency
-                eprintln!("Warning: DDL statement {} failed (may be expected for idempotency): {}", i + 1, e);
-                eprintln!("Statement: {}", adjusted_statement.chars().take(100).collect::<String>());
+                eprintln!(
+                    "Warning: DDL statement {} failed (may be expected for idempotency): {}",
+                    i + 1,
+                    e
+                );
+                eprintln!(
+                    "Statement: {}",
+                    adjusted_statement.chars().take(100).collect::<String>()
+                );
             } else {
                 ddl_count += 1;
             }
@@ -744,14 +820,21 @@ impl DatabaseContainer {
     }
 
     /// Execute DML statements for data seeding (inside explicit transactions)
-    fn execute_data_seeding(&self, conn: &mut mysql::PooledConn, db_info: &DatabaseInfo) -> Result<()> {
+    fn execute_data_seeding(
+        &self,
+        conn: &mut mysql::PooledConn,
+        db_info: &DatabaseInfo,
+    ) -> Result<()> {
         use mysql::prelude::*;
         use std::fs;
 
         // Load seed_data.sql file
         let seed_path = std::path::Path::new("tests/fixtures/seed_data.sql");
         if !seed_path.exists() {
-            return Err(anyhow::anyhow!("Seed data file not found: {}", seed_path.display()));
+            return Err(anyhow::anyhow!(
+                "Seed data file not found: {}",
+                seed_path.display()
+            ));
         }
 
         let seed_sql = fs::read_to_string(seed_path)
@@ -783,18 +866,21 @@ impl DatabaseContainer {
                 Err(e) => {
                     eprintln!("Warning: Failed to adjust statement {}: {}", i + 1, e);
                     continue;
-                },
+                }
             };
 
             // Execute DML statement inside transaction
             match tx.exec_drop(&adjusted_statement, ()) {
                 Ok(_) => {
                     dml_count += 1;
-                },
+                }
                 Err(e) => {
                     error_count += 1;
                     eprintln!("Warning: DML statement {} failed: {}", i + 1, e);
-                    eprintln!("Statement: {}", adjusted_statement.chars().take(100).collect::<String>());
+                    eprintln!(
+                        "Statement: {}",
+                        adjusted_statement.chars().take(100).collect::<String>()
+                    );
 
                     // For critical errors, rollback and fail
                     if adjusted_statement.to_uppercase().contains("INSERT") && error_count > 10 {
@@ -804,14 +890,18 @@ impl DatabaseContainer {
                             error_count
                         ));
                     }
-                },
+                }
             }
         }
 
         // Commit transaction if we have successful operations
         if dml_count > 0 {
-            tx.commit().context("Failed to commit data seeding transaction")?;
-            eprintln!("Committed {} DML statements successfully ({} errors)", dml_count, error_count);
+            tx.commit()
+                .context("Failed to commit data seeding transaction")?;
+            eprintln!(
+                "Committed {} DML statements successfully ({} errors)",
+                dml_count, error_count
+            );
         } else {
             tx.rollback().ok();
             return Err(anyhow::anyhow!("No DML statements executed successfully"));
@@ -821,7 +911,11 @@ impl DatabaseContainer {
     }
 
     /// Apply database-specific compatibility adjustments to SQL statements
-    fn apply_compatibility_adjustments(&self, statement: &str, db_info: &DatabaseInfo) -> Result<String> {
+    fn apply_compatibility_adjustments(
+        &self,
+        statement: &str,
+        db_info: &DatabaseInfo,
+    ) -> Result<String> {
         let mut adjusted = statement.to_string();
 
         // Handle MySQL vs MariaDB differences
@@ -839,7 +933,7 @@ impl DatabaseContainer {
                         adjusted = adjusted.replace("JSON_OBJECT", "CONCAT");
                     }
                 }
-            },
+            }
             "MariaDB" => {
                 // MariaDB-specific adjustments
                 if db_info.version.major >= 10 && db_info.version.minor >= 2 {
@@ -851,20 +945,28 @@ impl DatabaseContainer {
                         adjusted = adjusted.replace("JSON", "TEXT");
                     }
                 }
-            },
+            }
             _ => {
                 // Unknown database type - use conservative approach
-                eprintln!("Warning: Unknown database type {}, using conservative SQL", db_info.db_type);
-            },
+                eprintln!(
+                    "Warning: Unknown database type {}, using conservative SQL",
+                    db_info.db_type
+                );
+            }
         }
 
         // Handle CREATE TABLE IF NOT EXISTS for idempotency
-        if adjusted.to_uppercase().contains("CREATE TABLE") && !adjusted.to_uppercase().contains("IF NOT EXISTS") {
+        if adjusted.to_uppercase().contains("CREATE TABLE")
+            && !adjusted.to_uppercase().contains("IF NOT EXISTS")
+        {
             adjusted = adjusted.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS");
         }
 
         // Handle CREATE INDEX for idempotency (MySQL doesn't support IF NOT EXISTS for indexes)
-        if adjusted.to_uppercase().contains("CREATE INDEX IF NOT EXISTS") {
+        if adjusted
+            .to_uppercase()
+            .contains("CREATE INDEX IF NOT EXISTS")
+        {
             // MySQL doesn't support IF NOT EXISTS for CREATE INDEX, so we'll skip these
             // or convert them to a different approach
             let _index_name = if let Some(start) = adjusted.find("CREATE INDEX IF NOT EXISTS ") {
@@ -920,7 +1022,10 @@ impl DatabaseContainer {
             }
 
             // Skip empty lines and comments
-            if trimmed_line.is_empty() || trimmed_line.starts_with("--") || trimmed_line.starts_with("/*") {
+            if trimmed_line.is_empty()
+                || trimmed_line.starts_with("--")
+                || trimmed_line.starts_with("/*")
+            {
                 continue;
             }
 
@@ -958,13 +1063,20 @@ impl DatabaseContainer {
             return Err(anyhow::anyhow!("SQL statement cannot be empty"));
         }
 
-        let opts = mysql::Opts::from_url(&self.connection_url).context("Failed to parse database URL")?;
+        let opts =
+            mysql::Opts::from_url(&self.connection_url).context("Failed to parse database URL")?;
         let pool = mysql::Pool::new(opts).context("Failed to create database connection pool")?;
 
-        let mut conn = pool.get_conn().context("Failed to get database connection")?;
+        let mut conn = pool
+            .get_conn()
+            .context("Failed to get database connection")?;
 
-        conn.exec_drop(sql, ())
-            .with_context(|| format!("Failed to execute SQL: {}", sql.chars().take(100).collect::<String>()))?;
+        conn.exec_drop(sql, ()).with_context(|| {
+            format!(
+                "Failed to execute SQL: {}",
+                sql.chars().take(100).collect::<String>()
+            )
+        })?;
 
         Ok(())
     }
@@ -978,14 +1090,20 @@ impl DatabaseContainer {
             return Err(anyhow::anyhow!("SQL query cannot be empty"));
         }
 
-        let opts = mysql::Opts::from_url(&self.connection_url).context("Failed to parse database URL")?;
+        let opts =
+            mysql::Opts::from_url(&self.connection_url).context("Failed to parse database URL")?;
         let pool = mysql::Pool::new(opts).context("Failed to create database connection pool")?;
 
-        let mut conn = pool.get_conn().context("Failed to get database connection")?;
+        let mut conn = pool
+            .get_conn()
+            .context("Failed to get database connection")?;
 
-        let results: Vec<mysql::Row> = conn
-            .query(sql)
-            .with_context(|| format!("Failed to execute query: {}", sql.chars().take(100).collect::<String>()))?;
+        let results: Vec<mysql::Row> = conn.query(sql).with_context(|| {
+            format!(
+                "Failed to execute query: {}",
+                sql.chars().take(100).collect::<String>()
+            )
+        })?;
 
         Ok(results)
     }
@@ -1054,7 +1172,9 @@ impl DatabaseContainer {
         ];
 
         let lower_message = log_message.to_lowercase();
-        !sensitive_patterns.iter().any(|pattern| lower_message.contains(pattern))
+        !sensitive_patterns
+            .iter()
+            .any(|pattern| lower_message.contains(pattern))
     }
 
     /// Validate TLS connection establishment
@@ -1097,14 +1217,19 @@ impl DatabaseContainer {
     fn test_connection_with_url(&self, url: &str) -> Result<()> {
         use mysql::prelude::*;
 
-        let opts = mysql::Opts::from_url(url).with_context(|| format!("Failed to parse connection URL: {}", url))?;
+        let opts = mysql::Opts::from_url(url)
+            .with_context(|| format!("Failed to parse connection URL: {}", url))?;
 
         let pool = mysql::Pool::new(opts).context("Failed to create connection pool")?;
 
-        let mut conn = pool.get_conn().context("Failed to get database connection")?;
+        let mut conn = pool
+            .get_conn()
+            .context("Failed to get database connection")?;
 
         // Test with a simple query
-        let result: Option<i32> = conn.query_first("SELECT 1").context("Failed to execute test query")?;
+        let result: Option<i32> = conn
+            .query_first("SELECT 1")
+            .context("Failed to execute test query")?;
 
         match result {
             Some(1) => Ok(()),

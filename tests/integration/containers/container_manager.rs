@@ -123,7 +123,8 @@ impl RetryConfig {
 
     /// Calculate adaptive backoff based on consecutive failures
     pub fn calculate_backoff(&self, consecutive_failures: usize) -> u64 {
-        let exponential_backoff = self.base_backoff_ms * 2_u64.pow(consecutive_failures.min(10) as u32);
+        let exponential_backoff =
+            self.base_backoff_ms * 2_u64.pow(consecutive_failures.min(10) as u32);
         exponential_backoff.min(self.max_backoff_ms)
     }
 }

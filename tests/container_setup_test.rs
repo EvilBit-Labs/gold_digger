@@ -37,13 +37,13 @@ fn test_docker_availability_check() {
                 } else {
                     println!("macOS Docker setup looks good");
                 }
-            },
+            }
             "linux" => {
                 println!("Running on Linux - standard Docker setup");
-            },
+            }
             platform => {
                 println!("Running on {}", platform);
-            },
+            }
         }
     } else {
         println!("Docker is not available - container tests will be skipped");
@@ -68,10 +68,16 @@ fn test_mysql_container_creation() -> anyhow::Result<()> {
     let container = utils::create_test_database(mysql_db)?;
 
     println!("MySQL container created successfully");
-    println!("Connection URL (redacted): {}", container.health_info().connection_url_redacted);
+    println!(
+        "Connection URL (redacted): {}",
+        container.health_info().connection_url_redacted
+    );
 
     // Test basic connection
-    assert!(container.test_connection(), "MySQL container should be connectable");
+    assert!(
+        container.test_connection(),
+        "MySQL container should be connectable"
+    );
 
     println!("MySQL container test completed successfully");
     Ok(())
@@ -91,10 +97,16 @@ fn test_mariadb_container_creation() -> anyhow::Result<()> {
     let container = utils::create_test_database(mariadb_db)?;
 
     println!("MariaDB container created successfully");
-    println!("Connection URL (redacted): {}", container.health_info().connection_url_redacted);
+    println!(
+        "Connection URL (redacted): {}",
+        container.health_info().connection_url_redacted
+    );
 
     // Test basic connection
-    assert!(container.test_connection(), "MariaDB container should be connectable");
+    assert!(
+        container.test_connection(),
+        "MariaDB container should be connectable"
+    );
 
     println!("MariaDB container test completed successfully");
     Ok(())
@@ -114,7 +126,10 @@ fn test_mysql_tls_container_creation() -> anyhow::Result<()> {
     let container = utils::create_test_database(mysql_tls_db)?;
 
     println!("MySQL TLS container created successfully");
-    println!("Connection URL (redacted): {}", container.health_info().connection_url_redacted);
+    println!(
+        "Connection URL (redacted): {}",
+        container.health_info().connection_url_redacted
+    );
 
     // Note: TLS connection test may fail without proper certificates
     // This test verifies container creation, not TLS functionality
@@ -136,7 +151,10 @@ fn test_container_manager() -> anyhow::Result<()> {
 
     // Create a MySQL container
     let mysql_container = manager.create_container(TestDatabase::mysql())?;
-    println!("Created MySQL container: {}", mysql_container.health_info().container_id);
+    println!(
+        "Created MySQL container: {}",
+        mysql_container.health_info().container_id
+    );
 
     // Verify container is in manager
     assert_eq!(manager.containers().len(), 1);
@@ -151,10 +169,10 @@ fn test_container_manager() -> anyhow::Result<()> {
                     usage.container_id, usage.cpu_percent, usage.memory_usage
                 );
             }
-        },
+        }
         Err(e) => {
             println!("Could not get resource usage: {}", e);
-        },
+        }
     }
 
     // Clean up
@@ -189,7 +207,7 @@ fn test_multiplatform_support() {
             } else {
                 println!("✓ Platform optimization completed");
             }
-        },
+        }
         "linux" => {
             println!("Testing Linux-specific functionality...");
 
@@ -199,15 +217,18 @@ fn test_multiplatform_support() {
             } else {
                 println!("✓ Platform optimization completed");
             }
-        },
+        }
         unsupported_platform => {
-            println!("Platform {} detected - limited container support", unsupported_platform);
+            println!(
+                "Platform {} detected - limited container support",
+                unsupported_platform
+            );
             assert!(
                 !preflight.platform_supported,
                 "Unsupported platform '{}' should not be marked as supported",
                 unsupported_platform
             );
-        },
+        }
     }
 
     // Test resource recommendations
@@ -219,7 +240,10 @@ fn test_multiplatform_support() {
 
 #[test]
 fn test_certificate_generation_multiplatform() -> anyhow::Result<()> {
-    println!("Testing certificate generation on platform: {}", std::env::consts::OS);
+    println!(
+        "Testing certificate generation on platform: {}",
+        std::env::consts::OS
+    );
     println!("✓ Certificate generation available (using OpenSSL/LibreSSL)");
     println!("✓ Platform: {}", std::env::consts::OS);
     Ok(())

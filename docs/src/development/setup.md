@@ -451,7 +451,7 @@ use gold_digger::rows_to_strings;
 
 ```rust
 use anyhow::Result;
-use mysql::{from_value_opt, Value};
+use mysql::{Value, from_value_opt};
 
 fn example_function() -> Result<()> {
     let database_value = Value::NULL; // example value

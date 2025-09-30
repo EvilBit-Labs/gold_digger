@@ -49,8 +49,8 @@ impl EphemeralCertificate {
         // For simplicity, generate two separate self-signed certificates
         // One for CA and one for server
         let ca_subject_alt_names = vec!["Gold Digger Test CA".to_string()];
-        let ca_cert =
-            generate_simple_self_signed(ca_subject_alt_names).context("Failed to generate CA certificate")?;
+        let ca_cert = generate_simple_self_signed(ca_subject_alt_names)
+            .context("Failed to generate CA certificate")?;
 
         // Generate server certificate with appropriate SANs
         let mut server_subject_alt_names = vec!["localhost".to_string()];
@@ -58,8 +58,8 @@ impl EphemeralCertificate {
             server_subject_alt_names.push(hostname.to_string());
         }
 
-        let server_cert =
-            generate_simple_self_signed(server_subject_alt_names).context("Failed to generate server certificate")?;
+        let server_cert = generate_simple_self_signed(server_subject_alt_names)
+            .context("Failed to generate server certificate")?;
 
         Ok(EphemeralCertificate {
             ca_cert_pem: ca_cert.cert.pem(),
@@ -79,7 +79,8 @@ impl EphemeralCertificate {
     /// # Returns
     /// * `Result<(String, String)>` - Tuple of (certificate_pem, private_key_pem)
     pub fn generate_self_signed(hostnames: Vec<String>) -> Result<(String, String)> {
-        let cert = generate_simple_self_signed(hostnames).context("Failed to generate self-signed certificate")?;
+        let cert = generate_simple_self_signed(hostnames)
+            .context("Failed to generate self-signed certificate")?;
 
         let cert_pem = cert.cert.pem();
         let key_pem = cert.signing_key.serialize_pem();

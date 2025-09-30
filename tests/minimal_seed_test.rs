@@ -57,7 +57,9 @@ fn wait_for_mysql_ready(connection_url: &str) -> Result<()> {
         std::thread::sleep(Duration::from_millis(500));
     }
 
-    Err(anyhow::anyhow!("MySQL container failed to become ready within 60 seconds"))
+    Err(anyhow::anyhow!(
+        "MySQL container failed to become ready within 60 seconds"
+    ))
 }
 
 /// Test MySQL connection
@@ -147,19 +149,34 @@ fn verify_seeded_data(connection_url: &str) -> Result<()> {
 
     // Check basic table
     let count: Option<i64> = conn.query_first("SELECT COUNT(*) FROM test_basic")?;
-    assert!(count.unwrap_or(0) >= 2, "test_basic should have at least 2 rows");
+    assert!(
+        count.unwrap_or(0) >= 2,
+        "test_basic should have at least 2 rows"
+    );
 
     // Check data types table
     let count: Option<i64> = conn.query_first("SELECT COUNT(*) FROM test_data_types")?;
-    assert!(count.unwrap_or(0) >= 1, "test_data_types should have at least 1 row");
+    assert!(
+        count.unwrap_or(0) >= 1,
+        "test_data_types should have at least 1 row"
+    );
 
     // Verify specific data
-    let item_name: Option<String> = conn.query_first("SELECT item_name FROM test_basic WHERE table_value = 100")?;
-    assert_eq!(item_name, Some("test1".to_string()), "Should find test1 with value 100");
+    let item_name: Option<String> =
+        conn.query_first("SELECT item_name FROM test_basic WHERE table_value = 100")?;
+    assert_eq!(
+        item_name,
+        Some("test1".to_string()),
+        "Should find test1 with value 100"
+    );
 
     let varchar_value: Option<String> =
         conn.query_first("SELECT varchar_col FROM test_data_types WHERE int_col = 42")?;
-    assert_eq!(varchar_value, Some("Sample text".to_string()), "Should find sample text with int_col 42");
+    assert_eq!(
+        varchar_value,
+        Some("Sample text".to_string()),
+        "Should find sample text with int_col 42"
+    );
 
     Ok(())
 }

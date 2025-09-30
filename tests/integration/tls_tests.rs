@@ -22,9 +22,11 @@ use super::{TestDatabase, TestDatabasePlain, is_ci_environment, is_docker_availa
 /// The returned TempDir must be kept alive for the duration of certificate usage
 /// to prevent the temporary file from being deleted.
 fn create_temp_cert_file(content: &str) -> Result<(TempDir, PathBuf)> {
-    let temp_dir = tempfile::tempdir().context("Failed to create temporary directory for certificate")?;
+    let temp_dir =
+        tempfile::tempdir().context("Failed to create temporary directory for certificate")?;
     let cert_path = temp_dir.path().join("test_cert.pem");
-    std::fs::write(&cert_path, content).context("Failed to write certificate content to temporary file")?;
+    std::fs::write(&cert_path, content)
+        .context("Failed to write certificate content to temporary file")?;
     Ok((temp_dir, cert_path))
 }
 
@@ -68,7 +70,10 @@ mod platform_certificate_tests {
         skip_if_no_docker();
 
         let config = TlsConfig::new(); // Uses platform certificate store
-        assert!(matches!(config.validation_mode(), TlsValidationMode::Platform));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::Platform
+        ));
 
         // Test SSL opts generation
         let ssl_opts = config.to_ssl_opts()?;
@@ -95,7 +100,10 @@ mod platform_certificate_tests {
         skip_if_no_docker();
 
         let config = TlsConfig::new();
-        assert!(matches!(config.validation_mode(), TlsValidationMode::Platform));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::Platform
+        ));
 
         // Test SSL opts generation
         let ssl_opts = config.to_ssl_opts()?;
@@ -165,7 +173,7 @@ mod custom_ca_tests {
             Err(_) => {
                 // Certificate parsing failure is acceptable for this test
                 // We're testing configuration creation, not certificate validation
-            },
+            }
         }
 
         Ok(())
@@ -201,7 +209,7 @@ mod custom_ca_tests {
             Err(_) => {
                 // Certificate parsing failure is acceptable for this test
                 // We're testing configuration creation, not certificate validation
-            },
+            }
         }
 
         Ok(())
@@ -253,7 +261,10 @@ mod hostname_verification_tests {
         skip_if_no_docker();
 
         let config = TlsConfig::with_skip_hostname_verification();
-        assert!(matches!(config.validation_mode(), TlsValidationMode::SkipHostnameVerification));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::SkipHostnameVerification
+        ));
 
         // Test SSL opts generation
         let ssl_opts = config.to_ssl_opts()?;
@@ -275,7 +286,10 @@ mod hostname_verification_tests {
         skip_if_no_docker();
 
         let config = TlsConfig::with_skip_hostname_verification();
-        assert!(matches!(config.validation_mode(), TlsValidationMode::SkipHostnameVerification));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::SkipHostnameVerification
+        ));
 
         // Test SSL opts generation
         let ssl_opts = config.to_ssl_opts()?;
@@ -318,7 +332,10 @@ mod invalid_certificate_tests {
         skip_if_no_docker();
 
         let config = TlsConfig::with_accept_invalid();
-        assert!(matches!(config.validation_mode(), TlsValidationMode::AcceptInvalid));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::AcceptInvalid
+        ));
 
         // Test SSL opts generation
         let ssl_opts = config.to_ssl_opts()?;
@@ -340,7 +357,10 @@ mod invalid_certificate_tests {
         skip_if_no_docker();
 
         let config = TlsConfig::with_accept_invalid();
-        assert!(matches!(config.validation_mode(), TlsValidationMode::AcceptInvalid));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::AcceptInvalid
+        ));
 
         // Test SSL opts generation
         let ssl_opts = config.to_ssl_opts()?;
@@ -417,7 +437,10 @@ mod tls_error_handling_tests {
         let error = result.unwrap_err();
 
         // Should be a MutuallyExclusiveFlags error
-        assert!(matches!(error, gold_digger::tls::TlsError::MutuallyExclusiveFlags { .. }));
+        assert!(matches!(
+            error,
+            gold_digger::tls::TlsError::MutuallyExclusiveFlags { .. }
+        ));
 
         Ok(())
     }
@@ -524,8 +547,10 @@ mod container_integration_tests {
         // Validate the generated certificate
         CertificateValidator::validate_ephemeral_certificate(&ephemeral_cert)?;
 
-        let (_cert_file, _key_file) =
-            CertificateLoader::create_temp_files(&ephemeral_cert.ca_cert_pem, &ephemeral_cert.ca_key_pem)?;
+        let (_cert_file, _key_file) = CertificateLoader::create_temp_files(
+            &ephemeral_cert.ca_cert_pem,
+            &ephemeral_cert.ca_key_pem,
+        )?;
 
         // Test TLS configuration with custom CA certificate
         let config = gold_digger::tls::TlsConfig::with_custom_ca(_cert_file.path());
@@ -535,7 +560,9 @@ mod container_integration_tests {
         assert!(ssl_opts.is_some());
 
         // Test that the configuration is properly set for custom CA
-        if let gold_digger::tls::TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
+        if let gold_digger::tls::TlsValidationMode::CustomCa { ca_file_path } =
+            config.validation_mode()
+        {
             assert_eq!(ca_file_path, _cert_file.path());
         } else {
             panic!("Expected CustomCa validation mode");
@@ -571,8 +598,10 @@ mod container_integration_tests {
         // Validate the generated certificate
         CertificateValidator::validate_ephemeral_certificate(&ephemeral_cert)?;
 
-        let (_cert_file, _key_file) =
-            CertificateLoader::create_temp_files(&ephemeral_cert.ca_cert_pem, &ephemeral_cert.ca_key_pem)?;
+        let (_cert_file, _key_file) = CertificateLoader::create_temp_files(
+            &ephemeral_cert.ca_cert_pem,
+            &ephemeral_cert.ca_key_pem,
+        )?;
 
         // Test TLS configuration with custom CA certificate
         let config = gold_digger::tls::TlsConfig::with_custom_ca(_cert_file.path());
@@ -582,7 +611,9 @@ mod container_integration_tests {
         assert!(ssl_opts.is_some());
 
         // Test that the configuration is properly set for custom CA
-        if let gold_digger::tls::TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
+        if let gold_digger::tls::TlsValidationMode::CustomCa { ca_file_path } =
+            config.validation_mode()
+        {
             assert_eq!(ca_file_path, _cert_file.path());
         } else {
             panic!("Expected CustomCa validation mode");
@@ -620,7 +651,10 @@ mod container_integration_tests {
         assert!(ssl_opts.is_some());
 
         // Test that the configuration is properly set for skip hostname verification
-        assert!(matches!(config.validation_mode(), gold_digger::tls::TlsValidationMode::SkipHostnameVerification));
+        assert!(matches!(
+            config.validation_mode(),
+            gold_digger::tls::TlsValidationMode::SkipHostnameVerification
+        ));
 
         // Test that security warnings are displayed for skip hostname mode
         config.display_security_warnings();
@@ -653,7 +687,10 @@ mod container_integration_tests {
         assert!(ssl_opts.is_some());
 
         // Test that the configuration is properly set for skip hostname verification
-        assert!(matches!(config.validation_mode(), gold_digger::tls::TlsValidationMode::SkipHostnameVerification));
+        assert!(matches!(
+            config.validation_mode(),
+            gold_digger::tls::TlsValidationMode::SkipHostnameVerification
+        ));
 
         // Test that security warnings are displayed for skip hostname mode
         config.display_security_warnings();
@@ -686,7 +723,10 @@ mod container_integration_tests {
         assert!(ssl_opts.is_some());
 
         // Test that the configuration is properly set for accept invalid mode
-        assert!(matches!(config.validation_mode(), gold_digger::tls::TlsValidationMode::AcceptInvalid));
+        assert!(matches!(
+            config.validation_mode(),
+            gold_digger::tls::TlsValidationMode::AcceptInvalid
+        ));
 
         // Test that security warnings are displayed for accept invalid mode
         config.display_security_warnings();
@@ -719,7 +759,10 @@ mod container_integration_tests {
         assert!(ssl_opts.is_some());
 
         // Test that the configuration is properly set for accept invalid mode
-        assert!(matches!(config.validation_mode(), gold_digger::tls::TlsValidationMode::AcceptInvalid));
+        assert!(matches!(
+            config.validation_mode(),
+            gold_digger::tls::TlsValidationMode::AcceptInvalid
+        ));
 
         // Test that security warnings are displayed for accept invalid mode
         config.display_security_warnings();
@@ -752,10 +795,26 @@ mod ephemeral_certificate_tests {
         assert!(!ephemeral_cert.server_key_pem.is_empty());
 
         // Verify PEM format
-        assert!(ephemeral_cert.ca_cert_pem.contains("-----BEGIN CERTIFICATE-----"));
-        assert!(ephemeral_cert.ca_cert_pem.contains("-----END CERTIFICATE-----"));
-        assert!(ephemeral_cert.server_cert_pem.contains("-----BEGIN CERTIFICATE-----"));
-        assert!(ephemeral_cert.server_cert_pem.contains("-----END CERTIFICATE-----"));
+        assert!(
+            ephemeral_cert
+                .ca_cert_pem
+                .contains("-----BEGIN CERTIFICATE-----")
+        );
+        assert!(
+            ephemeral_cert
+                .ca_cert_pem
+                .contains("-----END CERTIFICATE-----")
+        );
+        assert!(
+            ephemeral_cert
+                .server_cert_pem
+                .contains("-----BEGIN CERTIFICATE-----")
+        );
+        assert!(
+            ephemeral_cert
+                .server_cert_pem
+                .contains("-----END CERTIFICATE-----")
+        );
 
         Ok(())
     }
@@ -768,8 +827,10 @@ mod ephemeral_certificate_tests {
         let ephemeral_cert = EphemeralCertificate::generate(Some("test-container"))?;
 
         // Test creating temporary files
-        let (cert_file, key_file) =
-            CertificateLoader::create_temp_files(&ephemeral_cert.ca_cert_pem, &ephemeral_cert.ca_key_pem)?;
+        let (cert_file, key_file) = CertificateLoader::create_temp_files(
+            &ephemeral_cert.ca_cert_pem,
+            &ephemeral_cert.ca_key_pem,
+        )?;
 
         // Verify files were created and contain correct content
         let cert_content = CertificateLoader::load_cert_from_file(cert_file.path())?;
@@ -793,7 +854,10 @@ mod ephemeral_certificate_tests {
         let ephemeral_cert = EphemeralCertificate::generate(Some("localhost"))?;
 
         // Test certificate pair validation
-        CertificateValidator::validate_certificate_pair(&ephemeral_cert.ca_cert_pem, &ephemeral_cert.ca_key_pem)?;
+        CertificateValidator::validate_certificate_pair(
+            &ephemeral_cert.ca_cert_pem,
+            &ephemeral_cert.ca_key_pem,
+        )?;
 
         // Test ephemeral certificate validation
         CertificateValidator::validate_ephemeral_certificate(&ephemeral_cert)?;
@@ -802,8 +866,10 @@ mod ephemeral_certificate_tests {
         // Note: The certificate_contains_hostname function does a simple string search
         // The ephemeral certificate generation includes the hostname in the certificate
         // but it might be encoded differently, so we'll test with a more flexible approach
-        let contains_localhost =
-            CertificateValidator::certificate_contains_hostname(&ephemeral_cert.server_cert_pem, "localhost");
+        let contains_localhost = CertificateValidator::certificate_contains_hostname(
+            &ephemeral_cert.server_cert_pem,
+            "localhost",
+        );
 
         // The certificate should contain localhost since we generated it with that hostname
         if !contains_localhost {
@@ -813,7 +879,11 @@ mod ephemeral_certificate_tests {
             );
             // For now, just verify the certificate is not empty and properly formatted
             assert!(!ephemeral_cert.server_cert_pem.is_empty());
-            assert!(ephemeral_cert.server_cert_pem.contains("-----BEGIN CERTIFICATE-----"));
+            assert!(
+                ephemeral_cert
+                    .server_cert_pem
+                    .contains("-----BEGIN CERTIFICATE-----")
+            );
         } else {
             // If localhost is found, the test passes as expected
             assert!(contains_localhost);

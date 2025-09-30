@@ -17,7 +17,9 @@ fn test_type_conversion_safety_with_real_database() {
         return;
     }
     // Start a MariaDB container for testing
-    let mariadb_container = Mariadb::default().start().expect("Failed to start MariaDB container");
+    let mariadb_container = Mariadb::default()
+        .start()
+        .expect("Failed to start MariaDB container");
     let host_port = mariadb_container
         .get_host_port_ipv4(3306)
         .expect("Failed to get host port");
@@ -125,7 +127,11 @@ fn test_type_conversion_safety_with_real_database() {
     assert_eq!(row3[0], "3"); // id (should be present)
     // All other values should be empty strings for NULL
     for (i, value) in row3.iter().enumerate().skip(1) {
-        assert_eq!(value, "", "Column {} should be empty string for NULL value", i);
+        assert_eq!(
+            value, "",
+            "Column {} should be empty string for NULL value",
+            i
+        );
     }
 }
 
@@ -135,7 +141,9 @@ fn test_special_characters_and_unicode() {
     if is_ci() {
         return;
     }
-    let mariadb_container = Mariadb::default().start().expect("Failed to start MariaDB container");
+    let mariadb_container = Mariadb::default()
+        .start()
+        .expect("Failed to start MariaDB container");
     let host_port = mariadb_container
         .get_host_port_ipv4(3306)
         .expect("Failed to get host port");
@@ -202,7 +210,9 @@ fn test_large_numbers_and_precision() {
     if is_ci() {
         return;
     }
-    let mariadb_container = Mariadb::default().start().expect("Failed to start MariaDB container");
+    let mariadb_container = Mariadb::default()
+        .start()
+        .expect("Failed to start MariaDB container");
     let host_port = mariadb_container
         .get_host_port_ipv4(3306)
         .expect("Failed to get host port");
@@ -269,7 +279,9 @@ fn test_empty_result_set() {
     if is_ci() {
         return;
     }
-    let mariadb_container = Mariadb::default().start().expect("Failed to start MariaDB container");
+    let mariadb_container = Mariadb::default()
+        .start()
+        .expect("Failed to start MariaDB container");
     let host_port = mariadb_container
         .get_host_port_ipv4(3306)
         .expect("Failed to get host port");
@@ -294,7 +306,9 @@ fn test_single_row_result() {
     if is_ci() {
         return;
     }
-    let mariadb_container = Mariadb::default().start().expect("Failed to start MariaDB container");
+    let mariadb_container = Mariadb::default()
+        .start()
+        .expect("Failed to start MariaDB container");
     let host_port = mariadb_container
         .get_host_port_ipv4(3306)
         .expect("Failed to get host port");
@@ -304,7 +318,9 @@ fn test_single_row_result() {
     let mut conn = pool.get_conn().expect("Failed to get connection");
 
     // Query that returns a single row
-    let rows: Vec<mysql::Row> = conn.query("SELECT 1 as id, 'test' as name").expect("Failed to query");
+    let rows: Vec<mysql::Row> = conn
+        .query("SELECT 1 as id, 'test' as name")
+        .expect("Failed to query");
     let result = rows_to_strings(rows).expect("Failed to convert rows to strings");
 
     assert_eq!(result.len(), 2); // Header + 1 data row
@@ -320,7 +336,9 @@ fn test_null_and_type_conversion_safety() {
     if is_ci() {
         return;
     }
-    let mariadb_container = Mariadb::default().start().expect("Failed to start MariaDB container");
+    let mariadb_container = Mariadb::default()
+        .start()
+        .expect("Failed to start MariaDB container");
     let host_port = mariadb_container
         .get_host_port_ipv4(3306)
         .expect("Failed to get host port");
@@ -370,7 +388,10 @@ fn test_null_and_type_conversion_safety() {
     let result = rows_to_strings(rows);
 
     // Verify it succeeds without panicking
-    assert!(result.is_ok(), "rows_to_strings should handle all types safely");
+    assert!(
+        result.is_ok(),
+        "rows_to_strings should handle all types safely"
+    );
     let result = result.unwrap();
 
     // Verify structure
@@ -405,9 +426,15 @@ fn test_null_and_type_conversion_safety() {
     assert_eq!(row2[1], ""); // NULL int
     assert_eq!(row2[2], ""); // NULL varchar
     // Binary data should be converted to some string representation (not panic)
-    assert!(!row2[3].is_empty(), "Binary data should convert to non-empty string");
+    assert!(
+        !row2[3].is_empty(),
+        "Binary data should convert to non-empty string"
+    );
     // JSON should be converted to string representation
-    assert!(row2[4].contains("key") && row2[4].contains("value"), "JSON should be converted to string");
+    assert!(
+        row2[4].contains("key") && row2[4].contains("value"),
+        "JSON should be converted to string"
+    );
 }
 
 /// Test memory efficiency and performance characteristics
@@ -417,7 +444,9 @@ fn test_memory_efficiency_with_large_dataset() {
     if is_ci() {
         return;
     }
-    let mariadb_container = Mariadb::default().start().expect("Failed to start MariaDB container");
+    let mariadb_container = Mariadb::default()
+        .start()
+        .expect("Failed to start MariaDB container");
     let host_port = mariadb_container
         .get_host_port_ipv4(3306)
         .expect("Failed to get host port");
@@ -439,8 +468,11 @@ fn test_memory_efficiency_with_large_dataset() {
 
     // Insert 1000 rows to test memory scaling
     for i in 0..1000 {
-        conn.query_drop(format!("INSERT INTO memory_test VALUES ({}, 'test_data_row_{}')", i, i))
-            .expect("Failed to insert test data");
+        conn.query_drop(format!(
+            "INSERT INTO memory_test VALUES ({}, 'test_data_row_{}')",
+            i, i
+        ))
+        .expect("Failed to insert test data");
     }
 
     let rows: Vec<mysql::Row> = conn
@@ -459,7 +491,10 @@ fn test_memory_efficiency_with_large_dataset() {
     assert_eq!(result[1000], vec!["999", "test_data_row_999"]); // Last row
 
     // Performance check - should complete reasonably quickly
-    assert!(duration.as_millis() < 1000, "Conversion should complete within 1 second for 1000 rows");
+    assert!(
+        duration.as_millis() < 1000,
+        "Conversion should complete within 1 second for 1000 rows"
+    );
 
     // Memory efficiency check - ensure we're not holding excessive memory
     println!("Processed {} rows in {:?}", result.len() - 1, duration);
@@ -472,7 +507,9 @@ fn test_indexed_access_safety_fix() {
     if is_ci() {
         return;
     }
-    let mariadb_container = Mariadb::default().start().expect("Failed to start MariaDB container");
+    let mariadb_container = Mariadb::default()
+        .start()
+        .expect("Failed to start MariaDB container");
     let host_port = mariadb_container
         .get_host_port_ipv4(3306)
         .expect("Failed to get host port");
@@ -517,7 +554,10 @@ fn test_indexed_access_safety_fix() {
     let result = rows_to_strings(rows);
 
     // Verify it succeeds without panicking
-    assert!(result.is_ok(), "rows_to_strings should handle indexed access safely");
+    assert!(
+        result.is_ok(),
+        "rows_to_strings should handle indexed access safely"
+    );
     let result = result.unwrap();
 
     // Verify structure and content
@@ -539,17 +579,30 @@ fn test_indexed_access_safety_fix() {
     let row1 = &result[1];
     assert_eq!(row1[0], "1"); // id should be present
     for (i, value) in row1.iter().enumerate().skip(1) {
-        assert_eq!(value, "", "NULL values should convert to empty strings, column {}", i);
+        assert_eq!(
+            value, "",
+            "NULL values should convert to empty strings, column {}",
+            i
+        );
     }
 
     // Verify non-NULL data conversion
     let row2 = &result[2];
     assert_eq!(row2[0], "2");
     assert_eq!(row2[1], "test");
-    assert!(!row2[2].is_empty(), "Binary data should convert to non-empty string");
-    assert!(row2[3].contains("test") && row2[3].contains("value"), "JSON should be converted");
+    assert!(
+        !row2[2].is_empty(),
+        "Binary data should convert to non-empty string"
+    );
+    assert!(
+        row2[3].contains("test") && row2[3].contains("value"),
+        "JSON should be converted"
+    );
     assert_eq!(row2[4], "123.45");
-    assert!(row2[5].contains("2023-12-25"), "Timestamp should be converted");
+    assert!(
+        row2[5].contains("2023-12-25"),
+        "Timestamp should be converted"
+    );
     assert_eq!(row2[6], "value1");
 }
 
@@ -560,7 +613,9 @@ fn test_error_handling_edge_cases() {
     if is_ci() {
         return;
     }
-    let mariadb_container = Mariadb::default().start().expect("Failed to start MariaDB container");
+    let mariadb_container = Mariadb::default()
+        .start()
+        .expect("Failed to start MariaDB container");
     let host_port = mariadb_container
         .get_host_port_ipv4(3306)
         .expect("Failed to get host port");
@@ -610,8 +665,14 @@ fn test_error_handling_edge_cases() {
     assert_eq!(data_row[1], "9223372036854775807");
     assert_eq!(data_row[2], "-9223372036854775808");
     // Double values might have precision differences, just check they're not empty
-    assert!(!data_row[3].is_empty(), "Max double should convert to non-empty string");
-    assert!(!data_row[4].is_empty(), "Min double should convert to non-empty string");
+    assert!(
+        !data_row[3].is_empty(),
+        "Max double should convert to non-empty string"
+    );
+    assert!(
+        !data_row[4].is_empty(),
+        "Min double should convert to non-empty string"
+    );
     assert_eq!(data_row[5], ""); // NULL timestamp
     assert_eq!(data_row[6].len(), 1000); // Large varchar should be preserved
 }

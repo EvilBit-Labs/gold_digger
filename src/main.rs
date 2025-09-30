@@ -28,7 +28,7 @@ fn main() {
             Commands::Completion { shell } => {
                 generate_completion(shell);
                 return;
-            },
+            }
         }
     }
 
@@ -56,7 +56,10 @@ fn main() {
 
     let pool = match create_database_connection(&database_url, &cli) {
         Ok(pool) => pool,
-        Err(e) => exit_with_error(anyhow::anyhow!("Database connection pool creation failed: {}", e), None),
+        Err(e) => exit_with_error(
+            anyhow::anyhow!("Database connection pool creation failed: {}", e),
+            None,
+        ),
     };
     let mut conn = match pool.get_conn() {
         Ok(conn) => conn,
@@ -75,22 +78,22 @@ fn main() {
                 mysql::Error::MySqlError(mysql_err) => {
                     // Map known MySQL error codes to contextual messages
                     let context = match mysql_err.code {
-                        1064 => "SQL syntax error in query",                   // ER_PARSE_ERROR
-                        1146 => "Table does not exist",                        // ER_NO_SUCH_TABLE
-                        1054 => "Column does not exist or is ambiguous",       // ER_BAD_FIELD_ERROR
-                        1045 => "Access denied - invalid credentials",         // ER_ACCESS_DENIED_ERROR
-                        1044 => "Access denied to database",                   // ER_DBACCESS_DENIED_ERROR
+                        1064 => "SQL syntax error in query", // ER_PARSE_ERROR
+                        1146 => "Table does not exist",      // ER_NO_SUCH_TABLE
+                        1054 => "Column does not exist or is ambiguous", // ER_BAD_FIELD_ERROR
+                        1045 => "Access denied - invalid credentials", // ER_ACCESS_DENIED_ERROR
+                        1044 => "Access denied to database", // ER_DBACCESS_DENIED_ERROR
                         1142 => "Insufficient privileges for query execution", // ER_TABLEACCESS_DENIED_ERROR
-                        1143 => "Insufficient column privileges",              // ER_COLUMNACCESS_DENIED_ERROR
-                        1049 => "Unknown database",                            // ER_BAD_DB_ERROR
-                        2002 => "Connection failed - server not reachable",    // CR_CONNECTION_ERROR
-                        2003 => "Connection failed - server not responding",   // CR_CONN_HOST_ERROR
-                        2006 => "Connection lost - server has gone away",      // CR_SERVER_GONE_ERROR
-                        2013 => "Connection lost during query",                // CR_SERVER_LOST
+                        1143 => "Insufficient column privileges", // ER_COLUMNACCESS_DENIED_ERROR
+                        1049 => "Unknown database",               // ER_BAD_DB_ERROR
+                        2002 => "Connection failed - server not reachable", // CR_CONNECTION_ERROR
+                        2003 => "Connection failed - server not responding", // CR_CONN_HOST_ERROR
+                        2006 => "Connection lost - server has gone away", // CR_SERVER_GONE_ERROR
+                        2013 => "Connection lost during query",   // CR_SERVER_LOST
                         _ => "Query execution failed",
                     };
                     (context, true)
-                },
+                }
                 mysql::Error::IoError(_) => ("Network I/O error during query execution", false),
                 mysql::Error::UrlError(_) => ("Invalid database URL format", false),
                 mysql::Error::DriverError(_) => ("Database driver error", false),
@@ -104,12 +107,19 @@ fn main() {
                 context.to_string()
             };
 
-            exit_with_error(anyhow::anyhow!("{}", error_message), Some("Database query failed"));
-        },
+            exit_with_error(
+                anyhow::anyhow!("{}", error_message),
+                Some("Database query failed"),
+            );
+        }
     };
 
     if cli.verbose > 0 && !cli.quiet {
-        println!("Outputting {} records to {}.", result.len(), output_file.display());
+        println!(
+            "Outputting {} records to {}.",
+            result.len(),
+            output_file.display()
+        );
     }
 
     if result.is_empty() {
@@ -120,7 +130,9 @@ fn main() {
             // Create empty output file
             let output = match File::create(&output_file) {
                 Ok(output) => output,
-                Err(e) => exit_with_error(anyhow::anyhow!("Failed to create output file: {}", e), None),
+                Err(e) => {
+                    exit_with_error(anyhow::anyhow!("Failed to create output file: {}", e), None)
+                }
             };
             let empty_rows: Vec<Vec<String>> = vec![];
             if let Err(e) = write_output(empty_rows, output, output_file.as_path(), &cli) {
@@ -189,7 +201,7 @@ fn create_database_connection(database_url: &str, cli: &Cli) -> Result<Pool> {
                 } else {
                     anyhow::anyhow!("{}", tls_error)
                 }
-            },
+            }
             gold_digger::tls::TlsError::HostnameVerificationFailed { .. } => {
                 // Hostname verification errors - suggest skip hostname flag
                 anyhow::anyhow!(
@@ -199,17 +211,17 @@ fn create_database_connection(database_url: &str, cli: &Cli) -> Result<Pool> {
                         .suggest_cli_flag()
                         .unwrap_or("--insecure-skip-hostname-verify")
                 )
-            },
+            }
             gold_digger::tls::TlsError::CaFileNotFound { .. }
             | gold_digger::tls::TlsError::InvalidCaFormat { .. }
             | gold_digger::tls::TlsError::MutuallyExclusiveFlags { .. } => {
                 // Client configuration errors - no additional context needed
                 anyhow::anyhow!("{}", tls_error)
-            },
+            }
             _ => {
                 // Other TLS errors (handshake, connection, server issues)
                 anyhow::anyhow!("Database connection failed: {}", tls_error)
-            },
+            }
         }
     })
 }
@@ -219,8 +231,9 @@ fn resolve_database_url(cli: &Cli) -> Result<String> {
     if let Some(url) = &cli.db_url {
         Ok(url.clone())
     } else {
-        gold_digger::get_required_env("DATABASE_URL")
-            .context("Missing database URL. Provide --db-url or set DATABASE_URL environment variable")
+        gold_digger::get_required_env("DATABASE_URL").context(
+            "Missing database URL. Provide --db-url or set DATABASE_URL environment variable",
+        )
     }
 }
 
@@ -229,8 +242,9 @@ fn resolve_database_query(cli: &Cli) -> Result<String> {
     if let Some(query) = &cli.query {
         Ok(query.clone())
     } else if let Some(query_file) = &cli.query_file {
-        std::fs::read_to_string(query_file)
-            .map_err(|e| anyhow::anyhow!("Failed to read query file {}: {}", query_file.display(), e))
+        std::fs::read_to_string(query_file).map_err(|e| {
+            anyhow::anyhow!("Failed to read query file {}: {}", query_file.display(), e)
+        })
     } else {
         gold_digger::get_required_env("DATABASE_QUERY").context(
             "Missing database query. Provide --query, --query-file, or set DATABASE_QUERY environment variable",
@@ -243,14 +257,20 @@ fn resolve_output_file(cli: &Cli) -> Result<PathBuf> {
     if let Some(output) = &cli.output {
         Ok(output.clone())
     } else {
-        let output = gold_digger::get_required_env("OUTPUT_FILE")
-            .context("Missing output file. Provide --output or set OUTPUT_FILE environment variable")?;
+        let output = gold_digger::get_required_env("OUTPUT_FILE").context(
+            "Missing output file. Provide --output or set OUTPUT_FILE environment variable",
+        )?;
         Ok(PathBuf::from(output))
     }
 }
 
 /// Writes output in the specified format
-fn write_output(rows: Vec<Vec<String>>, output: File, output_file: &std::path::Path, cli: &Cli) -> Result<()> {
+fn write_output(
+    rows: Vec<Vec<String>>,
+    output: File,
+    output_file: &std::path::Path,
+    cli: &Cli,
+) -> Result<()> {
     let format = if let Some(format) = &cli.format {
         format.clone()
     } else {
@@ -278,10 +298,30 @@ fn generate_completion(shell: Shell) {
     let bin_name = "gold_digger";
 
     match shell {
-        Shell::Bash => generate(CompletionShell::Bash, &mut cmd, bin_name, &mut std::io::stdout()),
-        Shell::Zsh => generate(CompletionShell::Zsh, &mut cmd, bin_name, &mut std::io::stdout()),
-        Shell::Fish => generate(CompletionShell::Fish, &mut cmd, bin_name, &mut std::io::stdout()),
-        Shell::PowerShell => generate(CompletionShell::PowerShell, &mut cmd, bin_name, &mut std::io::stdout()),
+        Shell::Bash => generate(
+            CompletionShell::Bash,
+            &mut cmd,
+            bin_name,
+            &mut std::io::stdout(),
+        ),
+        Shell::Zsh => generate(
+            CompletionShell::Zsh,
+            &mut cmd,
+            bin_name,
+            &mut std::io::stdout(),
+        ),
+        Shell::Fish => generate(
+            CompletionShell::Fish,
+            &mut cmd,
+            bin_name,
+            &mut std::io::stdout(),
+        ),
+        Shell::PowerShell => generate(
+            CompletionShell::PowerShell,
+            &mut cmd,
+            bin_name,
+            &mut std::io::stdout(),
+        ),
     }
 }
 
@@ -372,7 +412,8 @@ mod tests {
     fn test_create_database_connection() {
         // Test that the function exists and handles errors properly
         let cli = build_test_cli();
-        let result = create_database_connection("mysql://invalid:invalid@nonexistent:3306/test", &cli);
+        let result =
+            create_database_connection("mysql://invalid:invalid@nonexistent:3306/test", &cli);
         // Should fail due to invalid connection details, but not panic
         assert!(result.is_err());
     }
@@ -381,7 +422,8 @@ mod tests {
     fn test_create_database_connection_with_tls_options() {
         // Test TLS configuration path
         let cli = build_test_cli_with_tls();
-        let result = create_database_connection("mysql://invalid:invalid@nonexistent:3306/test", &cli);
+        let result =
+            create_database_connection("mysql://invalid:invalid@nonexistent:3306/test", &cli);
         // Should fail due to invalid connection details, but TLS config should be processed
         assert!(result.is_err());
     }
@@ -396,7 +438,13 @@ mod tests {
 
     #[test]
     fn test_resolve_database_url_from_env() {
-        let cli = Cli::parse_from(["gold_digger", "--query", "SELECT 1", "--output", "test.json"]);
+        let cli = Cli::parse_from([
+            "gold_digger",
+            "--query",
+            "SELECT 1",
+            "--output",
+            "test.json",
+        ]);
 
         // Set environment variable using temp_env
         temp_env::with_var("DATABASE_URL", Some("mysql://env_test"), || {
@@ -408,13 +456,24 @@ mod tests {
 
     #[test]
     fn test_resolve_database_url_missing() {
-        let cli = Cli::parse_from(["gold_digger", "--query", "SELECT 1", "--output", "test.json"]);
+        let cli = Cli::parse_from([
+            "gold_digger",
+            "--query",
+            "SELECT 1",
+            "--output",
+            "test.json",
+        ]);
 
         // Ensure env var is not set using temp_env
         temp_env::with_var("DATABASE_URL", None::<&str>, || {
             let result = resolve_database_url(&cli);
             assert!(result.is_err());
-            assert!(result.unwrap_err().to_string().contains("Missing database URL"));
+            assert!(
+                result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("Missing database URL")
+            );
         });
     }
 
@@ -449,7 +508,13 @@ mod tests {
 
     #[test]
     fn test_resolve_database_query_from_env() {
-        let cli = Cli::parse_from(["gold_digger", "--db-url", "mysql://test", "--output", "test.json"]);
+        let cli = Cli::parse_from([
+            "gold_digger",
+            "--db-url",
+            "mysql://test",
+            "--output",
+            "test.json",
+        ]);
 
         // Set environment variable using temp_env
         temp_env::with_var("DATABASE_QUERY", Some("SELECT * FROM env_table"), || {
@@ -461,13 +526,24 @@ mod tests {
 
     #[test]
     fn test_resolve_database_query_missing() {
-        let cli = Cli::parse_from(["gold_digger", "--db-url", "mysql://test", "--output", "test.json"]);
+        let cli = Cli::parse_from([
+            "gold_digger",
+            "--db-url",
+            "mysql://test",
+            "--output",
+            "test.json",
+        ]);
 
         // Ensure env var is not set using temp_env
         temp_env::with_var("DATABASE_QUERY", None::<&str>, || {
             let result = resolve_database_query(&cli);
             assert!(result.is_err());
-            assert!(result.unwrap_err().to_string().contains("Missing database query"));
+            assert!(
+                result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("Missing database query")
+            );
         });
     }
 
@@ -485,7 +561,12 @@ mod tests {
 
         let result = resolve_database_query(&cli);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Failed to read query file"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Failed to read query file")
+        );
     }
 
     #[test]
@@ -498,7 +579,13 @@ mod tests {
 
     #[test]
     fn test_resolve_output_file_from_env() {
-        let cli = Cli::parse_from(["gold_digger", "--db-url", "mysql://test", "--query", "SELECT 1"]);
+        let cli = Cli::parse_from([
+            "gold_digger",
+            "--db-url",
+            "mysql://test",
+            "--query",
+            "SELECT 1",
+        ]);
 
         // Set environment variable using temp_env
         temp_env::with_var("OUTPUT_FILE", Some("/tmp/env_output.csv"), || {
@@ -510,13 +597,24 @@ mod tests {
 
     #[test]
     fn test_resolve_output_file_missing() {
-        let cli = Cli::parse_from(["gold_digger", "--db-url", "mysql://test", "--query", "SELECT 1"]);
+        let cli = Cli::parse_from([
+            "gold_digger",
+            "--db-url",
+            "mysql://test",
+            "--query",
+            "SELECT 1",
+        ]);
 
         // Ensure env var is not set using temp_env
         temp_env::with_var("OUTPUT_FILE", None::<&str>, || {
             let result = resolve_output_file(&cli);
             assert!(result.is_err());
-            assert!(result.unwrap_err().to_string().contains("Missing output file"));
+            assert!(
+                result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("Missing output file")
+            );
         });
     }
 
@@ -553,7 +651,13 @@ mod tests {
     #[test]
     fn test_dump_configuration_with_env_query() -> anyhow::Result<()> {
         temp_env::with_var("DATABASE_QUERY", Some("SELECT password FROM users"), || {
-            let cli = Cli::parse_from(["gold_digger", "--db-url", "mysql://test", "--output", "test.json"]);
+            let cli = Cli::parse_from([
+                "gold_digger",
+                "--db-url",
+                "mysql://test",
+                "--output",
+                "test.json",
+            ]);
 
             let result = dump_configuration(&cli);
             assert!(result.is_ok());

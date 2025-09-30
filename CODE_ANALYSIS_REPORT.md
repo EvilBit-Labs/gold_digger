@@ -61,14 +61,14 @@ fn create_seeded_container(&self, db_config: &TestDatabaseConfig) -> Result<Data
             } else {
                 crate::integration::TestDatabase::MySQL { tls_enabled: false }
             }
-        },
+        }
         DatabaseType::MariaDB => {
             if db_config.tls_config.is_some() {
                 crate::integration::TestDatabase::MariaDB { tls_enabled: true }
             } else {
                 crate::integration::TestDatabase::MariaDB { tls_enabled: false }
             }
-        },
+        }
     };
 
     let container = DatabaseContainer::new(test_db)?;
@@ -104,10 +104,10 @@ expected_value: &"A".repeat(255),
 ```rust
 // WRONG - ValidationRule not used, incorrect container path
 use crate::integration::{
-    containers::{DatabaseContainer, TestDatabaseConfig}, // Wrong path
     OutputFormat,
     TestCase,
-    ValidationRule, // ValidationRule not used
+    ValidationRule,                                      // ValidationRule not used
+    containers::{DatabaseContainer, TestDatabaseConfig}, // Wrong path
 };
 ```
 
@@ -116,9 +116,9 @@ use crate::integration::{
 ```rust
 // CORRECT - Only import what's needed, correct paths
 use crate::integration::{
+    DatabaseType, OutputFormat, TestCase, TestDatabaseConfig,
     common::{GoldDiggerCli, OutputParser, TempFileManager},
     containers::database_container::DatabaseContainer,
-    DatabaseType, OutputFormat, TestCase, TestDatabaseConfig,
 };
 ```
 
@@ -249,7 +249,11 @@ pub struct TestDataBuilder {
 
 impl TestDataBuilder {
     pub fn with_varchar_samples(mut self) -> Self {
-        self.varchar_data = vec!["Sample varchar text".to_string(), "".to_string(), "A".repeat(255)];
+        self.varchar_data = vec![
+            "Sample varchar text".to_string(),
+            "".to_string(),
+            "A".repeat(255),
+        ];
         self
     }
 }
