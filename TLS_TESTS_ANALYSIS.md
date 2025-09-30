@@ -30,8 +30,7 @@
 
 ### 1. **Database Safety Patterns** ⚠️ NEEDS ATTENTION
 
-**Issue**: The code doesn't demonstrate safe MySQL value handling patterns that are critical in the
-main application.
+**Issue**: The code doesn't demonstrate safe MySQL value handling patterns that are critical in the main application.
 
 **Recommendation**: Add tests that verify safe handling of NULL values and type conversions:
 
@@ -276,5 +275,4 @@ The TLS tests file has been significantly improved with fixes for:
 4. Improve test isolation
 5. Add comprehensive security testing
 
-**Priority**: Focus on CLI integration tests first, as these provide the most value for validating
-the actual Gold Digger functionality with TLS.
+**Priority**: Focus on CLI integration tests first, as these provide the most value for validating the actual Gold Digger functionality with TLS.

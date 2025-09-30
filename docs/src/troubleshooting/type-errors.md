@@ -174,5 +174,4 @@ If you continue experiencing type errors after following these guidelines:
 4. Specify which output format you're using
 
 > [!NOTE]
-> The type conversion system is being improved in future versions to handle these cases more
-> gracefully.
+> The type conversion system is being improved in future versions to handle these cases more gracefully.

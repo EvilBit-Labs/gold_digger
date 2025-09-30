@@ -1,7 +1,6 @@
 # Integration Testing Framework
 
-Gold Digger features a comprehensive integration testing framework that validates functionality
-against real MySQL and MariaDB databases using testcontainers for automated container management.
+Gold Digger features a comprehensive integration testing framework that validates functionality against real MySQL and MariaDB databases using testcontainers for automated container management.
 
 ## Overview
 
@@ -19,8 +18,7 @@ The integration testing enhancement provides:
 
 ### Current Implementation Status
 
-The integration testing framework is actively under development with the following components
-implemented:
+The integration testing framework is actively under development with the following components implemented:
 
 **✅ Completed Components:**
 
@@ -72,8 +70,7 @@ tests/
 
 ### Container Management
 
-The framework uses testcontainers-modules for automated database lifecycle management with
-comprehensive TLS support:
+The framework uses testcontainers-modules for automated database lifecycle management with comprehensive TLS support:
 
 ```rust
 use testcontainers_modules::{mariadb::Mariadb, mysql::Mysql};
@@ -455,5 +452,4 @@ cargo llvm-cov --features integration_tests --html -- --ignored
 - **Cross-Format Consistency**: Ensure identical data across output formats
 - **Error Scenarios**: Test both success and failure paths
 
-This integration testing framework ensures Gold Digger's reliability and correctness across diverse
-database environments and usage scenarios.
+This integration testing framework ensures Gold Digger's reliability and correctness across diverse database environments and usage scenarios.

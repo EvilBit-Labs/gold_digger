@@ -4,9 +4,7 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 ## Project Overview
 
-Gold Digger is a production-ready Rust CLI tool for MySQL/MariaDB database queries with structured
-output (CSV, JSON, TSV). It features comprehensive CLI interface, rustls-only TLS, and safe data
-type handling.
+Gold Digger is a production-ready Rust CLI tool for MySQL/MariaDB database queries with structured output (CSV, JSON, TSV). It features comprehensive CLI interface, rustls-only TLS, and safe data type handling.
 
 **Current Architecture (v0.2.6):**
 
@@ -471,5 +469,4 @@ just test-no-docker # Unit tests
 
 ---
 
-**This guidance document should be updated when major architectural changes occur. For current
-project status, see Cargo.toml version and recent commit history.**
+**This guidance document should be updated when major architectural changes occur. For current project status, see Cargo.toml version and recent commit history.**

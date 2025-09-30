@@ -4,8 +4,7 @@ This directory contains TLS certificate fixtures for integration testing.
 
 ## Certificate Generation
 
-Certificates are generated ephemeral per test run to ensure security and avoid certificate reuse
-across test executions.
+Certificates are generated ephemeral per test run to ensure security and avoid certificate reuse across test executions.
 
 ## Files
 
