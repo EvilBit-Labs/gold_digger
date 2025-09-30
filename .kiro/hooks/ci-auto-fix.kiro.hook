@@ -1,0 +1,19 @@
+{
+  "enabled": true,
+  "name": "Auto CI Checks & Fixes",
+  "description": "Automatically runs CI checks when source files change and fixes any failures including formatting, linting, compilation errors, test failures, security audits, and license compliance issues",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "src/**/*.rs",
+      "Cargo.toml",
+      "tests/**/*.rs",
+      "rustfmt.toml"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Source files have been modified. Please run a comprehensive CI check and fix any issues found. This should include:\n\n1. **Code Formatting**: Run `just format` to fix any formatting issues\n2. **Linting**: Run `just lint` and fix any clippy warnings\n3. **Compilation**: Ensure `just build` and `just build-release` both succeed\n4. **Testing**: Run `just test` and `cargo nextest run` (if available) and fix any test failures\n5. **Security Audit**: Run `just audit` and address any security vulnerabilities\n6. **License Compliance**: Check that all dependencies have compatible licenses by running `just deny`\n7. **Documentation**: Ensure `just docs-build` builds without warnings (skip on Windows)\n8. **Coverage**: Run coverage checks with `just coverage-check` to ensure we are meeting our coverage thresholds\n\nFor each issue found:\n- Identify the root cause\n- Apply the appropriate fix\n- Verify the fix resolves the issue\n- Ensure no new issues are introduced\n\nIf any issues cannot be automatically fixed, provide clear guidance on manual resolution steps needed."
+  }
+}
