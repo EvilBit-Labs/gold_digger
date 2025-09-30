@@ -921,9 +921,9 @@ impl NumericDataTypeTests {
             },
             BigintTestCase {
                 name: "bigint_arithmetic",
-                query: "SELECT bigint_col * 2 AS doubled_bigint FROM test_data_types WHERE bigint_col > 0 LIMIT 1",
+                query: "SELECT CAST(bigint_col AS DECIMAL(20,0)) * 2 AS doubled_bigint FROM test_data_types WHERE bigint_col = 9223372036854775807",
                 expected_value: "18446744073709551614",
-                description: "BIGINT arithmetic operations",
+                description: "BIGINT arithmetic operations without overflow",
             },
         ];
 

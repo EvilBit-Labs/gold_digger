@@ -77,7 +77,7 @@
   - Add support for generating certificates using LibreSSL on macOS and Linux
   - _Requirements: 1.1, 1.2, 1.3, 1.5, 9.3_
 
-- [ ] 1.3 Create TLS certificate management and test database schema system
+- [x] 1.3 Create TLS certificate management and test database schema system
 
   - ✓ Basic TLS certificate handling exists in `tests/tls_integration.rs` (need to move to fixtures)
   - Create `tests/fixtures/tls/` directory with test SSL certificates for TLS-enabled containers
@@ -197,7 +197,7 @@
   - Use `tempfile`'s automatic cleanup-on-failure for robust test execution
   - Create utilities for test artifact collection and debugging using `tempfile` paths
 
-- [ ] 2. Implement data type validation tests
+- [x] 2. Implement data type validation tests
 
   - ✓ Safe MySQL value handling exists in `src/lib.rs` (`mysql_value_to_string` function)
   - Create comprehensive tests for MySQL data type handling and conversion using real database data
@@ -256,6 +256,7 @@
 - [ ] 3. Create output format validation framework
 
   - ✓ Basic format writers exist in `src/csv.rs`, `src/json.rs`, `src/tab.rs`
+  - ✓ Basic output parsing utilities exist in `tests/integration/common.rs` (OutputParser)
   - Implement format-specific validators for CSV, JSON, and TSV outputs using real database results
   - Test format compliance and consistency across different data scenarios with actual Gold Digger output
   - Validate special character handling and encoding with real-world data
@@ -268,33 +269,6 @@
   - Add RFC4180 compliance validation including header row verification
   - Test CSV quoting behavior with QuoteStyle::Necessary and NULL handling as empty strings
   - _Requirements: 2.1, 2.4, 2.5_
-
-- [ ] 3.1.1 Create CSV format compliance validator
-
-  - Implement `CsvValidator` struct with RFC4180 compliance checking
-  - Add header row validation and column count verification
-  - Create CSV parsing utilities using the csv crate for validation
-  - Implement quoting behavior validation (QuoteStyle::Necessary)
-  - Add line ending and delimiter validation
-  - Include tests for Excel interoperability (embedded commas, quotes, newlines) with CRLF enforcement
-
-- [ ] 3.1.2 Implement CSV content validation
-
-  - Create data integrity validation for CSV output content
-  - Add NULL value handling validation (empty strings in CSV)
-  - Implement special character escaping validation
-  - Create row count and column count validation utilities
-  - Add CSV-specific edge case testing (embedded newlines, quotes)
-
-- [ ] 3.1.3 Add CSV performance and compatibility tests
-
-  - Create performance tests for CSV generation with large datasets
-  - Add cross-platform CSV compatibility tests (line endings)
-  - Implement CSV output consistency tests across multiple runs
-  - Create CSV format regression tests for edge cases
-  - Add CSV memory usage validation for large result sets
-  - Gate performance tests behind `INTEGRATION_PERF=1` and use P95-based time thresholds
-  - Add CSV memory usage checks with coarse upper bounds; skip on constrained runners
 
 - [ ] 3.2 Implement JSON format validation
 
@@ -313,6 +287,7 @@
 - [ ] 4. Implement error handling and exit code validation tests
 
   - ✓ Exit code mapping exists in `src/exit.rs`
+  - ✓ CLI testing infrastructure exists with assert_cmd and predicates
   - Create comprehensive error scenario tests with proper exit code validation using real Gold Digger CLI
   - Test database connection failures and authentication errors with actual containers
   - Validate file I/O error handling and meaningful error messages in real scenarios
@@ -326,30 +301,6 @@
   - Implement test cases for invalid SQL syntax with exit code 4 validation
   - Add tests for non-existent table scenarios with appropriate error messages
   - _Requirements: 4.1, 4.2_
-
-- [ ] 4.1.1 Implement SQL error handling tests
-
-  - Create tests for invalid SQL syntax with various error types
-  - Add tests for non-existent table and column references
-  - Implement SQL permission error tests with restricted user accounts
-  - Create tests for SQL timeout scenarios with long-running queries
-  - Add validation for exit code 4 and appropriate error messages
-
-- [ ] 4.1.2 Implement database connection error tests
-
-  - Create tests for invalid database URLs and connection strings
-  - Add tests for authentication failures with wrong credentials
-  - Implement network connectivity error tests (unreachable host)
-  - Create tests for database server unavailability scenarios
-  - Add validation for exit code 3 and connection error messages
-
-- [ ] 4.1.3 Implement file I/O error handling tests
-
-  - Create tests for invalid output file paths and permissions
-  - Add tests for disk space exhaustion scenarios
-  - Implement tests for read-only filesystem scenarios
-  - Create tests for invalid file format specifications
-  - Add validation for exit code 5 and I/O error messages
 
 - [ ] 4.2 Implement connection and authentication error tests
 
@@ -367,6 +318,7 @@
 
 - [ ] 5. Implement CLI integration and configuration tests
 
+  - ✓ CLI testing infrastructure exists with assert_cmd and predicates
   - Test CLI flag precedence over environment variables
   - Validate mutually exclusive option handling
   - Test configuration resolution and format detection
@@ -395,6 +347,7 @@
 
 - [ ] 6. Implement large result set and performance tests
 
+  - ✓ Performance test data seeding exists in `tests/fixtures/seed_data.sql`
   - Create tests for handling substantial data volumes
   - Add memory usage validation and performance benchmarking
   - Test empty result set handling with --allow-empty flag
@@ -406,31 +359,6 @@
   - Implement tests with 1000+ row result sets to verify completion without memory issues
   - Add tests for wide tables (20+ columns) to ensure all columns are handled correctly
   - _Requirements: 5.1, 5.2_
-
-- [ ] 6.1.1 Implement large row count performance tests
-
-  - Create test queries that generate 1000+ row result sets
-  - Add memory usage monitoring during large result set processing
-  - Implement execution time measurement and performance thresholds
-  - Create tests for result set processing without memory exhaustion
-  - Add validation for consistent performance across multiple runs
-  - Seed a deterministic helper table (numbers) for 1k+ rows to avoid engine/version CTE differences
-
-- [ ] 6.1.2 Implement wide table performance tests
-
-  - Create test tables with 20+ columns of various data types
-  - Add tests for wide table query execution and output generation
-  - Implement column handling validation for wide result sets
-  - Create performance tests for wide table CSV, JSON, and TSV output
-  - Add memory usage validation for wide table processing
-
-- [ ] 6.1.3 Implement large content performance tests
-
-  - Create tests with large text fields (1MB+ content per field)
-  - Add tests for BLOB and binary data handling with large content
-  - Implement performance tests for large content output generation
-  - Create memory usage validation for large content processing
-  - Add tests for large content handling across all output formats
 
 - [ ] 6.2 Implement large content and memory validation tests
 
@@ -449,6 +377,7 @@
 
 - [ ] 7. Implement MySQL-specific feature tests
 
+  - ✓ MySQL and MariaDB container support exists with version selection
   - Test MySQL functions and version-specific functionality
   - Validate character set and timezone handling
   - Test MySQL-specific SQL syntax compatibility
@@ -471,6 +400,8 @@
 
 - [ ] 8. Implement security validation tests
 
+  - ✓ TLS infrastructure exists with certificate generation and validation
+  - ✓ Credential redaction exists in CLI utilities
   - Test credential redaction in logs and error messages
   - Validate TLS connection handling and certificate validation
   - Test connection string parsing security with special characters
@@ -497,6 +428,8 @@
 
 - [ ] 9. Add cross-platform validation and CI integration
 
+  - ✓ CI environment detection exists with timeout and resource limit handling
+  - ✓ Docker availability detection exists with graceful test skipping
   - Ensure tests pass consistently across Linux, macOS, and Windows
   - Implement platform-specific path and line ending handling
   - Add CI integration with appropriate test categorization
@@ -526,18 +459,9 @@
   - Add retry logic for flaky container operations in CI environments
   - _Requirements: 1.5, 8.4, 8.5_
 
-- [ ] 9.4 Update GitHub Actions workflow configuration for comprehensive database testing
-
-  - ✓ Docker service already enabled in `.github/workflows/ci.yml`
-  - Add integration test matrix for different MySQL versions (8.0, 8.1) and MariaDB versions using testcontainers-modules
-  - Configure test matrix to include both TLS and non-TLS connection testing scenarios
-  - ✓ TLS is always available (rustls-only implementation) - no feature flag matrix needed
-  - Configure appropriate timeouts, resource limits, and caching for container-based tests
-  - Add integration test status reporting and artifact collection for failed tests
-  - _Requirements: 1.5, 7.3, 8.4, 8.5, 9.3, 9.4, 9.5_
-
 - [ ] 10. Create comprehensive test documentation and CI troubleshooting
 
+  - ✓ Basic test documentation exists in `tests/README.md`
   - Write documentation for running and maintaining integration tests locally and in CI
   - Add CI-specific troubleshooting guides for Docker and testcontainers issues
   - Create test maintenance utilities for updating test data and expectations
@@ -546,6 +470,10 @@
 - [ ] 10.1 Write integration test documentation with CI focus
 
   - Create comprehensive README for integration test setup and execution in both local and CI environments
+  - Document Docker requirements and troubleshooting steps
+  - Add examples for running specific test suites and categories
+  - Document environment variables and configuration options
+  - _Requirements: All requirements - documentation and maintenance_nd CI environments_
   - Document GitHub Actions configuration requirements for Docker and testcontainers
   - Add troubleshooting section for common CI issues (Docker availability, timeouts, resource limits)
   - Include examples for running specific test suites and debugging CI failures
