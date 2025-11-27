@@ -143,4 +143,92 @@ mod tests {
         assert!(!test_data.is_empty());
         assert!(test_data[0].contains("INSERT INTO"));
     }
+
+    /// Test NULL value and JSON column type handling
+    #[test]
+    fn test_null_value_and_json_column_handling() {
+        // Skip test if Docker is not available
+        if !is_docker_available() {
+            println!("Skipping NULL value and JSON tests: Docker not available");
+            return;
+        }
+
+        // Create test configuration for MySQL (non-TLS for simplicity)
+        let db_config = TestDatabase::mysql().to_config();
+
+        // Create NULL value and JSON test suite
+        let null_json_tests = integration::data_types::NullValueAndJsonTests::new()
+            .expect("Failed to create NULL value and JSON test suite");
+
+        // Run all NULL value and JSON tests
+        let test_results = null_json_tests
+            .run_all_tests(&db_config)
+            .expect("Failed to run NULL value and JSON tests");
+
+        // Validate test results
+        let mut passed_tests = 0;
+        let mut failed_tests = 0;
+
+        for result in &test_results {
+            println!(
+                "Test: {} ({}) - {} - {}",
+                result.test_name,
+                result.test_type,
+                if result.passed { "PASSED" } else { "FAILED" },
+                result.description
+            );
+
+            if let Some(error) = &result.error_message {
+                println!("  Error: {}", error);
+            }
+
+            if result.passed {
+                passed_tests += 1;
+            } else {
+                failed_tests += 1;
+            }
+        }
+
+        println!(
+            "NULL value and JSON tests completed: {} passed, {} failed",
+            passed_tests, failed_tests
+        );
+
+        // Assert that all tests passed
+        assert_eq!(
+            failed_tests, 0,
+            "Some NULL value and JSON tests failed. Check output above for details."
+        );
+
+        // Ensure we actually ran some tests
+        assert!(
+            passed_tests > 0,
+            "No NULL value and JSON tests were executed"
+        );
+
+        // Verify we tested all expected categories
+        let test_types: std::collections::HashSet<_> = test_results
+            .iter()
+            .map(|r| format!("{}", r.test_type))
+            .collect();
+
+        assert!(
+            test_types.contains("NULL Handling"),
+            "Should have NULL handling tests"
+        );
+        assert!(
+            test_types.contains("JSON Preservation"),
+            "Should have JSON preservation tests"
+        );
+        assert!(
+            test_types.contains("Panic Prevention"),
+            "Should have panic prevention tests"
+        );
+        assert!(
+            test_types.contains("Format Specific"),
+            "Should have format-specific tests"
+        );
+
+        println!("All NULL value and JSON column type tests passed successfully!");
+    }
 }

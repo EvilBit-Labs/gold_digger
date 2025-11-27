@@ -606,9 +606,10 @@ pub fn redact_url(url: &str) -> String {
 }
 
 /// TLS validation modes for different security requirements
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum TlsValidationMode {
     /// Use platform certificate store with full validation (default)
+    #[default]
     Platform,
     /// Use custom CA file with full validation
     CustomCa { ca_file_path: PathBuf },
@@ -616,12 +617,6 @@ pub enum TlsValidationMode {
     SkipHostnameVerification,
     /// Accept any certificate (no validation) - DANGEROUS
     AcceptInvalid,
-}
-
-impl Default for TlsValidationMode {
-    fn default() -> Self {
-        Self::Platform
-    }
 }
 
 /// TLS configuration for MySQL connections

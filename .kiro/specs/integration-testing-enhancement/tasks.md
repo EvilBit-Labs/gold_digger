@@ -237,7 +237,7 @@
   - Create performance tests for data type conversion with large datasets
   - Implement regression tests for data type handling edge cases
 
-- [-] 2.2 Add temporal and binary data type tests
+- [x] 2.2 Add temporal and binary data type tests
 
   - Implement tests for DATE, DATETIME, TIMESTAMP, TIME data types
   - Create tests for BINARY, VARBINARY, BLOB data types
@@ -246,7 +246,7 @@
   - For TIMESTAMP/DATETIME, assert UTC normalization and documented formatting
   - _Requirements: 3.4, 3.5_
 
-- [ ] 2.3 Implement NULL value and JSON column type tests
+- [x] 2.3 Implement NULL value and JSON column type tests
 
   - Write comprehensive NULL value handling tests across all output formats
   - Add tests for MySQL JSON column type preservation
