@@ -1,7 +1,7 @@
 {
   "enabled": true,
   "name": "AI Instructions Sync",
-  "description": "Monitors changes to AI coding assistant instruction files (.github/copilot-instructions.md, WARP.md, AGENTS.md, GEMINI.md, .kiro/steering, .cursor/rules) and automatically updates other AI assistant files to capture the intent of the original modification while maintaining each file's tone and purpose",
+  "description": "Monitors changes to AI coding assistant instruction files (.github/copilot-instructions.md, AGENTS.md, .kiro/steering, .cursor/rules) and automatically updates other AI assistant files to capture the intent of the original modification while maintaining each file's tone and purpose",
   "version": "1",
   "when": {
     "type": "fileEdited",
