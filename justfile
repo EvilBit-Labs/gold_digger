@@ -95,7 +95,9 @@ check: pre-commit-run
 pre-commit-run:
     pre-commit run -a
 
-# Format a single file (for pre-commit hooks)
+# Format files (for pre-commit hooks)
+# Accepts variadic file arguments from pre-commit
+# When pre-commit passes filenames, they are expanded as {{FILES}}
 format-files +FILES:
     npx prettier --write --config .prettierrc.json {{FILES}}
 
@@ -440,9 +442,48 @@ coverage-ci:
     cd {{justfile_dir()}}
     cargo llvm-cov --package gold_digger --json --output-path coverage.json
 
-# Benchmark (when criterion tests exist)
+# =============================================================================
+# BENCHMARKING
+# =============================================================================
+
+# Run full Criterion benchmark suite (mirrors CI)
 bench:
-    cargo bench || echo "No benchmarks found"
+    cd {{justfile_dir()}}
+    cargo bench --bench rows_processing --bench output_formats --bench value_conversion --bench memory_usage
+
+# Run benchmarks and save current performance as a named baseline
+bench-baseline BASELINE_NAME:
+    cd {{justfile_dir()}}
+    cargo bench --bench rows_processing --bench output_formats --bench value_conversion --bench memory_usage -- --save-baseline {{BASELINE_NAME}}
+
+# Run benchmarks and compare against a previously saved baseline
+bench-compare BASELINE_NAME:
+    cd {{justfile_dir()}}
+    cargo bench --bench rows_processing --bench output_formats --bench value_conversion --bench memory_usage -- --baseline {{BASELINE_NAME}}
+
+# Open the generated HTML report from Criterion output directory in a browser
+bench-report:
+    cd {{justfile_dir()}}
+    @if command -v open >/dev/null 2>&1; then \
+        find target/criterion -name "index.html" | head -1 | xargs open; \
+    elif command -v xdg-open >/dev/null 2>&1; then \
+        find target/criterion -name "index.html" | head -1 | xargs xdg-open; \
+    elif command -v start >/dev/null 2>&1; then \
+        find target/criterion -name "index.html" | head -1 | xargs start; \
+    else \
+        echo "Could not find a way to open HTML files. Please open manually:"; \
+        find target/criterion -name "index.html" | head -1; \
+    fi
+
+# Run a specific benchmark by name
+bench-specific BENCHMARK_NAME:
+    cd {{justfile_dir()}}
+    cargo bench --bench {{BENCHMARK_NAME}}
+
+# Run benchmarks with reduced sample size for faster feedback during development
+bench-quick:
+    cd {{justfile_dir()}}
+    cargo bench --bench rows_processing --bench output_formats --bench value_conversion --bench memory_usage -- --quick
 
 # Profile release build
 profile:
@@ -891,8 +932,15 @@ help:
     @echo "  coverage      Run tests with coverage report"
     @echo "  coverage-llvm Run tests with llvm-cov (CI compatible)"
     @echo "  cover         Alias for coverage-llvm (CI naming consistency)"
-    @echo "  bench         Run benchmarks"
     @echo "  check-docker  Check Docker availability for integration tests"
+    @echo ""
+    @echo "Benchmarking:"
+    @echo "  bench         Run full Criterion benchmark suite (mirrors CI)"
+    @echo "  bench-baseline BASELINE_NAME  Run benchmarks and save as named baseline"
+    @echo "  bench-compare BASELINE_NAME   Run benchmarks and compare against baseline"
+    @echo "  bench-report  Open generated HTML report in browser"
+    @echo "  bench-specific BENCHMARK_NAME Run a specific benchmark by name"
+    @echo "  bench-quick   Run benchmarks with reduced sample size for faster feedback"
     @echo "  generate-test-reports Generate integration test reports for CI"
     @echo "  validate-ci-integration Validate CI integration and test execution utilities"
     @echo ""
