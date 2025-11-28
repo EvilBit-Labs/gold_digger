@@ -35,6 +35,19 @@ fn mariadb_container() -> Container<Mariadb> {
         .expect("Failed to start MariaDB container")
 }
 
+/// Conditional fixture for CI environments that skips container tests
+#[fixture]
+fn optional_mariadb_container() -> Option<Container<Mariadb>> {
+    if is_ci() {
+        return None;
+    }
+    Some(
+        Mariadb::default()
+            .start()
+            .expect("Failed to start MariaDB container"),
+    )
+}
+
 /// Fixture for database connection pool that keeps container alive
 #[fixture]
 fn db_pool(#[from(mariadb_container)] container: Container<Mariadb>) -> TestDatabase {
@@ -56,6 +69,36 @@ fn db_pool(#[from(mariadb_container)] container: Container<Mariadb>) -> TestData
         _container: container, // Keep container alive
         pool,
     }
+}
+
+/// Conditional fixture for CI environments that skips container tests
+#[fixture]
+fn optional_db_pool(
+    #[from(optional_mariadb_container)] container: Option<Container<Mariadb>>,
+) -> Option<TestDatabase> {
+    if is_ci() {
+        return None;
+    }
+
+    let container = container.expect("Container should be available in non-CI environments");
+    let host_port = container
+        .get_host_port_ipv4(3306)
+        .expect("Failed to get host port");
+    let database_url = format!("mysql://root@127.0.0.1:{}/mysql", host_port);
+
+    // Wait for container to be ready before creating the pool
+    wait_for_container_ready(&database_url, Duration::from_secs(60))
+        .expect("Container failed to become ready");
+
+    let pool = mysql::Pool::new(database_url.as_str()).expect("Failed to create connection pool");
+
+    // Verify the pool can actually get a connection
+    wait_for_pool_ready(&pool, Duration::from_secs(30)).expect("Pool failed to become ready");
+
+    Some(TestDatabase {
+        _container: container, // Keep container alive
+        pool,
+    })
 }
 
 /// Wait for database container to be ready by attempting connections
@@ -131,10 +174,11 @@ fn wait_for_pool_ready(pool: &Pool, timeout: Duration) -> Result<(), String> {
 /// This test verifies that the rows_to_strings function handles all MySQL data types safely
 /// without panicking on NULL values or non-string types
 #[rstest]
-fn test_type_conversion_safety_with_real_database(db_pool: TestDatabase) {
-    if is_ci() {
-        return;
-    }
+fn test_type_conversion_safety_with_real_database(optional_db_pool: Option<TestDatabase>) {
+    let db_pool = match optional_db_pool {
+        Some(pool) => pool,
+        None => return, // Skip test in CI environments
+    };
 
     let mut conn = db_pool.pool().get_conn().expect("Failed to get connection");
 
@@ -419,6 +463,23 @@ fn test_empty_result_set(db_pool: TestDatabase) {
 
     // Should return empty vector
     assert_eq!(result.len(), 0);
+}
+
+#[rstest]
+fn test_empty_result_set_conditional(optional_db_pool: Option<TestDatabase>) {
+    if let Some(db_pool) = optional_db_pool {
+        let mut conn = db_pool.pool().get_conn().expect("Failed to get connection");
+
+        // Query that returns no rows
+        let rows: Vec<mysql::Row> = conn
+            .query("SELECT * FROM mysql.user WHERE 1=0")
+            .expect("Failed to query");
+        let result = rows_to_strings(rows).expect("Failed to convert rows to strings");
+
+        // Should return empty vector
+        assert_eq!(result.len(), 0);
+    }
+    // Skip test in CI environments
 }
 
 /// Test that the function handles single row results correctly
