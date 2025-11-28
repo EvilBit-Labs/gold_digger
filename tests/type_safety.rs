@@ -1,7 +1,7 @@
 use gold_digger::rows_to_strings;
-use mysql::{Pool, prelude::Queryable};
+use mysql::{Conn, Pool, prelude::Queryable};
 use rstest::{fixture, rstest};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use testcontainers_modules::{
     mariadb::Mariadb,
     testcontainers::{Container, runners::SyncRunner},
@@ -30,7 +30,86 @@ fn db_pool(#[from(mariadb_container)] container: Container<Mariadb>) -> Pool {
         .get_host_port_ipv4(3306)
         .expect("Failed to get host port");
     let database_url = format!("mysql://root@127.0.0.1:{}/mysql", host_port);
-    mysql::Pool::new(database_url.as_str()).expect("Failed to create connection pool")
+
+    // Wait for container to be ready before creating the pool
+    wait_for_container_ready(&database_url, Duration::from_secs(60))
+        .expect("Container failed to become ready");
+
+    let pool = mysql::Pool::new(database_url.as_str()).expect("Failed to create connection pool");
+
+    // Verify the pool can actually get a connection
+    wait_for_pool_ready(&pool, Duration::from_secs(30)).expect("Pool failed to become ready");
+
+    pool
+}
+
+/// Wait for database container to be ready by attempting connections
+fn wait_for_container_ready(url: &str, timeout: Duration) -> Result<(), String> {
+    let start = Instant::now();
+    let mut attempt = 0;
+
+    while start.elapsed() < timeout {
+        attempt += 1;
+
+        // Try to create a temporary connection to test readiness
+        match mysql::Conn::new(url) {
+            Ok(mut conn) => {
+                // Try a simple query to ensure the database is fully ready
+                match conn.query_drop("SELECT 1") {
+                    Ok(_) => {
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        if attempt % 10 == 0 {
+                            eprintln!("Container not ready (attempt {}): {}", attempt, e);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                if attempt % 10 == 0 {
+                    eprintln!("Waiting for container (attempt {}): {}", attempt, e);
+                }
+            }
+        }
+
+        std::thread::sleep(Duration::from_millis(500));
+    }
+
+    Err(format!(
+        "Container failed to become ready within {} seconds after {} attempts",
+        timeout.as_secs(),
+        attempt
+    ))
+}
+
+/// Wait for pool to be ready by attempting to get a connection
+fn wait_for_pool_ready(pool: &Pool, timeout: Duration) -> Result<(), String> {
+    let start = Instant::now();
+    let mut attempt = 0;
+
+    while start.elapsed() < timeout {
+        attempt += 1;
+
+        match pool.get_conn() {
+            Ok(_) => {
+                return Ok(());
+            }
+            Err(e) => {
+                if attempt % 10 == 0 {
+                    eprintln!("Pool not ready (attempt {}): {}", attempt, e);
+                }
+            }
+        }
+
+        std::thread::sleep(Duration::from_millis(200));
+    }
+
+    Err(format!(
+        "Pool failed to become ready within {} seconds after {} attempts",
+        timeout.as_secs(),
+        attempt
+    ))
 }
 
 /// Test type conversion safety with real MySQL data types
