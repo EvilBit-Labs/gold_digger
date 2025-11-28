@@ -47,6 +47,8 @@ mod tls_cli_flag_tests {
     /// Requirement: 11.3 - CLI documentation includes TLS flags
     #[test]
     fn test_tls_help_includes_all_options() {
+        #[allow(deprecated)]
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd.arg("--help").output().unwrap();
 
@@ -71,6 +73,7 @@ mod tls_cli_flag_tests {
     fn test_nonexistent_ca_file_error() {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd
             .args([
@@ -119,6 +122,7 @@ mod tls_cli_flag_tests {
         let (_temp_dir, cert_path) = create_temp_cert_file("invalid certificate content").unwrap();
         let (_temp_dir2, output_path) = create_temp_output_path().unwrap();
 
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd
             .args([
@@ -172,6 +176,7 @@ mod tls_mutual_exclusion_tests {
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem).unwrap();
         let (_temp_dir2, output_path) = create_temp_output_path().unwrap();
 
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd
             .args([
@@ -217,6 +222,7 @@ mod tls_mutual_exclusion_tests {
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem).unwrap();
         let (_temp_dir2, output_path) = create_temp_output_path().unwrap();
 
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd
             .args([
@@ -260,6 +266,7 @@ mod tls_mutual_exclusion_tests {
     fn test_skip_hostname_and_allow_invalid_mutual_exclusion() {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd
             .args([

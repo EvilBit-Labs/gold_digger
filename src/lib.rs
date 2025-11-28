@@ -133,6 +133,11 @@ pub fn rows_to_strings(rows: Vec<Row>) -> anyhow::Result<Vec<Vec<String>>> {
 ///
 /// Returns an error for certain edge cases such as invalid date/time values
 /// that cannot be properly formatted.
+/// Public function for benchmarking value conversion performance
+pub fn mysql_value_to_string_bench(value: &mysql::Value) -> anyhow::Result<String> {
+    mysql_value_to_string(value)
+}
+
 fn mysql_value_to_string(value: &mysql::Value) -> anyhow::Result<String> {
     match value {
         mysql::Value::NULL => Ok(String::new()),

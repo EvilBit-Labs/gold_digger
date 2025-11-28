@@ -141,6 +141,7 @@ impl GoldDiggerCommand {
     pub fn execute(self) -> Result<CommandResult> {
         let start_time = Instant::now();
 
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger")?;
 
         // Add database URL

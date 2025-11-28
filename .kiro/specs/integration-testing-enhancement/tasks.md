@@ -473,7 +473,7 @@
   - Document Docker requirements and troubleshooting steps
   - Add examples for running specific test suites and categories
   - Document environment variables and configuration options
-  - _Requirements: All requirements - documentation and maintenance_nd CI environments_
+  - _Requirements: All requirements - documentation and maintenance in CI environments_
   - Document GitHub Actions configuration requirements for Docker and testcontainers
   - Add troubleshooting section for common CI issues (Docker availability, timeouts, resource limits)
   - Include examples for running specific test suites and debugging CI failures

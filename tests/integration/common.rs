@@ -110,6 +110,7 @@ impl GoldDiggerCli {
         let start_time = Instant::now();
 
         // Build command using assert_cmd
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger")?;
 
         // Set database URL (never log the actual URL for security)
@@ -178,6 +179,7 @@ impl GoldDiggerCli {
         let start_time = Instant::now();
 
         // Build command using assert_cmd
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger")?;
 
         // Set database URL (never log the actual URL for security)
@@ -300,6 +302,7 @@ impl GoldDiggerCli {
         db_url: &str,
         output_path: &Path,
     ) -> Result<Output> {
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger")?;
 
         cmd.arg("--db-url")
@@ -338,6 +341,7 @@ impl GoldDiggerCli {
         stdout_contains: Option<&str>,
         stderr_contains: Option<&str>,
     ) -> Result<GoldDiggerResult> {
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger")?;
 
         // Set database URL (never log the actual URL for security)
@@ -479,6 +483,7 @@ impl GoldDiggerCli {
         db_url: &str,
         output_path: &Path,
     ) -> Result<GoldDiggerResult> {
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger")?;
 
         // Set database URL (never log the actual URL for security)
@@ -1006,6 +1011,7 @@ impl AssertCmdIntegration {
         let output_file = temp_manager.create_output_file(&test_case.expected_format)?;
 
         // Build command
+        #[allow(deprecated)]
         let mut cmd = assert_cmd::Command::cargo_bin("gold_digger")?;
 
         cmd.arg("--db-url")
@@ -1048,6 +1054,7 @@ impl AssertCmdIntegration {
         let output_file = temp_manager.create_output_file(output_format)?;
 
         // Build command
+        #[allow(deprecated)]
         let mut cmd = assert_cmd::Command::cargo_bin("gold_digger")?;
 
         cmd.arg("--db-url")
@@ -1073,6 +1080,7 @@ impl AssertCmdIntegration {
         let output_file = temp_manager.create_output_file(&test_case.expected_format)?;
 
         // Build command
+        #[allow(deprecated)]
         let mut cmd = assert_cmd::Command::cargo_bin("gold_digger")?;
 
         cmd.arg("--db-url")

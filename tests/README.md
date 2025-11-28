@@ -240,6 +240,178 @@ Integration tests automatically pull the following Docker images:
 - Tests malformed URL handling
 - Tests unreachable host scenarios
 
+## Performance Benchmarking
+
+The project includes comprehensive performance benchmarks using Criterion to measure and track performance characteristics of core functionality.
+
+### Benchmark Suite
+
+The benchmark suite is located in the `benches/` directory and includes:
+
+- **`rows_processing.rs`**: Benchmarks for `rows_to_strings` function with various dataset sizes (small, medium, large, wide, null-heavy, mixed types)
+- **`output_formats.rs`**: Benchmarks for CSV, JSON (compact and pretty), and TSV writers with different data characteristics
+- **`value_conversion.rs`**: Benchmarks for MySQL value to string conversion across all value types
+- **`memory_usage.rs`**: End-to-end memory and throughput benchmarks comparing formats on large datasets
+
+### Running Benchmarks
+
+#### Basic Commands
+
+```bash
+# Run all benchmarks
+cargo bench
+
+# Run specific benchmark suite
+cargo bench --bench rows_processing
+cargo bench --bench output_formats
+cargo bench --bench value_conversion
+cargo bench --bench memory_usage
+```
+
+#### Using Just Recipes
+
+```bash
+# Run full benchmark suite (mirrors CI)
+just bench
+
+# Run with reduced sample size for faster feedback
+just bench-quick
+
+# Save current performance as a named baseline
+just bench-baseline main-branch
+
+# Compare against a saved baseline
+just bench-compare main-branch
+
+# Run a specific benchmark by name
+just bench-specific rows_processing
+
+# Open generated HTML report in browser
+just bench-report
+```
+
+### Interpreting Results
+
+Criterion provides detailed performance metrics:
+
+- **Throughput**: Measured in rows/second or elements/second
+- **Time per iteration**: Average time for each benchmark iteration
+- **HTML Reports**: Detailed reports with statistical analysis in `target/criterion/`
+
+The HTML reports include:
+
+- Performance trends over time
+- Statistical significance of changes
+- Comparison with saved baselines
+- Distribution plots and outlier detection
+
+### Baseline Management
+
+Baselines allow tracking performance regressions:
+
+1. **Create baseline**: `just bench-baseline baseline-name`
+2. **Compare**: `just bench-compare baseline-name`
+3. **Update**: Re-run `bench-baseline` with the same name to update
+
+Baselines are stored in `target/criterion/` and should be committed for main branch performance tracking.
+
+## Parameterized Testing with rstest
+
+The project uses `rstest` for parameterized testing, allowing comprehensive test coverage with less code duplication.
+
+### rstest Features
+
+- **Fixtures**: Reusable test setup code (containers, connections, CLI commands)
+- **Parameterized Tests**: Run the same test with different inputs using `#[case]` or `#[values]`
+- **Descriptive Case Names**: Each test case has a clear name for easy identification in output
+
+### Using rstest
+
+#### Fixtures
+
+Fixtures encapsulate common setup logic:
+
+```rust
+use rstest::{fixture, rstest};
+
+#[fixture]
+fn db_pool() -> Pool {
+    // Setup database connection
+    // ...
+}
+
+#[test]
+fn test_with_fixture(db_pool: Pool) {
+    // Use the fixture
+}
+```
+
+#### Parameterized Tests
+
+Use `#[case]` for specific test scenarios:
+
+```rust
+#[rstest]
+#[case("scenario_1")]
+#[case("scenario_2")]
+fn test_multiple_scenarios(db_pool: Pool, #[case] scenario: &str) {
+    // Test logic varies based on scenario
+}
+```
+
+### Files Using rstest
+
+- **`tests/type_safety.rs`**: Parameterized tests for data types, special characters, and numeric ranges
+- **`tests/cli_testing_example.rs`**: Parameterized tests for formats, environment variables, and flag precedence
+- **`tests/tls_integration.rs`**: Parameterized tests for TLS configuration matrices
+
+### Adding New Parameterized Tests
+
+1. Import rstest: `use rstest::{fixture, rstest};`
+2. Create fixtures for common setup
+3. Use `#[rstest]` instead of `#[test]`
+4. Add `#[case]` attributes for each test scenario
+5. Ensure case names clearly describe the scenario
+
+## Snapshot Testing with insta
+
+The project uses `insta` for snapshot testing to ensure output format consistency and catch regressions.
+
+### Snapshot Test Files
+
+- **`tests/output_format_snapshots.rs`**: Snapshot tests for CSV, JSON, and TSV output formats
+- **`tests/snapshots/`**: Directory containing snapshot files (`.snap` format)
+
+### Running Snapshot Tests
+
+```bash
+# Run snapshot tests
+cargo test output_format_snapshots
+
+# Review and accept snapshot changes
+cargo insta review
+
+# Accept all snapshot changes (use with caution)
+cargo insta accept
+```
+
+### Snapshot Coverage
+
+The snapshot tests cover:
+
+- **CSV**: Standard data, escaping (quotes/commas), newlines, null values, empty result sets
+- **JSON**: Standard data, pretty-printed output, empty result sets, null handling, large integers, boundary values
+- **TSV**: Standard tab-delimited data, special characters, null conversion
+
+### Working with Snapshots
+
+1. **Run tests**: `cargo test output_format_snapshots`
+2. **Review changes**: `cargo insta review` (opens interactive review)
+3. **Accept changes**: Review and accept if changes are expected
+4. **Commit snapshots**: Commit updated `.snap` files to version control
+
+Snapshots are stored in `tests/snapshots/output_formats.snap` and should be committed alongside code changes.
+
 ## CI Integration
 
 The tests are designed to work in CI environments:
@@ -248,6 +420,8 @@ The tests are designed to work in CI environments:
 - Unit tests run without external dependencies
 - Tests work with always-available rustls TLS implementation
 - Tests validate that TLS is available in both standard and minimal builds
+- **Benchmarks**: Run on main branch pushes, results uploaded as artifacts
+- **Snapshot tests**: Run as part of standard test suite, failures require review
 
 ## Troubleshooting
 

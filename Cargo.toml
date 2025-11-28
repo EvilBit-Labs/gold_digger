@@ -185,11 +185,13 @@ url = "2.5.7"
 
 [dev-dependencies]
 assert_cmd = "2.1.1"
+criterion = { version = "0.5", features = ["html_reports"] }
 insta = "1.44.2"
 predicates = "3.1.2"
 process_control = "5.2.0"
 rcgen = "0.14.5"
 regex = "1.12.2"
+rstest = "0.18"
 sysinfo = "0.37.2"
 temp-env = "0.3.6"
 tempfile = "3.23.0"
@@ -198,6 +200,23 @@ testcontainers-modules = { version = "0.13.0", features = ["mariadb", "mysql", "
 time = { version = "0.3.44", features = ["macros"] }
 tokio = { version = "1.48.0", features = ["full"] }
 walkdir = "2.5.0"
+
+# Benchmarks for performance testing
+[[bench]]
+name = "rows_processing"
+harness = false
+
+[[bench]]
+name = "output_formats"
+harness = false
+
+[[bench]]
+name = "value_conversion"
+harness = false
+
+[[bench]]
+name = "memory_usage"
+harness = false
 
 # The profile that 'dist' will build with
 [profile.dist]

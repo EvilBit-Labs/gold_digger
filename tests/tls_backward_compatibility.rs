@@ -655,6 +655,7 @@ mod cli_flag_behavior_tests {
     #[test]
     fn test_tls_flags_always_available() {
         // Test that help includes TLS flags
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd.arg("--help").output().unwrap();
 
@@ -696,6 +697,7 @@ mod cli_flag_behavior_tests {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
         // Test nonexistent CA file error
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd
             .args([
@@ -790,6 +792,7 @@ mod security_warnings_tests {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
         // Test CLI command with skip hostname verification
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd
             .args([
@@ -830,6 +833,7 @@ mod security_warnings_tests {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
         // Test CLI command with accept invalid certificate
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd
             .args([
@@ -1044,6 +1048,7 @@ mod integration_compatibility_tests {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
         // Test basic command without TLS flags (should work as before)
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd
             .args([
@@ -1075,6 +1080,7 @@ mod integration_compatibility_tests {
     /// Requirement: 7.4 - Help documentation preserved
     #[test]
     fn test_cli_help_includes_tls_options() {
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd.arg("--help").output().unwrap();
 
@@ -1117,6 +1123,7 @@ mod integration_compatibility_tests {
     /// Requirement: 7.4 - Help documentation preserved with stable contract
     #[test]
     fn test_cli_help_snapshot() {
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd.arg("--help").output().unwrap();
 
@@ -1134,6 +1141,7 @@ mod integration_compatibility_tests {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
         // Test configuration dump with TLS flags
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd
             .args([

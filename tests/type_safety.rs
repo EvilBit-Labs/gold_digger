@@ -1,35 +1,48 @@
 use gold_digger::rows_to_strings;
-use mysql::prelude::Queryable;
+use mysql::{Pool, prelude::Queryable};
+use rstest::{fixture, rstest};
 use std::time::Instant;
-use testcontainers_modules::{mariadb::Mariadb, testcontainers::runners::SyncRunner};
+use testcontainers_modules::{
+    mariadb::Mariadb,
+    testcontainers::{Container, runners::SyncRunner},
+};
 
 /// Check if running in CI environment
 fn is_ci() -> bool {
     std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok()
 }
 
+/// Fixture for MariaDB container setup
+#[fixture]
+fn mariadb_container() -> Container<Mariadb> {
+    if is_ci() {
+        panic!("Container tests should not run in CI without proper setup");
+    }
+    Mariadb::default()
+        .start()
+        .expect("Failed to start MariaDB container")
+}
+
+/// Fixture for database connection pool
+#[fixture]
+fn db_pool(#[from(mariadb_container)] container: Container<Mariadb>) -> Pool {
+    let host_port = container
+        .get_host_port_ipv4(3306)
+        .expect("Failed to get host port");
+    let database_url = format!("mysql://root@127.0.0.1:{}/mysql", host_port);
+    mysql::Pool::new(database_url.as_str()).expect("Failed to create connection pool")
+}
+
 /// Test type conversion safety with real MySQL data types
 /// This test verifies that the rows_to_strings function handles all MySQL data types safely
 /// without panicking on NULL values or non-string types
-#[test]
-fn test_type_conversion_safety_with_real_database() {
+#[rstest]
+fn test_type_conversion_safety_with_real_database(db_pool: Pool) {
     if is_ci() {
         return;
     }
-    // Start a MariaDB container for testing
-    let mariadb_container = Mariadb::default()
-        .start()
-        .expect("Failed to start MariaDB container");
-    let host_port = mariadb_container
-        .get_host_port_ipv4(3306)
-        .expect("Failed to get host port");
 
-    // Create connection URL
-    let database_url = format!("mysql://root@127.0.0.1:{}/mysql", host_port);
-
-    // Create connection pool
-    let pool = mysql::Pool::new(database_url.as_str()).expect("Failed to create connection pool");
-    let mut conn = pool.get_conn().expect("Failed to get connection");
+    let mut conn = db_pool.get_conn().expect("Failed to get connection");
 
     // Create a test table with various data types
     conn.query_drop(
@@ -136,21 +149,15 @@ fn test_type_conversion_safety_with_real_database() {
 }
 
 /// Test edge cases with special characters and unicode
-#[test]
-fn test_special_characters_and_unicode() {
+#[rstest]
+#[case("quotes_and_newlines")]
+#[case("unicode_and_null")]
+fn test_special_characters_and_unicode(db_pool: Pool, #[case] test_scenario: &str) {
     if is_ci() {
         return;
     }
-    let mariadb_container = Mariadb::default()
-        .start()
-        .expect("Failed to start MariaDB container");
-    let host_port = mariadb_container
-        .get_host_port_ipv4(3306)
-        .expect("Failed to get host port");
 
-    let database_url = format!("mysql://root@127.0.0.1:{}/mysql", host_port);
-    let pool = mysql::Pool::new(database_url.as_str()).expect("Failed to create connection pool");
-    let mut conn = pool.get_conn().expect("Failed to get connection");
+    let mut conn = db_pool.get_conn().expect("Failed to get connection");
 
     // Create test table for special characters
     conn.query_drop(
@@ -167,15 +174,28 @@ fn test_special_characters_and_unicode() {
     )
     .expect("Failed to create test table");
 
-    // Insert data with special characters
-    conn.query_drop(
-        r#"
-        INSERT INTO special_chars_test VALUES
-        (1, 'Text with "quotes"', 'Line 1\nLine 2', 'Col1\tCol2', 'café', ''),
-        (2, '', NULL, '', '测试', NULL)
-    "#,
-    )
-    .expect("Failed to insert test data");
+    // Insert data based on test scenario
+    match test_scenario {
+        "quotes_and_newlines" => {
+            conn.query_drop(
+                r#"
+                INSERT INTO special_chars_test VALUES
+                (1, 'Text with "quotes"', 'Line 1\nLine 2', 'Col1\tCol2', 'café', '')
+            "#,
+            )
+            .expect("Failed to insert test data");
+        }
+        "unicode_and_null" => {
+            conn.query_drop(
+                r#"
+                INSERT INTO special_chars_test VALUES
+                (1, '', NULL, '', '测试', NULL)
+            "#,
+            )
+            .expect("Failed to insert test data");
+        }
+        _ => panic!("Unknown test scenario: {}", test_scenario),
+    }
 
     // Query and convert
     let rows: Vec<mysql::Row> = conn
@@ -183,43 +203,41 @@ fn test_special_characters_and_unicode() {
         .expect("Failed to query test data");
     let result = rows_to_strings(rows).expect("Failed to convert rows to strings");
 
-    assert_eq!(result.len(), 3); // Header + 2 data rows
+    assert_eq!(result.len(), 2); // Header + 1 data row
 
-    // Check first row
+    // Check first row based on scenario
     let row1 = &result[1];
     assert_eq!(row1[0], "1");
-    assert_eq!(row1[1], "Text with \"quotes\""); // Quotes preserved
-    assert_eq!(row1[2], "Line 1\nLine 2"); // Newlines preserved
-    assert_eq!(row1[3], "Col1\tCol2"); // Tabs preserved
-    assert_eq!(row1[4], "café"); // Unicode preserved
-    assert_eq!(row1[5], ""); // Empty string
 
-    // Check second row
-    let row2 = &result[2];
-    assert_eq!(row2[0], "2");
-    assert_eq!(row2[1], ""); // Empty string
-    assert_eq!(row2[2], ""); // NULL converted to empty string
-    assert_eq!(row2[3], ""); // Empty string
-    assert_eq!(row2[4], "测试"); // Unicode preserved
-    assert_eq!(row2[5], ""); // NULL converted to empty string
+    match test_scenario {
+        "quotes_and_newlines" => {
+            assert_eq!(row1[1], "Text with \"quotes\""); // Quotes preserved
+            assert_eq!(row1[2], "Line 1\nLine 2"); // Newlines preserved
+            assert_eq!(row1[3], "Col1\tCol2"); // Tabs preserved
+            assert_eq!(row1[4], "café"); // Unicode preserved
+            assert_eq!(row1[5], ""); // Empty string
+        }
+        "unicode_and_null" => {
+            assert_eq!(row1[1], ""); // Empty string
+            assert_eq!(row1[2], ""); // NULL converted to empty string
+            assert_eq!(row1[3], ""); // Empty string
+            assert_eq!(row1[4], "测试"); // Unicode preserved
+            assert_eq!(row1[5], ""); // NULL converted to empty string
+        }
+        _ => {}
+    }
 }
 
 /// Test large numbers and precision
-#[test]
-fn test_large_numbers_and_precision() {
+#[rstest]
+#[case("max_values")]
+#[case("min_values")]
+fn test_large_numbers_and_precision(db_pool: Pool, #[case] test_scenario: &str) {
     if is_ci() {
         return;
     }
-    let mariadb_container = Mariadb::default()
-        .start()
-        .expect("Failed to start MariaDB container");
-    let host_port = mariadb_container
-        .get_host_port_ipv4(3306)
-        .expect("Failed to get host port");
 
-    let database_url = format!("mysql://root@127.0.0.1:{}/mysql", host_port);
-    let pool = mysql::Pool::new(database_url.as_str()).expect("Failed to create connection pool");
-    let mut conn = pool.get_conn().expect("Failed to get connection");
+    let mut conn = db_pool.get_conn().expect("Failed to get connection");
 
     // Create test table for large numbers
     conn.query_drop(
@@ -236,15 +254,28 @@ fn test_large_numbers_and_precision() {
     )
     .expect("Failed to create test table");
 
-    // Insert large numbers
-    conn.query_drop(
-        r#"
-        INSERT INTO large_numbers_test VALUES
-        (1, 9223372036854775807, 18446744073709551615, 123.456, 3.14159, 2.718281828459045),
-        (2, -9223372036854775808, 0, -123.456, -3.14159, -2.718281828459045)
-    "#,
-    )
-    .expect("Failed to insert test data");
+    // Insert large numbers based on scenario
+    match test_scenario {
+        "max_values" => {
+            conn.query_drop(
+                r#"
+                INSERT INTO large_numbers_test VALUES
+                (1, 9223372036854775807, 18446744073709551615, 123.456, 3.14159, 2.718281828459045)
+            "#,
+            )
+            .expect("Failed to insert test data");
+        }
+        "min_values" => {
+            conn.query_drop(
+                r#"
+                INSERT INTO large_numbers_test VALUES
+                (1, -9223372036854775808, 0, -123.456, -3.14159, -2.718281828459045)
+            "#,
+            )
+            .expect("Failed to insert test data");
+        }
+        _ => panic!("Unknown test scenario: {}", test_scenario),
+    }
 
     // Query and convert
     let rows: Vec<mysql::Row> = conn
@@ -252,43 +283,39 @@ fn test_large_numbers_and_precision() {
         .expect("Failed to query test data");
     let result = rows_to_strings(rows).expect("Failed to convert rows to strings");
 
-    assert_eq!(result.len(), 3); // Header + 2 data rows
+    assert_eq!(result.len(), 2); // Header + 1 data row
 
-    // Check first row
+    // Check first row based on scenario
     let row1 = &result[1];
     assert_eq!(row1[0], "1");
-    assert_eq!(row1[1], "9223372036854775807"); // Max BIGINT
-    assert_eq!(row1[2], "18446744073709551615"); // Max UNSIGNED BIGINT
-    assert_eq!(row1[3], "123.456"); // DECIMAL
-    assert!(row1[4].contains("3.14159")); // FLOAT
-    assert!(row1[5].contains("2.718281828459045")); // DOUBLE
 
-    // Check second row
-    let row2 = &result[2];
-    assert_eq!(row2[0], "2");
-    assert_eq!(row2[1], "-9223372036854775808"); // Min BIGINT
-    assert_eq!(row2[2], "0"); // Zero UNSIGNED
-    assert_eq!(row2[3], "-123.456"); // Negative DECIMAL
-    assert!(row2[4].contains("-3.14159")); // Negative FLOAT
-    assert!(row2[5].contains("-2.718281828459045")); // Negative DOUBLE
+    match test_scenario {
+        "max_values" => {
+            assert_eq!(row1[1], "9223372036854775807"); // Max BIGINT
+            assert_eq!(row1[2], "18446744073709551615"); // Max UNSIGNED BIGINT
+            assert_eq!(row1[3], "123.456"); // DECIMAL
+            assert!(row1[4].contains("3.14159")); // FLOAT
+            assert!(row1[5].contains("2.718281828459045")); // DOUBLE
+        }
+        "min_values" => {
+            assert_eq!(row1[1], "-9223372036854775808"); // Min BIGINT
+            assert_eq!(row1[2], "0"); // Zero UNSIGNED
+            assert_eq!(row1[3], "-123.456"); // Negative DECIMAL
+            assert!(row1[4].contains("-3.14159")); // Negative FLOAT
+            assert!(row1[5].contains("-2.718281828459045")); // Negative DOUBLE
+        }
+        _ => {}
+    }
 }
 
 /// Test that the function handles empty result sets gracefully
-#[test]
-fn test_empty_result_set() {
+#[rstest]
+fn test_empty_result_set(db_pool: Pool) {
     if is_ci() {
         return;
     }
-    let mariadb_container = Mariadb::default()
-        .start()
-        .expect("Failed to start MariaDB container");
-    let host_port = mariadb_container
-        .get_host_port_ipv4(3306)
-        .expect("Failed to get host port");
 
-    let database_url = format!("mysql://root@127.0.0.1:{}/mysql", host_port);
-    let pool = mysql::Pool::new(database_url.as_str()).expect("Failed to create connection pool");
-    let mut conn = pool.get_conn().expect("Failed to get connection");
+    let mut conn = db_pool.get_conn().expect("Failed to get connection");
 
     // Query that returns no rows
     let rows: Vec<mysql::Row> = conn
@@ -301,21 +328,13 @@ fn test_empty_result_set() {
 }
 
 /// Test that the function handles single row results correctly
-#[test]
-fn test_single_row_result() {
+#[rstest]
+fn test_single_row_result(db_pool: Pool) {
     if is_ci() {
         return;
     }
-    let mariadb_container = Mariadb::default()
-        .start()
-        .expect("Failed to start MariaDB container");
-    let host_port = mariadb_container
-        .get_host_port_ipv4(3306)
-        .expect("Failed to get host port");
 
-    let database_url = format!("mysql://root@127.0.0.1:{}/mysql", host_port);
-    let pool = mysql::Pool::new(database_url.as_str()).expect("Failed to create connection pool");
-    let mut conn = pool.get_conn().expect("Failed to get connection");
+    let mut conn = db_pool.get_conn().expect("Failed to get connection");
 
     // Query that returns a single row
     let rows: Vec<mysql::Row> = conn
@@ -331,21 +350,13 @@ fn test_single_row_result() {
 /// Test that demonstrates the safety improvements over the old panic-prone pattern
 /// This test specifically validates that NULL values and type conversions are handled gracefully
 /// and that the dangerous `row[column.name_str().as_ref()]` pattern has been eliminated
-#[test]
-fn test_null_and_type_conversion_safety() {
+#[rstest]
+fn test_null_and_type_conversion_safety(db_pool: Pool) {
     if is_ci() {
         return;
     }
-    let mariadb_container = Mariadb::default()
-        .start()
-        .expect("Failed to start MariaDB container");
-    let host_port = mariadb_container
-        .get_host_port_ipv4(3306)
-        .expect("Failed to get host port");
 
-    let database_url = format!("mysql://root@127.0.0.1:{}/mysql", host_port);
-    let pool = mysql::Pool::new(database_url.as_str()).expect("Failed to create connection pool");
-    let mut conn = pool.get_conn().expect("Failed to get connection");
+    let mut conn = db_pool.get_conn().expect("Failed to get connection");
 
     // Create a comprehensive test table with edge cases that would cause the old
     // from_value::<String>() pattern to panic
@@ -439,21 +450,13 @@ fn test_null_and_type_conversion_safety() {
 
 /// Test memory efficiency and performance characteristics
 /// This test validates that the function doesn't have excessive memory overhead
-#[test]
-fn test_memory_efficiency_with_large_dataset() {
+#[rstest]
+fn test_memory_efficiency_with_large_dataset(db_pool: Pool) {
     if is_ci() {
         return;
     }
-    let mariadb_container = Mariadb::default()
-        .start()
-        .expect("Failed to start MariaDB container");
-    let host_port = mariadb_container
-        .get_host_port_ipv4(3306)
-        .expect("Failed to get host port");
 
-    let database_url = format!("mysql://root@127.0.0.1:{}/mysql", host_port);
-    let pool = mysql::Pool::new(database_url.as_str()).expect("Failed to create connection pool");
-    let mut conn = pool.get_conn().expect("Failed to get connection");
+    let mut conn = db_pool.get_conn().expect("Failed to get connection");
 
     // Create a table with moderate number of rows to test memory behavior
     conn.query_drop(
@@ -502,21 +505,13 @@ fn test_memory_efficiency_with_large_dataset() {
 
 /// Test that specifically validates the fix for the dangerous indexed access pattern
 /// This test creates scenarios that would cause the old `row[column.name_str().as_ref()]` to panic
-#[test]
-fn test_indexed_access_safety_fix() {
+#[rstest]
+fn test_indexed_access_safety_fix(db_pool: Pool) {
     if is_ci() {
         return;
     }
-    let mariadb_container = Mariadb::default()
-        .start()
-        .expect("Failed to start MariaDB container");
-    let host_port = mariadb_container
-        .get_host_port_ipv4(3306)
-        .expect("Failed to get host port");
 
-    let database_url = format!("mysql://root@127.0.0.1:{}/mysql", host_port);
-    let pool = mysql::Pool::new(database_url.as_str()).expect("Failed to create connection pool");
-    let mut conn = pool.get_conn().expect("Failed to get connection");
+    let mut conn = db_pool.get_conn().expect("Failed to get connection");
 
     // Create a table with column names that could cause issues with indexed access
     conn.query_drop(
@@ -607,22 +602,14 @@ fn test_indexed_access_safety_fix() {
 }
 
 /// Test error handling and edge cases that could cause panics
-#[test]
+#[rstest]
 #[ignore = "Container port exposure issue - needs migration to new DatabaseContainer API"]
-fn test_error_handling_edge_cases() {
+fn test_error_handling_edge_cases(db_pool: Pool) {
     if is_ci() {
         return;
     }
-    let mariadb_container = Mariadb::default()
-        .start()
-        .expect("Failed to start MariaDB container");
-    let host_port = mariadb_container
-        .get_host_port_ipv4(3306)
-        .expect("Failed to get host port");
 
-    let database_url = format!("mysql://root@127.0.0.1:{}/mysql", host_port);
-    let pool = mysql::Pool::new(database_url.as_str()).expect("Failed to create connection pool");
-    let mut conn = pool.get_conn().expect("Failed to get connection");
+    let mut conn = db_pool.get_conn().expect("Failed to get connection");
 
     // Test with extreme values that could cause conversion issues
     conn.query_drop(
