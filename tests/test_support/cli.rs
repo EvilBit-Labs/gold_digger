@@ -6,7 +6,7 @@
 #![allow(dead_code)]
 
 use anyhow::{Context, Result};
-use assert_cmd::Command;
+use assert_cmd::cargo;
 use std::collections::HashMap;
 use std::path::Path;
 use std::process::Output;
@@ -141,8 +141,9 @@ impl GoldDiggerCommand {
     pub fn execute(self) -> Result<CommandResult> {
         let start_time = Instant::now();
 
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger")?;
+        // TODO: Migration to assert_cmd v2.1+ complete - using cargo::cargo_bin_cmd! macro
+        // See: https://github.com/assert-rs/assert_cmd/blob/main/CHANGELOG.md#210
+        let mut cmd = cargo::cargo_bin_cmd!("gold_digger");
 
         // Add database URL
         if let Some(url) = &self.db_url {

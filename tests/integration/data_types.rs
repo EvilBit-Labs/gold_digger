@@ -1807,7 +1807,7 @@ impl TemporalBinaryDataTypeTests {
             },
             UTCTestCase {
                 name: "timestamp_timezone_conversion",
-                query: "SELECT timestamp_col, timestamp_col AS utc_timestamp FROM test_data_types WHERE timestamp_col IS NOT NULL LIMIT 1",
+                query: "SELECT timestamp_col FROM test_data_types WHERE timestamp_col IS NOT NULL LIMIT 1",
                 expected_consistency: true,
                 description: "TIMESTAMP timezone conversion to UTC",
             },
@@ -2080,7 +2080,8 @@ impl TemporalBinaryDataTypeTests {
 
         let test_case_obj = TestCase::new(test_case.name, test_case.query)
             .with_format(OutputFormat::Json)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--verbose");
 
         let output_file = self.temp_manager.create_output_file(&OutputFormat::Json)?;
         let result = self

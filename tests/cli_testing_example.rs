@@ -20,8 +20,7 @@ use tempfile::NamedTempFile;
 /// Fixture for creating a basic CLI command
 #[fixture]
 fn cli_command() -> Command {
-    #[allow(deprecated)]
-    Command::cargo_bin("gold_digger").unwrap()
+    assert_cmd::cargo::cargo_bin_cmd!("gold_digger")
 }
 
 /// Fixture for creating a temporary output file

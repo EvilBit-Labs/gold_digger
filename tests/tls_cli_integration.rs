@@ -48,7 +48,6 @@ mod tls_cli_flag_tests {
     #[test]
     fn test_tls_help_includes_all_options() {
         #[allow(deprecated)]
-        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd.arg("--help").output().unwrap();
 
