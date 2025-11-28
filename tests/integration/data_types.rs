@@ -3312,7 +3312,7 @@ impl std::fmt::Display for NumericTestType {
 }
 
 #[cfg(test)]
-mod tests {
+mod tests_private {
     use super::*;
     use crate::integration::{DatabaseType, TestDatabaseConfig};
 
@@ -4651,7 +4651,7 @@ pub struct RegressionTestResult {
 }
 
 #[cfg(test)]
-mod temporal_binary_tests {
+mod temporal_binary_tests_private {
     use super::*;
 
     /// Test temporal and binary data types
@@ -4999,7 +4999,7 @@ mod temporal_binary_tests {
 }
 
 #[cfg(test)]
-mod comprehensive_validation_tests {
+mod comprehensive_validation_tests_private {
     use super::*;
     use anyhow::Result;
 
