@@ -11,6 +11,7 @@ Always consult these files in order when working with this codebase:
 1. **AGENTS.md** (this file) - Primary AI assistant guidance
 2. **GEMINI.md** - Gemini-specific overrides (if present)
 3. **.cursor/rules/**/\*.mdc\*\* - Cursor-specific rules (if present)
+4. **.github/copilot-instructions.md** - Copilot-specific guidance
 
 ### Critical Restrictions
 
@@ -32,6 +33,70 @@ Always consult these files in order when working with this codebase:
 - This project prefers **CodeRabbit.ai** for code review
 - Do **NOT** enable GitHub Copilot auto-review in pull requests
 - Maintainer: **UncleSp1d3r** (single-maintainer workflow)
+
+## Build/Lint/Test Commands
+
+```bash
+# Quick development cycle
+just check                    # fmt + lint + test-no-docker
+just fmt                      # cargo fmt
+just lint                     # cargo clippy -- -D warnings
+just test                     # cargo nextest run (preferred) or cargo test
+just test-no-docker           # cargo nextest run (excludes Docker tests)
+
+# Single test execution
+cargo nextest run --test test_name
+cargo test --test test_name
+cargo test --lib module::function
+cargo test --bin gold_digger
+
+# Quality gates
+just ci-check                 # fmt-check + lint + lint-sql + test + deny-check
+just ci-full                  # Complete CI workflow equivalent
+just fmt-check                # cargo fmt --check
+just deny-check               # cargo deny check
+
+# Build variants
+cargo build                   # Debug build
+cargo build --release         # Release build
+cargo build --no-default-features --features "json csv additional_mysql_types verbose"  # Minimal build
+```
+
+## Code Style Guidelines
+
+### Formatting & Imports
+
+- **Line limit**: 100 characters (enforced by `rustfmt.toml`)
+- **Clippy**: Zero tolerance warnings (`-D warnings`)
+- **Imports**: Group by std, external crates, local modules (separated by newlines)
+- **Formatting**: Use `cargo fmt` (Rustfmt conventions)
+
+### Types & Naming
+
+- **snake_case** for functions/variables, **CamelCase** for types/structs
+- Use explicit types for public APIs
+- Prefer `anyhow::Result<T>` for applications, `thiserror` for libraries
+- Use `?` operator for error propagation
+
+### Documentation
+
+- All public functions require doc comments (`///`)
+- Use proper markdown formatting with Arguments/Returns/Example sections
+- Keep files ≤1000 lines, preferably ≤500 lines
+
+### Error Handling
+
+- Never use `from_value::<String>()` - always handle `mysql::Value::NULL`
+- Use safe conversion helpers: `mysql_value_to_string()` for CSV/TSV, `mysql_value_to_json()` for JSON
+- Redact credentials in all log output
+- Use context with `.map_err()` for better debugging
+
+### Cursor Rules Compliance
+
+- Follow `.cursor/rules/rust-best-practices.mdc` for module organization
+- Use format module contract: `fn write<W: Write>(rows: impl IntoIterator<Item = impl IntoIterator<Item = impl AsRef<str>>>, output: &mut W) -> anyhow::Result<()>`
+- Implement streaming support with generic writers
+- Use `#[cfg(feature = "...")]` for conditional compilation
 
 ## Project Overview
 
