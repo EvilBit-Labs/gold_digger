@@ -1,5 +1,5 @@
 use gold_digger::rows_to_strings;
-use mysql::{Conn, Pool, prelude::Queryable};
+use mysql::{Pool, prelude::Queryable};
 use rstest::{fixture, rstest};
 use std::time::{Duration, Instant};
 use testcontainers_modules::{
@@ -10,6 +10,18 @@ use testcontainers_modules::{
 /// Check if running in CI environment
 fn is_ci() -> bool {
     std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok()
+}
+
+/// Test database setup that keeps container alive
+struct TestDatabase {
+    _container: Container<Mariadb>, // Keep container alive
+    pool: Pool,
+}
+
+impl TestDatabase {
+    fn pool(&self) -> &Pool {
+        &self.pool
+    }
 }
 
 /// Fixture for MariaDB container setup
@@ -23,9 +35,9 @@ fn mariadb_container() -> Container<Mariadb> {
         .expect("Failed to start MariaDB container")
 }
 
-/// Fixture for database connection pool
+/// Fixture for database connection pool that keeps container alive
 #[fixture]
-fn db_pool(#[from(mariadb_container)] container: Container<Mariadb>) -> Pool {
+fn db_pool(#[from(mariadb_container)] container: Container<Mariadb>) -> TestDatabase {
     let host_port = container
         .get_host_port_ipv4(3306)
         .expect("Failed to get host port");
@@ -40,7 +52,10 @@ fn db_pool(#[from(mariadb_container)] container: Container<Mariadb>) -> Pool {
     // Verify the pool can actually get a connection
     wait_for_pool_ready(&pool, Duration::from_secs(30)).expect("Pool failed to become ready");
 
-    pool
+    TestDatabase {
+        _container: container, // Keep container alive
+        pool,
+    }
 }
 
 /// Wait for database container to be ready by attempting connections
@@ -116,12 +131,12 @@ fn wait_for_pool_ready(pool: &Pool, timeout: Duration) -> Result<(), String> {
 /// This test verifies that the rows_to_strings function handles all MySQL data types safely
 /// without panicking on NULL values or non-string types
 #[rstest]
-fn test_type_conversion_safety_with_real_database(db_pool: Pool) {
+fn test_type_conversion_safety_with_real_database(db_pool: TestDatabase) {
     if is_ci() {
         return;
     }
 
-    let mut conn = db_pool.get_conn().expect("Failed to get connection");
+    let mut conn = db_pool.pool().get_conn().expect("Failed to get connection");
 
     // Create a test table with various data types
     conn.query_drop(
@@ -231,12 +246,12 @@ fn test_type_conversion_safety_with_real_database(db_pool: Pool) {
 #[rstest]
 #[case("quotes_and_newlines")]
 #[case("unicode_and_null")]
-fn test_special_characters_and_unicode(db_pool: Pool, #[case] test_scenario: &str) {
+fn test_special_characters_and_unicode(db_pool: TestDatabase, #[case] test_scenario: &str) {
     if is_ci() {
         return;
     }
 
-    let mut conn = db_pool.get_conn().expect("Failed to get connection");
+    let mut conn = db_pool.pool().get_conn().expect("Failed to get connection");
 
     // Create test table for special characters
     conn.query_drop(
@@ -311,12 +326,12 @@ fn test_special_characters_and_unicode(db_pool: Pool, #[case] test_scenario: &st
 #[rstest]
 #[case("max_values")]
 #[case("min_values")]
-fn test_large_numbers_and_precision(db_pool: Pool, #[case] test_scenario: &str) {
+fn test_large_numbers_and_precision(db_pool: TestDatabase, #[case] test_scenario: &str) {
     if is_ci() {
         return;
     }
 
-    let mut conn = db_pool.get_conn().expect("Failed to get connection");
+    let mut conn = db_pool.pool().get_conn().expect("Failed to get connection");
 
     // Create test table for large numbers
     conn.query_drop(
@@ -389,12 +404,12 @@ fn test_large_numbers_and_precision(db_pool: Pool, #[case] test_scenario: &str) 
 
 /// Test that the function handles empty result sets gracefully
 #[rstest]
-fn test_empty_result_set(db_pool: Pool) {
+fn test_empty_result_set(db_pool: TestDatabase) {
     if is_ci() {
         return;
     }
 
-    let mut conn = db_pool.get_conn().expect("Failed to get connection");
+    let mut conn = db_pool.pool().get_conn().expect("Failed to get connection");
 
     // Query that returns no rows
     let rows: Vec<mysql::Row> = conn
@@ -408,12 +423,12 @@ fn test_empty_result_set(db_pool: Pool) {
 
 /// Test that the function handles single row results correctly
 #[rstest]
-fn test_single_row_result(db_pool: Pool) {
+fn test_single_row_result(db_pool: TestDatabase) {
     if is_ci() {
         return;
     }
 
-    let mut conn = db_pool.get_conn().expect("Failed to get connection");
+    let mut conn = db_pool.pool().get_conn().expect("Failed to get connection");
 
     // Query that returns a single row
     let rows: Vec<mysql::Row> = conn
@@ -430,12 +445,12 @@ fn test_single_row_result(db_pool: Pool) {
 /// This test specifically validates that NULL values and type conversions are handled gracefully
 /// and that the dangerous `row[column.name_str().as_ref()]` pattern has been eliminated
 #[rstest]
-fn test_null_and_type_conversion_safety(db_pool: Pool) {
+fn test_null_and_type_conversion_safety(db_pool: TestDatabase) {
     if is_ci() {
         return;
     }
 
-    let mut conn = db_pool.get_conn().expect("Failed to get connection");
+    let mut conn = db_pool.pool().get_conn().expect("Failed to get connection");
 
     // Create a comprehensive test table with edge cases that would cause the old
     // from_value::<String>() pattern to panic
@@ -530,12 +545,12 @@ fn test_null_and_type_conversion_safety(db_pool: Pool) {
 /// Test memory efficiency and performance characteristics
 /// This test validates that the function doesn't have excessive memory overhead
 #[rstest]
-fn test_memory_efficiency_with_large_dataset(db_pool: Pool) {
+fn test_memory_efficiency_with_large_dataset(db_pool: TestDatabase) {
     if is_ci() {
         return;
     }
 
-    let mut conn = db_pool.get_conn().expect("Failed to get connection");
+    let mut conn = db_pool.pool().get_conn().expect("Failed to get connection");
 
     // Create a table with moderate number of rows to test memory behavior
     conn.query_drop(
@@ -585,12 +600,12 @@ fn test_memory_efficiency_with_large_dataset(db_pool: Pool) {
 /// Test that specifically validates the fix for the dangerous indexed access pattern
 /// This test creates scenarios that would cause the old `row[column.name_str().as_ref()]` to panic
 #[rstest]
-fn test_indexed_access_safety_fix(db_pool: Pool) {
+fn test_indexed_access_safety_fix(db_pool: TestDatabase) {
     if is_ci() {
         return;
     }
 
-    let mut conn = db_pool.get_conn().expect("Failed to get connection");
+    let mut conn = db_pool.pool().get_conn().expect("Failed to get connection");
 
     // Create a table with column names that could cause issues with indexed access
     conn.query_drop(
@@ -683,12 +698,12 @@ fn test_indexed_access_safety_fix(db_pool: Pool) {
 /// Test error handling and edge cases that could cause panics
 #[rstest]
 #[ignore = "Container port exposure issue - needs migration to new DatabaseContainer API"]
-fn test_error_handling_edge_cases(db_pool: Pool) {
+fn test_error_handling_edge_cases(db_pool: TestDatabase) {
     if is_ci() {
         return;
     }
 
-    let mut conn = db_pool.get_conn().expect("Failed to get connection");
+    let mut conn = db_pool.pool().get_conn().expect("Failed to get connection");
 
     // Test with extreme values that could cause conversion issues
     conn.query_drop(
