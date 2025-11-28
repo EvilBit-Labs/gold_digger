@@ -220,6 +220,18 @@ impl DatabaseContainer {
         let container = testcontainers_modules::mysql::Mysql::default()
             .with_env_var("MYSQL_ALLOW_EMPTY_PASSWORD", "yes")
             .with_env_var("MYSQL_ROOT_HOST", "%")
+            // Fix for AIO issues in Docker environments
+            .with_env_var("MYSQL_INNODB_FLUSH_METHOD", "fsync")
+            .with_env_var("MYSQL_INNODB_USE_NATIVE_AIO", "0")
+            // Reduce memory usage for CI environments
+            .with_env_var("MYSQL_INNODB_BUFFER_POOL_SIZE", "64M")
+            .with_env_var("MYSQL_SKIP_HOST_CACHE", "1")
+            // Additional fixes for Docker environments
+            .with_env_var("MYSQL_INNODB_LOG_FILE_SIZE", "32M")
+            .with_env_var("MYSQL_INNODB_LOG_BUFFER_SIZE", "16M")
+            .with_env_var("MYSQL_MAX_CONNECTIONS", "50")
+            // Disable performance schema to reduce memory usage
+            .with_env_var("MYSQL_PERFORMANCE_SCHEMA", "0")
             .start()
             .with_context(|| format!("Failed to start MySQL container with TLS={}", tls_enabled))?;
 
@@ -470,8 +482,8 @@ impl DatabaseContainer {
             // CI environment: longer timeout, more aggressive retries
             (Duration::from_secs(300), RetryConfig::ci())
         } else {
-            // Local environment: Both MySQL and MariaDB need more time on some systems
-            let base_timeout = Duration::from_secs(180); // 3 minutes for all containers locally
+            // Local environment: Reduce timeout for faster feedback
+            let base_timeout = Duration::from_secs(90); // 1.5 minutes for local development
             (base_timeout, RetryConfig::local())
         };
 

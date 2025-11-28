@@ -25,6 +25,8 @@ allow = [
     "Unicode-3.0",
     "Unlicense",
     "Zlib",
+    "OpenSSL",
+    "CDLA-Permissive-2.0",
 ]
 include-dev = true
 
@@ -39,9 +41,14 @@ deny = [
     { crate = "openssl", use-instead = "rustls" },
     { crate = "openssl-sys", use-instead = "rustls" },
     "libssh2-sys",
-    { crate = "cmake", use-instead = "cc" },
+    # { crate = "cmake", use-instead = "cc" },  # Commented out - needed by rustls
 ]
-skip = []
+skip = [
+    # Allow multiple versions of getrandom - required by different crypto libraries
+    { crate = "getrandom", versions = ["0.2.16", "0.3.4"], reason = "Required by different crypto libraries (ring vs jobserver)" },
+    # Allow multiple versions of windows-sys - required by different Windows libraries  
+    { crate = "windows-sys", versions = ["0.52.0", "0.61.2"], reason = "Required by different Windows libraries (socket2 vs anstyle)" },
+]
 skip-tree = []
 
 
