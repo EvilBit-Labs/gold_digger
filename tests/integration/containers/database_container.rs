@@ -257,6 +257,18 @@ impl DatabaseContainer {
         let container = testcontainers_modules::mariadb::Mariadb::default()
             .with_env_var("MARIADB_ALLOW_EMPTY_ROOT_PASSWORD", "yes")
             .with_env_var("MARIADB_ROOT_HOST", "%")
+            // Fix for AIO issues in Docker environments
+            .with_env_var("MARIADB_INNODB_FLUSH_METHOD", "fsync")
+            .with_env_var("MARIADB_INNODB_USE_NATIVE_AIO", "0")
+            // Reduce memory usage for CI environments
+            .with_env_var("MARIADB_INNODB_BUFFER_POOL_SIZE", "64M")
+            .with_env_var("MARIADB_SKIP_HOST_CACHE", "1")
+            // Additional fixes for Docker environments
+            .with_env_var("MARIADB_INNODB_LOG_FILE_SIZE", "32M")
+            .with_env_var("MARIADB_INNODB_LOG_BUFFER_SIZE", "16M")
+            .with_env_var("MARIADB_MAX_CONNECTIONS", "50")
+            // Disable performance schema to reduce memory usage
+            .with_env_var("MARIADB_INNODB_USE_PERCPU_STATS", "0")
             .start()
             .with_context(|| {
                 format!("Failed to start MariaDB container with TLS={}", tls_enabled)
@@ -328,6 +340,18 @@ impl DatabaseContainer {
         let container = testcontainers_modules::mysql::Mysql::default()
             .with_env_var("MYSQL_ALLOW_EMPTY_PASSWORD", "yes")
             .with_env_var("MYSQL_ROOT_HOST", "%")
+            // Fix for AIO issues in Docker environments
+            .with_env_var("MYSQL_INNODB_FLUSH_METHOD", "fsync")
+            .with_env_var("MYSQL_INNODB_USE_NATIVE_AIO", "0")
+            // Reduce memory usage for CI environments
+            .with_env_var("MYSQL_INNODB_BUFFER_POOL_SIZE", "64M")
+            .with_env_var("MYSQL_SKIP_HOST_CACHE", "1")
+            // Additional fixes for Docker environments
+            .with_env_var("MYSQL_INNODB_LOG_FILE_SIZE", "32M")
+            .with_env_var("MYSQL_INNODB_LOG_BUFFER_SIZE", "16M")
+            .with_env_var("MYSQL_MAX_CONNECTIONS", "50")
+            // Disable performance schema to reduce memory usage
+            .with_env_var("MYSQL_PERFORMANCE_SCHEMA", "0")
             .start()
             .context("Failed to start MySQL TLS container")?;
 
@@ -401,6 +425,18 @@ impl DatabaseContainer {
         let container = testcontainers_modules::mariadb::Mariadb::default()
             .with_env_var("MARIADB_ALLOW_EMPTY_ROOT_PASSWORD", "yes")
             .with_env_var("MARIADB_ROOT_HOST", "%")
+            // Fix for AIO issues in Docker environments
+            .with_env_var("MARIADB_INNODB_FLUSH_METHOD", "fsync")
+            .with_env_var("MARIADB_INNODB_USE_NATIVE_AIO", "0")
+            // Reduce memory usage for CI environments
+            .with_env_var("MARIADB_INNODB_BUFFER_POOL_SIZE", "64M")
+            .with_env_var("MARIADB_SKIP_HOST_CACHE", "1")
+            // Additional fixes for Docker environments
+            .with_env_var("MARIADB_INNODB_LOG_FILE_SIZE", "32M")
+            .with_env_var("MARIADB_INNODB_LOG_BUFFER_SIZE", "16M")
+            .with_env_var("MARIADB_MAX_CONNECTIONS", "50")
+            // Disable performance schema to reduce memory usage
+            .with_env_var("MARIADB_INNODB_USE_PERCPU_STATS", "0")
             .start()
             .context("Failed to start MariaDB TLS container")?;
 
@@ -423,6 +459,18 @@ impl DatabaseContainer {
         let container = testcontainers_modules::mysql::Mysql::default()
             .with_env_var("MYSQL_ALLOW_EMPTY_PASSWORD", "yes")
             .with_env_var("MYSQL_ROOT_HOST", "%")
+            // Fix for AIO issues in Docker environments
+            .with_env_var("MYSQL_INNODB_FLUSH_METHOD", "fsync")
+            .with_env_var("MYSQL_INNODB_USE_NATIVE_AIO", "0")
+            // Reduce memory usage for CI environments
+            .with_env_var("MYSQL_INNODB_BUFFER_POOL_SIZE", "64M")
+            .with_env_var("MYSQL_SKIP_HOST_CACHE", "1")
+            // Additional fixes for Docker environments
+            .with_env_var("MYSQL_INNODB_LOG_FILE_SIZE", "32M")
+            .with_env_var("MYSQL_INNODB_LOG_BUFFER_SIZE", "16M")
+            .with_env_var("MYSQL_MAX_CONNECTIONS", "50")
+            // Disable performance schema to reduce memory usage
+            .with_env_var("MYSQL_PERFORMANCE_SCHEMA", "0")
             .start()
             .context("Failed to start MySQL plain container")?;
 
@@ -444,6 +492,18 @@ impl DatabaseContainer {
         let container = testcontainers_modules::mariadb::Mariadb::default()
             .with_env_var("MARIADB_ALLOW_EMPTY_ROOT_PASSWORD", "yes")
             .with_env_var("MARIADB_ROOT_HOST", "%")
+            // Fix for AIO issues in Docker environments
+            .with_env_var("MARIADB_INNODB_FLUSH_METHOD", "fsync")
+            .with_env_var("MARIADB_INNODB_USE_NATIVE_AIO", "0")
+            // Reduce memory usage for CI environments
+            .with_env_var("MARIADB_INNODB_BUFFER_POOL_SIZE", "64M")
+            .with_env_var("MARIADB_SKIP_HOST_CACHE", "1")
+            // Additional fixes for Docker environments
+            .with_env_var("MARIADB_INNODB_LOG_FILE_SIZE", "32M")
+            .with_env_var("MARIADB_INNODB_LOG_BUFFER_SIZE", "16M")
+            .with_env_var("MARIADB_MAX_CONNECTIONS", "50")
+            // Disable performance schema to reduce memory usage
+            .with_env_var("MARIADB_INNODB_USE_PERCPU_STATS", "0")
             .start()
             .context("Failed to start MariaDB plain container")?;
 
