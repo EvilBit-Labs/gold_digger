@@ -686,7 +686,7 @@ impl Default for ContainerManager {
 }
 
 /// Skip test if Docker is not available with comprehensive checks
-/// 
+///
 /// This function uses panic with "SKIP:" prefix to properly signal test skipping
 /// to the test framework, which is the standard mechanism for conditional test execution.
 pub fn skip_if_no_docker() -> Result<()> {
