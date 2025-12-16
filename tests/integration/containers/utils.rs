@@ -686,31 +686,25 @@ impl Default for ContainerManager {
 }
 
 /// Skip test if Docker is not available with comprehensive checks
+/// 
+/// This function uses panic with "SKIP:" prefix to properly signal test skipping
+/// to the test framework, which is the standard mechanism for conditional test execution.
 pub fn skip_if_no_docker() -> Result<()> {
     let preflight = ContainerManager::docker_preflight_check();
 
     if !preflight.docker_available {
-        for message in &preflight.skip_messages {
-            eprintln!("SKIP: {}", message);
-        }
-        // Return Ok to skip the test gracefully instead of failing
-        return Ok(());
+        let skip_message = preflight.skip_messages.join("; ");
+        panic!("SKIP: {}", skip_message);
     }
 
     if !preflight.platform_supported {
-        for message in &preflight.skip_messages {
-            eprintln!("SKIP: {}", message);
-        }
-        // Return Ok to skip the test gracefully instead of failing
-        return Ok(());
+        let skip_message = preflight.skip_messages.join("; ");
+        panic!("SKIP: {}", skip_message);
     }
 
     if !preflight.sufficient_resources {
-        for message in &preflight.skip_messages {
-            eprintln!("SKIP: {}", message);
-        }
-        // Return Ok to skip the test gracefully instead of failing
-        return Ok(());
+        let skip_message = preflight.skip_messages.join("; ");
+        panic!("SKIP: {}", skip_message);
     }
 
     Ok(())

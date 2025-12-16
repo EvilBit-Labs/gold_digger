@@ -1039,20 +1039,7 @@ impl DatabaseContainer {
             .to_uppercase()
             .contains("CREATE INDEX IF NOT EXISTS")
         {
-            // MySQL doesn't support IF NOT EXISTS for CREATE INDEX, so we'll skip these
-            // or convert them to a different approach
-            let _index_name = if let Some(start) = adjusted.find("CREATE INDEX IF NOT EXISTS ") {
-                let remaining = &adjusted[start + 28..];
-                if let Some(space_pos) = remaining.find(' ') {
-                    remaining[..space_pos].to_string()
-                } else {
-                    "unknown_index".to_string()
-                }
-            } else {
-                "unknown_index".to_string()
-            };
-
-            // For now, just remove IF NOT EXISTS from CREATE INDEX statements
+            // MySQL doesn't support IF NOT EXISTS for CREATE INDEX, so we strip the IF NOT EXISTS clause
             adjusted = adjusted.replace("CREATE INDEX IF NOT EXISTS", "CREATE INDEX");
         }
 
