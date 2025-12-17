@@ -141,7 +141,7 @@ impl GoldDiggerCommand {
     pub fn execute(self) -> Result<CommandResult> {
         let start_time = Instant::now();
 
-        // TODO: Migration to assert_cmd v2.1+ complete - using cargo::cargo_bin_cmd! macro
+        // Using assert_cmd v2.1+ cargo::cargo_bin_cmd! macro for command construction
         // See: https://github.com/assert-rs/assert_cmd/blob/main/CHANGELOG.md#210
         let mut cmd = cargo::cargo_bin_cmd!("gold_digger");
 

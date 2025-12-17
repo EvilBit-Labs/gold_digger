@@ -28,7 +28,7 @@ impl TestDatabase {
 #[fixture]
 fn mariadb_container() -> Container<Mariadb> {
     if is_ci() {
-        panic!("Container tests should not run in CI without proper setup");
+        panic!("SKIP: Container tests require Docker, which is not available in CI");
     }
     Mariadb::default()
         .start()
