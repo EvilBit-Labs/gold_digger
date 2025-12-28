@@ -290,10 +290,14 @@ fn test_type_conversion_safety_with_real_database(optional_db_pool: Option<TestD
 #[rstest]
 #[case("quotes_and_newlines")]
 #[case("unicode_and_null")]
-fn test_special_characters_and_unicode(db_pool: TestDatabase, #[case] test_scenario: &str) {
-    if is_ci() {
-        return;
-    }
+fn test_special_characters_and_unicode(
+    optional_db_pool: Option<TestDatabase>,
+    #[case] test_scenario: &str,
+) {
+    let db_pool = match optional_db_pool {
+        Some(pool) => pool,
+        None => return, // Skip test in CI environments
+    };
 
     let mut conn = db_pool.pool().get_conn().expect("Failed to get connection");
 
@@ -370,10 +374,14 @@ fn test_special_characters_and_unicode(db_pool: TestDatabase, #[case] test_scena
 #[rstest]
 #[case("max_values")]
 #[case("min_values")]
-fn test_large_numbers_and_precision(db_pool: TestDatabase, #[case] test_scenario: &str) {
-    if is_ci() {
-        return;
-    }
+fn test_large_numbers_and_precision(
+    optional_db_pool: Option<TestDatabase>,
+    #[case] test_scenario: &str,
+) {
+    let db_pool = match optional_db_pool {
+        Some(pool) => pool,
+        None => return, // Skip test in CI environments
+    };
 
     let mut conn = db_pool.pool().get_conn().expect("Failed to get connection");
 
@@ -448,10 +456,11 @@ fn test_large_numbers_and_precision(db_pool: TestDatabase, #[case] test_scenario
 
 /// Test that the function handles empty result sets gracefully
 #[rstest]
-fn test_empty_result_set(db_pool: TestDatabase) {
-    if is_ci() {
-        return;
-    }
+fn test_empty_result_set(optional_db_pool: Option<TestDatabase>) {
+    let db_pool = match optional_db_pool {
+        Some(pool) => pool,
+        None => return, // Skip test in CI environments
+    };
 
     let mut conn = db_pool.pool().get_conn().expect("Failed to get connection");
 
@@ -484,10 +493,11 @@ fn test_empty_result_set_conditional(optional_db_pool: Option<TestDatabase>) {
 
 /// Test that the function handles single row results correctly
 #[rstest]
-fn test_single_row_result(db_pool: TestDatabase) {
-    if is_ci() {
-        return;
-    }
+fn test_single_row_result(optional_db_pool: Option<TestDatabase>) {
+    let db_pool = match optional_db_pool {
+        Some(pool) => pool,
+        None => return, // Skip test in CI environments
+    };
 
     let mut conn = db_pool.pool().get_conn().expect("Failed to get connection");
 
@@ -506,10 +516,11 @@ fn test_single_row_result(db_pool: TestDatabase) {
 /// This test specifically validates that NULL values and type conversions are handled gracefully
 /// and that the dangerous `row[column.name_str().as_ref()]` pattern has been eliminated
 #[rstest]
-fn test_null_and_type_conversion_safety(db_pool: TestDatabase) {
-    if is_ci() {
-        return;
-    }
+fn test_null_and_type_conversion_safety(optional_db_pool: Option<TestDatabase>) {
+    let db_pool = match optional_db_pool {
+        Some(pool) => pool,
+        None => return, // Skip test in CI environments
+    };
 
     let mut conn = db_pool.pool().get_conn().expect("Failed to get connection");
 
@@ -606,10 +617,11 @@ fn test_null_and_type_conversion_safety(db_pool: TestDatabase) {
 /// Test memory efficiency and performance characteristics
 /// This test validates that the function doesn't have excessive memory overhead
 #[rstest]
-fn test_memory_efficiency_with_large_dataset(db_pool: TestDatabase) {
-    if is_ci() {
-        return;
-    }
+fn test_memory_efficiency_with_large_dataset(optional_db_pool: Option<TestDatabase>) {
+    let db_pool = match optional_db_pool {
+        Some(pool) => pool,
+        None => return, // Skip test in CI environments
+    };
 
     let mut conn = db_pool.pool().get_conn().expect("Failed to get connection");
 
@@ -661,10 +673,11 @@ fn test_memory_efficiency_with_large_dataset(db_pool: TestDatabase) {
 /// Test that specifically validates the fix for the dangerous indexed access pattern
 /// This test creates scenarios that would cause the old `row[column.name_str().as_ref()]` to panic
 #[rstest]
-fn test_indexed_access_safety_fix(db_pool: TestDatabase) {
-    if is_ci() {
-        return;
-    }
+fn test_indexed_access_safety_fix(optional_db_pool: Option<TestDatabase>) {
+    let db_pool = match optional_db_pool {
+        Some(pool) => pool,
+        None => return, // Skip test in CI environments
+    };
 
     let mut conn = db_pool.pool().get_conn().expect("Failed to get connection");
 
@@ -759,10 +772,11 @@ fn test_indexed_access_safety_fix(db_pool: TestDatabase) {
 /// Test error handling and edge cases that could cause panics
 #[rstest]
 #[ignore = "Container port exposure issue - needs migration to new DatabaseContainer API"]
-fn test_error_handling_edge_cases(db_pool: TestDatabase) {
-    if is_ci() {
-        return;
-    }
+fn test_error_handling_edge_cases(optional_db_pool: Option<TestDatabase>) {
+    let db_pool = match optional_db_pool {
+        Some(pool) => pool,
+        None => return, // Skip test in CI environments
+    };
 
     let mut conn = db_pool.pool().get_conn().expect("Failed to get connection");
 
