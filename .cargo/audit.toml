@@ -1,0 +1,15 @@
+# cargo-audit configuration
+# See: https://rustsec.org/
+
+[advisories]
+# Ignore warnings for unmaintained/unsound transitive dependencies
+# These come from the mysql crate and its dependencies, which we cannot directly control
+ignore = [
+    # rustls-pemfile is unmaintained but still pulled by mysql and testcontainers
+    # We've removed our direct dependency; waiting for upstream to update
+    "RUSTSEC-2025-0134",
+
+    # lru unsoundness in IterMut - transitive via mysql crate
+    # We don't use IterMut on lru directly; waiting for mysql to update
+    "RUSTSEC-2026-0002",
+]

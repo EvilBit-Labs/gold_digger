@@ -3,7 +3,7 @@ use mysql::{Pool, SslOpts};
 use std::path::PathBuf;
 use thiserror::Error;
 
-use rustls::pki_types::CertificateDer;
+use rustls_pki_types::{CertificateDer, pem::PemObject};
 
 /// TLS-specific error types for better error handling and user guidance
 #[derive(Error, Debug)]
@@ -410,8 +410,8 @@ pub mod cert_utils {
 
         let mut reader = BufReader::new(file);
 
-        // Parse PEM certificates
-        let certs = rustls_pemfile::certs(&mut reader)
+        // Parse PEM certificates using rustls-pki-types
+        let certs: Vec<CertificateDer<'static>> = CertificateDer::pem_reader_iter(&mut reader)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
                 TlsError::invalid_ca_format(
