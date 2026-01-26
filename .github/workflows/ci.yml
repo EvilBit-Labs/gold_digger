@@ -6,9 +6,6 @@ on:
     pull_request:
         branches: [main]
     workflow_dispatch:
-    workflow_run:
-        workflows: ["autofix.ci"]
-        types: [completed]
 
 defaults:
     run:
@@ -27,18 +24,16 @@ jobs:
     # Code quality checks - only need to run once
     quality:
         runs-on: ubuntu-latest
-        if: github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run'
         steps:
-            - uses: actions/checkout@v5
-            - uses: actions-rust-lang/setup-rust-toolchain@v1
+            - uses: actions/checkout@v6
+            - uses: dtolnay/rust-toolchain@1.91.0
               with:
-                  components: rustfmt, clippy
-
-            - name: Install just
-              uses: extractions/setup-just@v3
-
-            - name: Cache Rust dependencies
-              uses: Swatinem/rust-cache@v2
+                  components: llvm-tools, cargo, rustfmt, clippy
+            - uses: jdx/mise-action@v3
+              with:
+                  install: true
+                  cache: true
+                  github_token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Rustfmt Check
               uses: actions-rust-lang/rustfmt@v1
@@ -53,17 +48,13 @@ jobs:
     test-tls:
         runs-on: ubuntu-latest
         needs: quality
-        if: github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run'
         steps:
-            - uses: taiki-e/checkout-action@v1
-
-            - name: Setup Rust
-              uses: actions-rust-lang/setup-rust-toolchain@v1
-
-            - name: Install cargo-nextest
-              uses: taiki-e/install-action@v2
+            - uses: actions/checkout@v6
+            - uses: jdx/mise-action@v3
               with:
-                  tool: cargo-nextest
+                  install: true
+                  cache: true
+                  github_token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Test TLS configuration unit tests
               run: cargo nextest run --test tls_config_unit_tests
@@ -119,24 +110,18 @@ jobs:
     test-features:
         runs-on: ubuntu-latest
         needs: quality
-        if: github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run'
         strategy:
             matrix:
                 features:
                     - "default"
                     - "minimal"
         steps:
-            - uses: taiki-e/checkout-action@v1
-
-            - name: Setup Rust
-              uses: actions-rust-lang/setup-rust-toolchain@v1
+            - uses: actions/checkout@v6
+            - uses: jdx/mise-action@v3
               with:
-                  components: rustfmt, clippy
-
-            - name: Install cargo-nextest
-              uses: taiki-e/install-action@v2
-              with:
-                  tool: cargo-nextest
+                  install: true
+                  cache: true
+                  github_token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Run tests (default features)
               if: matrix.features == 'default'
@@ -167,17 +152,13 @@ jobs:
                       platform: "Windows"
         runs-on: ${{ matrix.os }}
         needs: quality
-        if: github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run'
         steps:
-            - uses: taiki-e/checkout-action@v1
-
-            - name: Setup Rust
-              uses: actions-rust-lang/setup-rust-toolchain@v1
-
-            - name: Install cargo-nextest
-              uses: taiki-e/install-action@v2
+            - uses: actions/checkout@v6
+            - uses: jdx/mise-action@v3
               with:
-                  tool: cargo-nextest
+                  install: true
+                  cache: true
+                  github_token: ${{ secrets.GITHUB_TOKEN }}
 
             # Run TLS configuration unit tests and build the release binary
             - run: cargo nextest run --test tls_config_unit_tests
@@ -194,19 +175,13 @@ jobs:
     test-tls-validation:
         runs-on: ubuntu-latest
         needs: quality
-        if: github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run'
         steps:
-            - uses: actions/checkout@v5
-
-            - name: Setup Rust
-              uses: actions-rust-lang/setup-rust-toolchain@v1
+            - uses: actions/checkout@v6
+            - uses: jdx/mise-action@v3
               with:
-                  components: rustfmt, clippy
-
-            - name: Install cargo-nextest
-              uses: taiki-e/install-action@v2
-              with:
-                  tool: cargo-nextest
+                  install: true
+                  cache: true
+                  github_token: ${{ secrets.GITHUB_TOKEN }}
 
             # Build the release binary and run the TLS integration and error handling tests
             - run: cargo build --release
@@ -237,19 +212,16 @@ jobs:
     coverage:
         runs-on: ubuntu-latest
         needs: [test-tls, test-features, test-cross-platform]
-        if: github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run'
         steps:
-            - uses: taiki-e/checkout-action@v1
-
-            - name: Setup Rust
-              uses: actions-rust-lang/setup-rust-toolchain@v1
+            - uses: actions/checkout@v6
+            - uses: dtolnay/rust-toolchain@1.91.0
               with:
-                  components: rustfmt, clippy
-
-            - name: Install cargo-llvm-cov
-              uses: taiki-e/install-action@v2
+                  components: llvm-tools, cargo, rustfmt, clippy
+            - uses: jdx/mise-action@v3
               with:
-                  tool: cargo-llvm-cov
+                  install: true
+                  cache: true
+                  github_token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Generate coverage (default features with TLS)
               run: cargo llvm-cov --workspace --no-report
