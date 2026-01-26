@@ -1,37 +1,55 @@
 # Gold Digger Justfile
 # Task runner for the MySQL/MariaDB query tool
 
-# Use PowerShell for Windows targets
-set windows-shell := ["powershell.exe", "-c"]
+# Cross-platform justfile using OS annotations
+# Windows uses PowerShell, Unix uses bash
 
-# Default recipe (runs linting)
+set shell := ["bash", "-cu"]
+set windows-shell := ["powershell", "-NoProfile", "-Command"]
+set dotenv-load := true
+set ignore-comments := true
+
+# Use mise to manage all dev tools (go, pre-commit, uv, etc.)
+# See mise.toml for tool versions
+mise_exec := "mise exec --"
+
+root := justfile_dir()
+
+# =============================================================================
+# GENERAL COMMANDS
+# =============================================================================
+
 default:
-    @just --choose
-
-# Variables
-export RUST_BACKTRACE := "1"
-export CARGO_TERM_COLOR := "always"
+    @just --list
 
 # =============================================================================
-# SETUP & INSTALLATION
+# CROSS-PLATFORM HELPERS (private)
 # =============================================================================
 
-# Development setup
+[private, windows]
+ensure-dir dir:
+    New-Item -ItemType Directory -Force -Path "{{ dir }}" | Out-Null
+
+[private, unix]
+ensure-dir dir:
+    /bin/mkdir -p "{{ dir }}"
+
+[private, windows]
+rmrf path:
+    if (Test-Path "{{ path }}") { Remove-Item "{{ path }}" -Recurse -Force }
+
+[private, unix]
+rmrf path:
+    /bin/rm -rf "{{ path }}"
+
+# =============================================================================
+# SETUP AND INITIALIZATION
+# =============================================================================
+
+# Development setup - mise handles all tool installation via mise.toml
 setup:
-    cd {{justfile_dir()}}
-    rustup component add rustfmt clippy llvm-tools-preview rust-src
-    cargo install cargo-nextest --locked || echo "cargo-nextest already installed"
+    mise install
 
-# Install development tools (extended setup)
-install-tools:
-    cargo install cargo-llvm-cov --locked || echo "cargo-llvm-cov already installed"
-    cargo install cargo-audit --locked || echo "cargo-audit already installed"
-    cargo install cargo-deny --locked || echo "cargo-deny already installed"
-    cargo install cargo-dist --locked || echo "cargo-dist already installed"
-
-# Install mdBook and plugins for documentation
-docs-install:
-    cargo install mdbook mdbook-admonish mdbook-mermaid mdbook-linkcheck mdbook-toc mdbook-open-on-gh mdbook-tabs mdbook-i18n-helpers
 
 # =============================================================================
 # CODE QUALITY
@@ -40,26 +58,17 @@ docs-install:
 format: fmt
 
 # Format code
-fmt:
-    cd {{justfile_dir()}}
-    just pre-commit-run || true
+fmt: pre-commit-run
     cargo fmt
 
 # Check formatting
 fmt-check:
-    cd {{justfile_dir()}}
     cargo fmt --check
 
 # Run clippy linting
 lint:
-    cd {{justfile_dir()}}
     cargo clippy --all-targets --release -- -D warnings
     cargo clippy --all-targets --no-default-features --features "json csv additional_mysql_types verbose" -- -D warnings
-
-# Run MegaLinter with Rust flavor
-megalinter:
-    cd {{justfile_dir()}}
-    npx mega-linter-runner --flavor rust
 
 # Lint SQL files with sqlfluff
 lint-sql:
@@ -93,7 +102,7 @@ check: pre-commit-run
     just test-no-docker
 
 pre-commit-run:
-    pre-commit run -a
+    uvx pre-commit run -a
 
 # Format files (for pre-commit hooks)
 # Accepts variadic file arguments from pre-commit
@@ -608,45 +617,6 @@ watch:
 # UTILITIES & INFORMATION
 # =============================================================================
 
-# Show feature matrix
-features:
-    @echo "Available feature combinations:"
-    @echo ""
-    @echo "Standard build:"
-    @echo "  cargo build --release"
-    @echo ""
-    @echo "Minimal build (fewer features):"
-    @echo "  cargo build --no-default-features --features \"csv json\""
-    @echo ""
-    @echo "All MySQL types:"
-    @echo "  cargo build --release --features \"default additional_mysql_types\""
-
-# Check current version
-version:
-    @echo "Current version information:"
-    @echo "Cargo.toml version: $(grep '^version' Cargo.toml | cut -d'"' -f2)"
-    @echo "CHANGELOG.md version: $(grep -m1 '## \[v' CHANGELOG.md | sed 's/.*\[v/v/' | sed 's/\].*//')"
-    @echo ""
-    @echo "Note: Versions may be out of sync - check WARP.md for details"
-
-# Show project status
-status:
-    @echo "Gold Digger Project Status:"
-    @echo ""
-    @echo "Architecture: Environment variable driven, structured output"
-    @echo "Current: v0.2.6 (check version discrepancy)"
-    @echo "Target: v1.0 with CLI interface"
-    @echo "Maintainer: EvilBit-Labs"
-    @echo ""
-    @echo "Critical Issues:"
-    @echo "  • Type conversion panics on NULL/non-string values"
-    @echo "  • No dotenv support (use exported env vars)"
-    @echo "  • Non-deterministic JSON output"
-    @echo "  • Pattern matching bug in src/main.rs:59"
-    @echo ""
-    @echo "cargo-dist: Automated versioning and distribution enabled"
-    @echo "See WARP.md for detailed information"
-
 # Clean build artifacts
 clean:
     cargo clean
@@ -884,117 +854,3 @@ release-dry:
     }
     (Get-FileHash -Path $BINARY_PATH -Algorithm SHA256).Hash | Out-File -FilePath checksums-test.txt
     (Get-FileHash -Path sbom-test.json -Algorithm SHA256).Hash | Add-Content -Path checksums-test.txt
-
-# =============================================================================
-# HELP & DOCUMENTATION
-# =============================================================================
-
-# Show help
-help:
-    @echo "Gold Digger Justfile Commands:"
-    @echo ""
-    @echo "Development:"
-    @echo "  setup          Set up development environment"
-    @echo "  install-tools  Install additional development tools"
-    @echo "  build         Build debug version"
-    @echo "  build-release Build release version"
-    @echo "  build-all     Build all feature combinations"
-    @echo "  install       Install locally from workspace"
-    @echo ""
-    @echo "Code Quality:"
-    @echo "  format           Format code"
-    @echo "  fmt-check     Check formatting"
-    @echo "  lint          Run clippy linting"
-    @echo "  lint-sql      Lint SQL files with sqlfluff"
-    @echo "  megalinter    Run MegaLinter with Rust flavor (comprehensive linting)"
-    @echo "  fix           Run clippy with automatic fixes"
-    @echo "  fix-sql       Fix SQL formatting with sqlfluff"
-    @echo "  check         Quick development checks"
-    @echo "  ci-check      Full CI equivalent checks (includes SQL linting)"
-    @echo "  ci-full       Complete CI workflow equivalent (mirrors .github/workflows/ci.yml)"
-    @echo "  full-checks   Comprehensive validation (all non-destructive checks)"
-    @echo "  deny-check    Run cargo-deny checks (license & duplicates)"
-    @echo ""
-    @echo "Testing:"
-    @echo "  test          Run tests with nextest (including ignored Docker tests)"
-    @echo "  test-no-docker Run tests with nextest (excluding Docker tests)"
-    @echo "  test-integration Run integration tests (requires Docker)"
-    @echo "  test-integration-nextest Run integration tests with nextest and flaky test quarantine"
-    @echo "  test-integration-ci Run integration tests with JUnit XML output for CI"
-    @echo "  test-integration-fast Run fast integration test subset for PR validation"
-    @echo "  test-integration-comprehensive Run comprehensive integration test suite"
-    @echo "  test-integration-debug Run integration tests with debug artifact collection"
-    @echo "  test-integration-perf Run integration tests with performance benchmarking"
-    @echo "  test-integration-matrix Run integration tests with TLS/non-TLS matrix"
-    @echo "  test-integration-quarantine Run integration tests with flaky test quarantine"
-    @echo "  test-execution-utilities Test the new test execution utilities"
-    @echo "  test-all      Run all tests including integration tests"
-    @echo "  coverage      Run tests with coverage report"
-    @echo "  coverage-llvm Run tests with llvm-cov (CI compatible)"
-    @echo "  cover         Alias for coverage-llvm (CI naming consistency)"
-    @echo "  check-docker  Check Docker availability for integration tests"
-    @echo ""
-    @echo "Benchmarking:"
-    @echo "  bench         Run full Criterion benchmark suite (mirrors CI)"
-    @echo "  bench-baseline BASELINE_NAME  Run benchmarks and save as named baseline"
-    @echo "  bench-compare BASELINE_NAME   Run benchmarks and compare against baseline"
-    @echo "  bench-report  Open generated HTML report in browser"
-    @echo "  bench-specific BENCHMARK_NAME Run a specific benchmark by name"
-    @echo "  bench-quick   Run benchmarks with reduced sample size for faster feedback"
-    @echo "  generate-test-reports Generate integration test reports for CI"
-    @echo "  validate-ci-integration Validate CI integration and test execution utilities"
-    @echo ""
-    @echo "Security:"
-    @echo "  audit         Security audit"
-    @echo "  deny          License and security checks"
-    @echo "  deny-check    License and security checks with all features"
-    @echo "  security      Comprehensive security scanning (audit + deny + grype)"
-    @echo "  sbom          Generate Software Bill of Materials for inspection"
-    @echo "  validate-deps Validate TLS dependency tree"
-    @echo ""
-    @echo "Running:"
-    @echo "  run OUTPUT_FILE DATABASE_URL DATABASE_QUERY  Run with custom env vars"
-    @echo "  run-safe      Run with safe example query"
-    @echo "  watch         Watch for changes (requires cargo-watch)"
-    @echo ""
-    @echo "Local GitHub Actions Testing (requires act):"
-    @echo "  act-setup     Set up act and pull Docker images"
-    @echo "  act-ci-dry    Run CI workflow dry-run (simulation)"
-    @echo "  act-ci        Run CI workflow locally (full execution)"
-    @echo "  act-release-dry TAG  Simulate release workflow for tag"
-    @echo "  act-cargo-dist-dry  Simulate cargo-dist workflow"
-    @echo "  act-cargo-dist-test  Test with sample conventional commits"
-    @echo "  act-cargo-dist-integration TAG  Test cargo-dist + release integration"
-    @echo "  act-list      List all available workflows"
-    @echo "  act-job JOB   Test specific workflow job"
-    @echo "  act-clean     Clean act cache and containers"
-    @echo ""
-    @echo "Documentation:"
-    @echo "  docs-install  Install mdBook and plugins"
-    @echo "  docs-build    Build complete documentation (mdBook + rustdoc)"
-    @echo "  docs-serve    Serve documentation locally with live reload"
-    @echo "  docs-clean    Clean documentation artifacts"
-    @echo "  docs-check    Check documentation (build + validation + formatting)"
-    @echo "  docs          Generate and open rustdoc only"
-    @echo ""
-    @echo "Maintenance:"
-    @echo "  clean         Clean build artifacts"
-    @echo "  outdated      Check for outdated dependencies"
-    @echo "  update        Update dependencies"
-    @echo "  features      Show available feature combinations"
-    @echo "  version       Show version information"
-    @echo "  status        Show project status and critical issues"
-    @echo ""
-    @echo "Release:"
-    @echo "  release-check Pre-release checklist and validation"
-    @echo "  release-dry   Simulate release process locally"
-    @echo "  validate-cargo-dist  Validate cargo-dist configuration"
-    @echo ""
-    @echo "Distribution (cargo-dist):"
-    @echo "  dist-init     Initialize cargo-dist configuration"
-    @echo "  dist-plan     Plan cargo-dist release (dry-run)"
-    @echo "  dist-build    Build cargo-dist artifacts locally"
-    @echo "  dist-generate Generate cargo-dist installers"
-    @echo "  dist-check    Validate cargo-dist configuration"
-    @echo ""
-    @echo "For detailed project information, see WARP.md, AGENTS.md, or .cursor/rules/"
