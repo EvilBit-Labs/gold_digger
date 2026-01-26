@@ -36,6 +36,22 @@ Always consult these files in order when working with this codebase:
 
 ## Build/Lint/Test Commands
 
+### Tool Management
+
+All dev tools are managed via `mise.toml`. Commands in justfile use `{{ mise_exec }}` prefix.
+
+- `just setup` - Install all tools via mise
+- `mise use <tool>` - Add a new tool (e.g., `mise use cargo:cargo-watch`)
+- `mise install` - Reinstall all configured tools
+
+### Pre-commit Hooks
+
+Pre-commit hooks run automatically and may modify files. If commit fails with formatting changes:
+
+1. Review the auto-fixed files
+2. `git add -A` to stage fixes
+3. Commit again
+
 ```bash
 # Quick development cycle
 just check                    # fmt + lint + test-no-docker
