@@ -70,6 +70,7 @@ cargo build --no-default-features --features "json csv additional_mysql_types ve
 - **Clippy**: Zero tolerance warnings (`-D warnings`)
 - **Imports**: Group by std, external crates, local modules (separated by newlines)
 - **Formatting**: Use `cargo fmt` (Rustfmt conventions)
+- Avoid using emojis and other non-ASCII characters in code, comments, or documentation, except when the code is handling non-plaintext characters (for example: em dash, en dash, or other non-ASCII symbols).
 
 ### Types & Naming
 

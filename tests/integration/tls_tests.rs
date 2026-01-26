@@ -55,16 +55,16 @@ fn skip_if_no_docker() {
 }
 
 /// Fixture for generating ephemeral certificates
-/// 
+///
 /// # Error Handling
-/// 
+///
 /// This fixture returns a `Result` that will propagate errors to dependent tests.
 /// Tests using this fixture should handle certificate generation failures gracefully
 /// by either:
 /// - Using `?` to propagate the error (fails the test with clear error message)
 /// - Matching on the Result and providing a fallback or skip logic
 /// - Using dependent fixtures that handle the Result (e.g., `temp_cert_file`)
-/// 
+///
 /// Certificate generation may fail if:
 /// - The system lacks proper entropy sources for key generation
 /// - Required cryptographic libraries are unavailable
