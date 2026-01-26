@@ -1,0 +1,30 @@
+# Commit Message Style for Gold Digger
+
+- **Conventional Commits**: All commits must follow [Conventional Commits](https://www.conventionalcommits.org): `<type>(<scope>): <description>`
+- **Types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`
+- **Scopes**: `(cli)`, `(db)`, `(output)`, `(tls)`, `(config)`, `(lib)`, `(security)`, `(test)`, `(bench)`, `(deps)`, etc. Required for all commits.
+- **Description**:
+  - Imperative mood ("add", not "added")
+  - No period at the end
+  - ≤72 characters, capitalized, clear and specific
+- **Body (optional)**:
+  - Start after a blank line
+  - Use itemized lists for multiple changes
+  - Explain what/why, not how
+- **Footer (optional)**:
+  - Start after a blank line
+  - Use for issue refs (`Closes #123`) or breaking changes (`BREAKING CHANGE:`)
+- **Breaking Changes**:
+  - Add `!` after type/scope (e.g., `feat(cli)!: ...`) or use `BREAKING CHANGE:` in footer
+- **Examples**:
+  - `feat(cli): add --query-file flag for SQL file input`
+  - `fix(db): prevent credential leakage in error messages`
+  - `docs(readme): update installation instructions for Rust 1.85+`
+  - `refactor(output): simplify CSV writer interface`
+  - `test(tls): add certificate validation integration tests`
+  - `chore(deps): update tokio to v1.40 for security patches`
+  - `perf(output): optimize JSON serialization for large datasets`
+  - `feat(tls): add custom CA certificate file support`
+- **CI Compatibility**:
+  - Use `chore:` for meta or maintenance changes
+  - Use `security:` scope for security-related changes

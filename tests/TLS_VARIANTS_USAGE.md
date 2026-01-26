@@ -1,19 +1,15 @@
 # TLS and Non-TLS Database Variants Usage Guide
 
-This document explains how to use the new `TestDatabaseTls` and `TestDatabasePlain` variants for
-integration testing with Gold Digger.
+This document explains how to use the new `TestDatabaseTls` and `TestDatabasePlain` variants for integration testing with Gold Digger.
 
 ## Overview
 
 Task 1.4 has implemented TLS and non-TLS test database variants that provide:
 
-- **TestDatabaseTls**: TLS-enabled database containers with SSL certificate mounting and MySQL TLS
-  settings
+- **TestDatabaseTls**: TLS-enabled database containers with SSL certificate mounting and MySQL TLS settings
 - **TestDatabasePlain**: Standard unencrypted database containers for basic connection testing
-- **TlsContainerConfig**: Configuration for TLS settings including certificate management and
-  security policies
-- **Connection URL generation**: Helper methods to generate appropriate connection URLs for each
-  configuration type
+- **TlsContainerConfig**: Configuration for TLS settings including certificate management and security policies
+- **Connection URL generation**: Helper methods to generate appropriate connection URLs for each configuration type
 - **Connection validation**: Test utilities to validate TLS vs non-TLS connection establishment
 
 ## Basic Usage
@@ -146,14 +142,11 @@ just test-all         # Run all tests including integration tests
 
 ### Current Limitations
 
-1. **Certificate Generation**: Currently uses placeholder certificates. Full integration with
-   `EphemeralCertificate` is planned for future tasks.
+1. **Certificate Generation**: Currently uses placeholder certificates. Full integration with `EphemeralCertificate` is planned for future tasks.
 
-2. **Container TLS Configuration**: Basic TLS container setup is implemented. Full SSL certificate
-   mounting and MySQL TLS settings configuration will be enhanced in subsequent tasks.
+2. **Container TLS Configuration**: Basic TLS container setup is implemented. Full SSL certificate mounting and MySQL TLS settings configuration will be enhanced in subsequent tasks.
 
-3. **Connection Validation**: Basic connection testing is implemented. More comprehensive TLS
-   handshake validation will be added as the TLS infrastructure matures.
+3. **Connection Validation**: Basic connection testing is implemented. More comprehensive TLS handshake validation will be added as the TLS infrastructure matures.
 
 ### Future Enhancements
 
@@ -168,12 +161,10 @@ just test-all         # Run all tests including integration tests
 This implementation satisfies the following requirements from task 1.4:
 
 - ✅ Create `TestDatabaseTls` and `TestDatabasePlain` variants for TLS and non-TLS testing
-- ✅ Implement TLS container configuration with SSL certificate mounting and MySQL TLS settings
-  (basic implementation)
+- ✅ Implement TLS container configuration with SSL certificate mounting and MySQL TLS settings (basic implementation)
 - ✅ Add non-TLS container configuration for standard unencrypted connection testing
 - ✅ Create helper methods to generate appropriate connection URLs for each configuration type
 - ✅ Add test utilities to validate TLS connection establishment vs non-TLS connections
 - ✅ Requirements: 1.1, 1.2, 1.3, 9.3, 9.4, 9.5
 
-The implementation provides a solid foundation for TLS and non-TLS testing that can be enhanced as
-the integration test infrastructure matures.
+The implementation provides a solid foundation for TLS and non-TLS testing that can be enhanced as the integration test infrastructure matures.

@@ -12,6 +12,7 @@ use tempfile::TempDir;
 // Re-export submodules
 pub mod common;
 pub mod containers;
+pub mod data_types;
 // TODO: Fix tls_tests module imports
 // pub mod tls_tests;
 
@@ -576,10 +577,12 @@ impl CiEnvironment {
                 let daemon_check = std::process::Command::new("docker").arg("info").output();
 
                 match daemon_check {
-                    Ok(daemon_output) if daemon_output.status.success() => DockerAvailability::Available,
+                    Ok(daemon_output) if daemon_output.status.success() => {
+                        DockerAvailability::Available
+                    }
                     _ => DockerAvailability::DaemonNotRunning,
                 }
-            },
+            }
             _ => DockerAvailability::NotInstalled,
         }
     }
@@ -607,7 +610,10 @@ impl CiEnvironment {
 
         let total_tests = test_results.len();
         let failed_tests = test_results.iter().filter(|r| !r.passed).count();
-        let total_time: f64 = test_results.iter().map(|r| r.execution_time.as_secs_f64()).sum();
+        let total_time: f64 = test_results
+            .iter()
+            .map(|r| r.execution_time.as_secs_f64())
+            .sum();
 
         xml.push_str(&format!(
             r#"<testsuite name="gold_digger_integration_tests" tests="{}" failures="{}" time="{:.3}">"#,
@@ -778,7 +784,12 @@ impl CargoNextestIntegration {
 
         // Nextest expects specific output format for test results
         let status = if result.passed { "PASS" } else { "FAIL" };
-        println!("test {} ... {} ({:.3}s)", test_name, status, result.execution_time.as_secs_f64());
+        println!(
+            "test {} ... {} ({:.3}s)",
+            test_name,
+            status,
+            result.execution_time.as_secs_f64()
+        );
 
         if !result.passed {
             if let Some(error) = &result.error_message {
@@ -798,7 +809,10 @@ impl CargoNextestIntegration {
         let ci_limits = CiEnvironment::get_resource_limits();
 
         ParallelExecutionConfig {
-            max_parallel_tests: std::cmp::min(nextest_config.test_threads, ci_limits.max_parallel_tests),
+            max_parallel_tests: std::cmp::min(
+                nextest_config.test_threads,
+                ci_limits.max_parallel_tests,
+            ),
             test_timeout: CiEnvironment::get_test_timeout(),
             container_timeout: CiEnvironment::get_container_timeout(),
             enable_flaky_test_quarantine: CiEnvironment::is_flaky_test_quarantine_enabled(),
@@ -840,6 +854,7 @@ pub struct ParallelExecutionConfig {
 }
 
 /// Check if running in CI environment (backward compatibility)
+#[allow(dead_code)]
 pub fn is_ci_environment() -> bool {
     CiEnvironment::is_ci()
 }
@@ -929,7 +944,9 @@ impl TestExecutor {
         let cli = common::GoldDiggerCli::with_timeout(self.parallel_config.test_timeout);
 
         // Create temporary output file
-        let output_file = self.temp_manager.create_output_file(&test_case.expected_format)?;
+        let output_file = self
+            .temp_manager
+            .create_output_file(&test_case.expected_format)?;
 
         // Generate database connection URL based on configuration
         let db_url = self.generate_connection_url(db_config)?;
@@ -1015,7 +1032,9 @@ impl TestExecutor {
         let cli = common::GoldDiggerCli::with_timeout(self.parallel_config.test_timeout);
 
         // Create temporary output file
-        let output_file = self.temp_manager.create_output_file(&test_case.expected_format)?;
+        let output_file = self
+            .temp_manager
+            .create_output_file(&test_case.expected_format)?;
 
         // Generate database connection URL
         let db_url = self.generate_connection_url(db_config)?;
@@ -1062,7 +1081,10 @@ impl TestExecutor {
             passed,
             execution_time: start_time.elapsed(),
             error_message: if !passed {
-                Some(format!("Exit code mismatch: expected {}, got {}", expected_exit_code, actual_exit_code))
+                Some(format!(
+                    "Exit code mismatch: expected {}, got {}",
+                    expected_exit_code, actual_exit_code
+                ))
             } else {
                 None
             },
@@ -1093,18 +1115,24 @@ impl TestExecutor {
         match &db_config.db_type {
             DatabaseType::MySQL => {
                 if db_config.tls_config.is_some() {
-                    Ok("mysql://test_user:test_pass@localhost:3306/test_db?ssl-mode=REQUIRED".to_string())
+                    Ok(
+                        "mysql://test_user:test_pass@localhost:3306/test_db?ssl-mode=REQUIRED"
+                            .to_string(),
+                    )
                 } else {
                     Ok("mysql://test_user:test_pass@localhost:3306/test_db".to_string())
                 }
-            },
+            }
             DatabaseType::MariaDB => {
                 if db_config.tls_config.is_some() {
-                    Ok("mysql://test_user:test_pass@localhost:3306/test_db?ssl-mode=REQUIRED".to_string())
+                    Ok(
+                        "mysql://test_user:test_pass@localhost:3306/test_db?ssl-mode=REQUIRED"
+                            .to_string(),
+                    )
                 } else {
                     Ok("mysql://test_user:test_pass@localhost:3306/test_db".to_string())
                 }
-            },
+            }
         }
     }
 
@@ -1162,7 +1190,11 @@ impl TestExecutor {
             let mut results = Vec::new();
             for test_case in test_cases {
                 let result = if self.parallel_config.enable_flaky_test_quarantine {
-                    self.execute_with_retry(test_case, db_config, self.parallel_config.flaky_test_retry_count)?
+                    self.execute_with_retry(
+                        test_case,
+                        db_config,
+                        self.parallel_config.flaky_test_retry_count,
+                    )?
                 } else {
                     self.execute_test_case(test_case, db_config)?
                 };
@@ -1214,7 +1246,11 @@ impl TestExecutor {
         let mut results = Vec::new();
         for test_case in test_cases {
             let result = if self.parallel_config.enable_flaky_test_quarantine {
-                self.execute_with_retry(test_case, db_config, self.parallel_config.flaky_test_retry_count)?
+                self.execute_with_retry(
+                    test_case,
+                    db_config,
+                    self.parallel_config.flaky_test_retry_count,
+                )?
             } else {
                 self.execute_test_case(test_case, db_config)?
             };
@@ -1289,7 +1325,11 @@ impl TlsContainerConfig {
 
     /// Create a TLS configuration with custom certificate paths
     #[allow(dead_code)]
-    pub fn with_custom_certs<P: AsRef<Path>>(ca_cert_path: P, server_cert_path: P, server_key_path: P) -> Self {
+    pub fn with_custom_certs<P: AsRef<Path>>(
+        ca_cert_path: P,
+        server_cert_path: P,
+        server_key_path: P,
+    ) -> Self {
         Self {
             require_secure_transport: true,
             min_tls_version: "TLSv1.2".to_string(),
@@ -1321,10 +1361,13 @@ impl TlsContainerConfig {
     pub fn validate(&self) -> Result<()> {
         // Validate TLS version
         match self.min_tls_version.as_str() {
-            "TLSv1.2" | "TLSv1.3" => {},
+            "TLSv1.2" | "TLSv1.3" => {}
             _ => {
-                anyhow::bail!("Invalid TLS version: {}. Must be TLSv1.2 or TLSv1.3", self.min_tls_version);
-            },
+                anyhow::bail!(
+                    "Invalid TLS version: {}. Must be TLSv1.2 or TLSv1.3",
+                    self.min_tls_version
+                );
+            }
         }
 
         // Validate cipher suites are not empty
@@ -1342,7 +1385,10 @@ impl TlsContainerConfig {
             if let Some(cert_path) = &self.server_cert_path
                 && !cert_path.exists()
             {
-                anyhow::bail!("Server certificate file does not exist: {}", cert_path.display());
+                anyhow::bail!(
+                    "Server certificate file does not exist: {}",
+                    cert_path.display()
+                );
             }
             if let Some(key_path) = &self.server_key_path
                 && !key_path.exists()

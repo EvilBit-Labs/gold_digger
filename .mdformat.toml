@@ -6,15 +6,12 @@ exclude = [
     "**/*.mdc",
     "**/*.tpl.md",
     "**/CHANGELOG.md",
-    "docs/src/SUMMARY.md",
-    "docs/src/usage/output-formats.md",
-    "rust_migration/index.md",
     "target/**",
     "megalinter-reports/**",
 ]
 validate = true
 number = true
-wrap = 100  # Consistent with Prettier's printWidth
+wrap = "no"
 end_of_line = "lf"
 extensions = [
     "gfm",
@@ -30,3 +27,4 @@ extensions = [
 [plugin.mkdocs]
 align_semantic_breaks_in_lists = true
 ignore_missing_references = true
+

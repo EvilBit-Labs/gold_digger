@@ -101,10 +101,16 @@ impl GoldDiggerCli {
     }
 
     /// Execute Gold Digger with the given test case using assert_cmd and predicates
-    pub fn execute(&self, test_case: &TestCase, db_url: &str, output_path: &Path) -> Result<GoldDiggerResult> {
+    pub fn execute(
+        &self,
+        test_case: &TestCase,
+        db_url: &str,
+        output_path: &Path,
+    ) -> Result<GoldDiggerResult> {
         let start_time = Instant::now();
 
         // Build command using assert_cmd
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger")?;
 
         // Set database URL (never log the actual URL for security)
@@ -129,7 +135,12 @@ impl GoldDiggerCli {
         // Execute with timeout using process_control
         let output = self
             .execute_with_timeout(cmd, self.default_timeout)
-            .with_context(|| format!("Failed to execute Gold Digger for test case: {}", test_case.name))?;
+            .with_context(|| {
+                format!(
+                    "Failed to execute Gold Digger for test case: {}",
+                    test_case.name
+                )
+            })?;
 
         let _execution_time = start_time.elapsed();
 
@@ -168,6 +179,7 @@ impl GoldDiggerCli {
         let start_time = Instant::now();
 
         // Build command using assert_cmd
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger")?;
 
         // Set database URL (never log the actual URL for security)
@@ -235,7 +247,11 @@ impl GoldDiggerCli {
     }
 
     /// Parse output file and calculate metrics
-    fn parse_output_file(&self, output_path: &Path, format: &OutputFormat) -> Result<GoldDiggerResult> {
+    fn parse_output_file(
+        &self,
+        output_path: &Path,
+        format: &OutputFormat,
+    ) -> Result<GoldDiggerResult> {
         let output_content = fs::read_to_string(output_path)
             .with_context(|| format!("Failed to read output file: {}", output_path.display()))?;
 
@@ -249,10 +265,10 @@ impl GoldDiggerCli {
                     .has_headers(true)
                     .from_reader(output_content.as_bytes());
                 reader.records().count()
-            },
+            }
             OutputFormat::Json => {
-                let json: serde_json::Value =
-                    serde_json::from_str(&output_content).with_context(|| "Failed to parse JSON output")?;
+                let json: serde_json::Value = serde_json::from_str(&output_content)
+                    .with_context(|| "Failed to parse JSON output")?;
                 if let Some(data) = json.get("data") {
                     if let Some(array) = data.as_array() {
                         array.len()
@@ -262,7 +278,7 @@ impl GoldDiggerCli {
                 } else {
                     0
                 }
-            },
+            }
             OutputFormat::Tsv => {
                 use csv::ReaderBuilder;
                 let mut reader = ReaderBuilder::new()
@@ -270,14 +286,23 @@ impl GoldDiggerCli {
                     .delimiter(b'\t')
                     .from_reader(output_content.as_bytes());
                 reader.records().count()
-            },
+            }
         };
 
-        Ok(GoldDiggerResult { row_count, output_size })
+        Ok(GoldDiggerResult {
+            row_count,
+            output_size,
+        })
     }
 
     /// Execute Gold Digger and capture raw output for error testing with predicates
-    pub fn execute_raw(&self, test_case: &TestCase, db_url: &str, output_path: &Path) -> Result<Output> {
+    pub fn execute_raw(
+        &self,
+        test_case: &TestCase,
+        db_url: &str,
+        output_path: &Path,
+    ) -> Result<Output> {
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger")?;
 
         cmd.arg("--db-url")
@@ -299,7 +324,12 @@ impl GoldDiggerCli {
 
         // Execute with timeout
         self.execute_with_timeout(cmd, self.default_timeout)
-            .with_context(|| format!("Failed to execute Gold Digger for test case: {}", test_case.name))
+            .with_context(|| {
+                format!(
+                    "Failed to execute Gold Digger for test case: {}",
+                    test_case.name
+                )
+            })
     }
 
     /// Execute Gold Digger with predicates for stdout/stderr validation
@@ -311,6 +341,7 @@ impl GoldDiggerCli {
         stdout_contains: Option<&str>,
         stderr_contains: Option<&str>,
     ) -> Result<GoldDiggerResult> {
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger")?;
 
         // Set database URL (never log the actual URL for security)
@@ -329,7 +360,9 @@ impl GoldDiggerCli {
         }
 
         // Use assert_cmd's assertion API with predicates
-        let mut assert = cmd.assert().code(predicate::eq(test_case.expected_exit_code));
+        let mut assert = cmd
+            .assert()
+            .code(predicate::eq(test_case.expected_exit_code));
 
         // Apply stdout predicate if provided
         if let Some(stdout_text) = stdout_contains {
@@ -450,6 +483,7 @@ impl GoldDiggerCli {
         db_url: &str,
         output_path: &Path,
     ) -> Result<GoldDiggerResult> {
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger")?;
 
         // Set database URL (never log the actual URL for security)
@@ -470,7 +504,12 @@ impl GoldDiggerCli {
         // Execute with timeout
         let output = self
             .execute_with_timeout(cmd, self.default_timeout)
-            .with_context(|| format!("Failed to execute Gold Digger for test case: {}", test_case.name))?;
+            .with_context(|| {
+                format!(
+                    "Failed to execute Gold Digger for test case: {}",
+                    test_case.name
+                )
+            })?;
 
         // Validate exit code
         let actual_exit_code = output.status.code().unwrap_or(-1);
@@ -505,8 +544,9 @@ impl GoldDiggerCli {
             let result = self.parse_output_file(output_path, &test_case.expected_format)?;
 
             // Create snapshot of output file content
-            let file_content = fs::read_to_string(output_path)
-                .with_context(|| format!("Failed to read output file: {}", output_path.display()))?;
+            let file_content = fs::read_to_string(output_path).with_context(|| {
+                format!("Failed to read output file: {}", output_path.display())
+            })?;
 
             let file_snapshot_name = format!("{}__output_file", test_case.name);
             insta::assert_snapshot!(file_snapshot_name, file_content);
@@ -527,7 +567,9 @@ impl GoldDiggerCli {
 
         // Redact mysql:// URLs
         if let Ok(re) = regex::Regex::new(r"mysql://[^:]+:[^@]+@[^/]+/[^\s]+") {
-            redacted = re.replace_all(&redacted, "mysql://***:***@***/***").to_string();
+            redacted = re
+                .replace_all(&redacted, "mysql://***:***@***/***")
+                .to_string();
         }
 
         // Redact DATABASE_URL references
@@ -548,7 +590,10 @@ pub struct CliPredicates;
 impl CliPredicates {
     /// Check if output indicates successful execution
     pub fn is_success_output(output: &str) -> bool {
-        output.is_empty() || output.contains("Processing") || output.contains("rows") || output.contains("Connecting")
+        output.is_empty()
+            || output.contains("Processing")
+            || output.contains("rows")
+            || output.contains("Connecting")
     }
 
     /// Check if output contains error message
@@ -573,7 +618,9 @@ impl CliPredicates {
 
     /// Check if output contains no credentials (should NOT contain sensitive data)
     pub fn has_no_credentials(output: &str) -> bool {
-        !output.contains("mysql://") && !output.contains("password") && !output.contains("DATABASE_URL")
+        !output.contains("mysql://")
+            && !output.contains("password")
+            && !output.contains("DATABASE_URL")
     }
 
     /// Create a predicate for successful execution output
@@ -627,7 +674,9 @@ impl OutputParser {
     pub fn parse_csv(content: &str) -> Result<CsvParseResult> {
         use csv::ReaderBuilder;
 
-        let mut reader = ReaderBuilder::new().has_headers(true).from_reader(content.as_bytes());
+        let mut reader = ReaderBuilder::new()
+            .has_headers(true)
+            .from_reader(content.as_bytes());
 
         let headers = reader.headers()?.clone();
         let column_count = headers.len();
@@ -635,7 +684,12 @@ impl OutputParser {
         let mut rows = Vec::new();
         for result in reader.records() {
             let record = result?;
-            rows.push(record.iter().map(|s| s.to_string()).collect::<Vec<String>>());
+            rows.push(
+                record
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<String>>(),
+            );
         }
 
         let row_count = rows.len();
@@ -693,7 +747,12 @@ impl OutputParser {
         let mut rows = Vec::new();
         for result in reader.records() {
             let record = result?;
-            rows.push(record.iter().map(|s| s.to_string()).collect::<Vec<String>>());
+            rows.push(
+                record
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<String>>(),
+            );
         }
 
         let row_count = rows.len();
@@ -759,7 +818,12 @@ impl TempFileManager {
         let temp_dir = tempfile::Builder::new()
             .prefix(&format!("gold_digger_test_{}_", test_name))
             .tempdir()
-            .with_context(|| format!("Failed to create temporary directory for test: {}", test_name))?;
+            .with_context(|| {
+                format!(
+                    "Failed to create temporary directory for test: {}",
+                    test_name
+                )
+            })?;
 
         Ok(Self {
             temp_dir,
@@ -774,7 +838,12 @@ impl TempFileManager {
             .prefix(&format!("output_{}_", self.test_name))
             .suffix(&format!(".{}", format.extension()))
             .tempfile_in(self.temp_dir.path())
-            .with_context(|| format!("Failed to create temporary output file for format: {:?}", format))?;
+            .with_context(|| {
+                format!(
+                    "Failed to create temporary output file for format: {:?}",
+                    format
+                )
+            })?;
 
         // Increment file counter
         *self.file_counter.borrow_mut() += 1;
@@ -783,16 +852,28 @@ impl TempFileManager {
     }
 
     /// Create a temporary input file (e.g., for query files)
-    pub fn create_input_file(&self, content: &str, extension: &str) -> Result<tempfile::NamedTempFile> {
+    pub fn create_input_file(
+        &self,
+        content: &str,
+        extension: &str,
+    ) -> Result<tempfile::NamedTempFile> {
         let temp_file = tempfile::Builder::new()
             .prefix(&format!("input_{}_", self.test_name))
             .suffix(&format!(".{}", extension))
             .tempfile_in(self.temp_dir.path())
-            .with_context(|| format!("Failed to create temporary input file with extension: {}", extension))?;
+            .with_context(|| {
+                format!(
+                    "Failed to create temporary input file with extension: {}",
+                    extension
+                )
+            })?;
 
         // Write content to the file
         std::fs::write(temp_file.path(), content).with_context(|| {
-            format!("Failed to write content to temporary input file: {}", temp_file.path().display())
+            format!(
+                "Failed to write content to temporary input file: {}",
+                temp_file.path().display()
+            )
         })?;
 
         // Increment file counter
@@ -804,8 +885,12 @@ impl TempFileManager {
     /// Create a temporary directory for test artifacts
     pub fn create_temp_subdir(&self, name: &str) -> Result<std::path::PathBuf> {
         let subdir_path = self.temp_dir.path().join(name);
-        std::fs::create_dir_all(&subdir_path)
-            .with_context(|| format!("Failed to create temporary subdirectory: {}", subdir_path.display()))?;
+        std::fs::create_dir_all(&subdir_path).with_context(|| {
+            format!(
+                "Failed to create temporary subdirectory: {}",
+                subdir_path.display()
+            )
+        })?;
         Ok(subdir_path)
     }
 
@@ -829,8 +914,12 @@ impl TempFileManager {
         let mut collected_files = Vec::new();
 
         // Create artifact directory if it doesn't exist
-        std::fs::create_dir_all(artifact_dir)
-            .with_context(|| format!("Failed to create artifact directory: {}", artifact_dir.display()))?;
+        std::fs::create_dir_all(artifact_dir).with_context(|| {
+            format!(
+                "Failed to create artifact directory: {}",
+                artifact_dir.display()
+            )
+        })?;
 
         // Copy all temporary files to artifact directory
         // Copy all files from the temp directory
@@ -843,7 +932,11 @@ impl TempFileManager {
                 let dest_path = artifact_dir.join(filename);
 
                 std::fs::copy(&source_path, &dest_path).with_context(|| {
-                    format!("Failed to copy artifact from {} to {}", source_path.display(), dest_path.display())
+                    format!(
+                        "Failed to copy artifact from {} to {}",
+                        source_path.display(),
+                        dest_path.display()
+                    )
                 })?;
                 collected_files.push(dest_path);
             }
@@ -876,8 +969,9 @@ impl TempFileManager {
     /// Clean up specific temporary file by path
     pub fn cleanup_file(&self, path: &Path) -> Result<()> {
         if path.exists() {
-            std::fs::remove_file(path)
-                .with_context(|| format!("Failed to clean up temporary file: {}", path.display()))?;
+            std::fs::remove_file(path).with_context(|| {
+                format!("Failed to clean up temporary file: {}", path.display())
+            })?;
         }
         Ok(())
     }
@@ -895,7 +989,10 @@ impl Drop for TempFileManager {
     fn drop(&mut self) {
         // tempfile handles cleanup automatically, but we can add logging if needed
         if std::env::var("GOLD_DIGGER_TEST_DEBUG").is_ok() {
-            eprintln!("Cleaning up temporary directory for test: {}", self.test_name);
+            eprintln!(
+                "Cleaning up temporary directory for test: {}",
+                self.test_name
+            );
         }
     }
 }
@@ -914,6 +1011,7 @@ impl AssertCmdIntegration {
         let output_file = temp_manager.create_output_file(&test_case.expected_format)?;
 
         // Build command
+        #[allow(deprecated)]
         let mut cmd = assert_cmd::Command::cargo_bin("gold_digger")?;
 
         cmd.arg("--db-url")
@@ -944,7 +1042,11 @@ impl AssertCmdIntegration {
         db_url: &str,
         output_format: &OutputFormat,
         temp_manager: &TempFileManager,
-    ) -> Result<(assert_cmd::assert::Assert, tempfile::NamedTempFile, tempfile::NamedTempFile)> {
+    ) -> Result<(
+        assert_cmd::assert::Assert,
+        tempfile::NamedTempFile,
+        tempfile::NamedTempFile,
+    )> {
         // Create temporary query file
         let query_file = temp_manager.create_input_file(query_content, "sql")?;
 
@@ -952,6 +1054,7 @@ impl AssertCmdIntegration {
         let output_file = temp_manager.create_output_file(output_format)?;
 
         // Build command
+        #[allow(deprecated)]
         let mut cmd = assert_cmd::Command::cargo_bin("gold_digger")?;
 
         cmd.arg("--db-url")
@@ -977,6 +1080,7 @@ impl AssertCmdIntegration {
         let output_file = temp_manager.create_output_file(&test_case.expected_format)?;
 
         // Build command
+        #[allow(deprecated)]
         let mut cmd = assert_cmd::Command::cargo_bin("gold_digger")?;
 
         cmd.arg("--db-url")
@@ -1036,7 +1140,8 @@ impl TestIsolation {
     /// Set environment variable for this test (will be restored on drop)
     pub fn set_env_var(&mut self, key: &str, value: &str) {
         // Store original value for restoration
-        self.original_env.insert(key.to_string(), std::env::var(key).ok());
+        self.original_env
+            .insert(key.to_string(), std::env::var(key).ok());
 
         // Set new value
         unsafe {
@@ -1047,7 +1152,8 @@ impl TestIsolation {
     /// Remove environment variable for this test (will be restored on drop)
     pub fn remove_env_var(&mut self, key: &str) {
         // Store original value for restoration
-        self.original_env.insert(key.to_string(), std::env::var(key).ok());
+        self.original_env
+            .insert(key.to_string(), std::env::var(key).ok());
 
         // Remove variable
         unsafe {
@@ -1066,8 +1172,12 @@ impl TestIsolation {
             .join("gold_digger_test_artifacts")
             .join(&self.test_name);
 
-        std::fs::create_dir_all(&artifact_dir)
-            .with_context(|| format!("Failed to create artifact directory: {}", artifact_dir.display()))?;
+        std::fs::create_dir_all(&artifact_dir).with_context(|| {
+            format!(
+                "Failed to create artifact directory: {}",
+                artifact_dir.display()
+            )
+        })?;
 
         Ok(artifact_dir)
     }
@@ -1149,8 +1259,8 @@ impl TestDataUtils {
 
     /// Get file size in bytes
     pub fn get_file_size(path: &Path) -> Result<u64> {
-        let metadata =
-            fs::metadata(path).with_context(|| format!("Failed to get metadata for file: {}", path.display()))?;
+        let metadata = fs::metadata(path)
+            .with_context(|| format!("Failed to get metadata for file: {}", path.display()))?;
         Ok(metadata.len())
     }
 
@@ -1182,7 +1292,8 @@ impl TestEnvironment {
     /// Set an environment variable for the test
     pub fn set_var(&mut self, key: &str, value: &str) {
         // Store original value for restoration
-        self.original_env.insert(key.to_string(), std::env::var(key).ok());
+        self.original_env
+            .insert(key.to_string(), std::env::var(key).ok());
 
         // Set new value
         unsafe {
@@ -1193,7 +1304,8 @@ impl TestEnvironment {
     /// Remove an environment variable for the test
     pub fn remove_var(&mut self, key: &str) {
         // Store original value for restoration
-        self.original_env.insert(key.to_string(), std::env::var(key).ok());
+        self.original_env
+            .insert(key.to_string(), std::env::var(key).ok());
 
         // Remove variable
         unsafe {
@@ -1226,13 +1338,19 @@ pub struct OutputValidator;
 
 impl OutputValidator {
     /// Validate output file existence and content using predicates
-    pub fn validate_file_output(path: &Path, format: &OutputFormat) -> Result<FileValidationResult> {
+    pub fn validate_file_output(
+        path: &Path,
+        format: &OutputFormat,
+    ) -> Result<FileValidationResult> {
         use predicates::prelude::*;
 
         // Check file existence
         let file_exists_predicate = predicate::path::exists();
         if !file_exists_predicate.eval(path) {
-            return Err(anyhow::anyhow!("Output file does not exist: {}", path.display()));
+            return Err(anyhow::anyhow!(
+                "Output file does not exist: {}",
+                path.display()
+            ));
         }
 
         // Check file is not empty
@@ -1242,8 +1360,8 @@ impl OutputValidator {
         }
 
         // Read and validate content based on format
-        let content =
-            fs::read_to_string(path).with_context(|| format!("Failed to read output file: {}", path.display()))?;
+        let content = fs::read_to_string(path)
+            .with_context(|| format!("Failed to read output file: {}", path.display()))?;
 
         let validation_result = match format {
             OutputFormat::Csv => Self::validate_csv_content(&content)?,
@@ -1270,7 +1388,10 @@ impl OutputValidator {
         // Validate CSV-specific requirements using predicates
         let min_columns_predicate = predicate::ge(1usize);
         if !min_columns_predicate.eval(&csv_result.column_count) {
-            return Err(anyhow::anyhow!("CSV must have at least 1 column, found {}", csv_result.column_count));
+            return Err(anyhow::anyhow!(
+                "CSV must have at least 1 column, found {}",
+                csv_result.column_count
+            ));
         }
 
         // Check for proper CSV quoting (QuoteStyle::Necessary)
@@ -1320,7 +1441,10 @@ impl OutputValidator {
 
         // Check for {"data": [...]} structure
         let has_data_field = json_value.get("data").is_some();
-        let data_is_array = json_value.get("data").map(|d| d.is_array()).unwrap_or(false);
+        let data_is_array = json_value
+            .get("data")
+            .map(|d| d.is_array())
+            .unwrap_or(false);
 
         // Check for deterministic key ordering (BTreeMap ensures this)
         let has_deterministic_ordering = Self::validate_json_key_ordering(&json_value)?;
@@ -1403,7 +1527,9 @@ impl OutputValidator {
         // For now, we'll assume proper quoting if the CSV can be parsed successfully
         use csv::ReaderBuilder;
 
-        let mut reader = ReaderBuilder::new().has_headers(true).from_reader(content.as_bytes());
+        let mut reader = ReaderBuilder::new()
+            .has_headers(true)
+            .from_reader(content.as_bytes());
 
         // Try to read all records - if successful, quoting is likely correct
         for result in reader.records() {
@@ -1512,10 +1638,11 @@ impl CsvContentPredicates {
     pub fn contains_value(column_index: usize, value: String) -> impl Predicate<str> {
         predicate::function(move |content: &str| {
             if let Ok(result) = OutputParser::parse_csv(content) {
-                result
-                    .rows
-                    .iter()
-                    .any(|row| row.get(column_index).map(|cell| cell == &value).unwrap_or(false))
+                result.rows.iter().any(|row| {
+                    row.get(column_index)
+                        .map(|cell| cell == &value)
+                        .unwrap_or(false)
+                })
             } else {
                 false
             }
@@ -1741,7 +1868,12 @@ pub struct SnapshotTesting;
 
 impl SnapshotTesting {
     /// Create snapshot of CLI output with sensitive data redaction
-    pub fn create_cli_output_snapshot(test_name: &str, stdout: &str, stderr: &str, exit_code: i32) -> Result<()> {
+    pub fn create_cli_output_snapshot(
+        test_name: &str,
+        stdout: &str,
+        stderr: &str,
+        exit_code: i32,
+    ) -> Result<()> {
         // Redact sensitive information
         let redacted_stdout = Self::redact_sensitive_data(stdout);
         let redacted_stderr = Self::redact_sensitive_data(stderr);
@@ -1759,7 +1891,11 @@ impl SnapshotTesting {
     }
 
     /// Create snapshot of output file content
-    pub fn create_file_output_snapshot(test_name: &str, file_content: &str, format: &OutputFormat) -> Result<()> {
+    pub fn create_file_output_snapshot(
+        test_name: &str,
+        file_content: &str,
+        format: &OutputFormat,
+    ) -> Result<()> {
         let snapshot_name = format!("{}_{}_output", test_name, format.extension());
         insta::assert_snapshot!(snapshot_name, file_content);
         Ok(())
@@ -1798,8 +1934,10 @@ impl SnapshotTesting {
             json_result.column_count,
             tsv_result.row_count,
             tsv_result.column_count,
-            csv_result.row_count == json_result.row_count && json_result.row_count == tsv_result.row_count,
-            csv_result.column_count == json_result.column_count && json_result.column_count == tsv_result.column_count,
+            csv_result.row_count == json_result.row_count
+                && json_result.row_count == tsv_result.row_count,
+            csv_result.column_count == json_result.column_count
+                && json_result.column_count == tsv_result.column_count,
             csv_content,
             json_content,
             tsv_content
@@ -1817,7 +1955,9 @@ impl SnapshotTesting {
 
         // Redact mysql:// URLs
         if let Ok(re) = regex::Regex::new(r"mysql://[^:]+:[^@]+@[^/]+/[^\s]+") {
-            redacted = re.replace_all(&redacted, "mysql://***:***@***/***").to_string();
+            redacted = re
+                .replace_all(&redacted, "mysql://***:***@***/***")
+                .to_string();
         }
 
         // Redact DATABASE_URL references
@@ -1830,7 +1970,9 @@ impl SnapshotTesting {
 
         // Redact connection strings in error messages
         if let Ok(re) = regex::Regex::new(r"connection string: [^\s]+") {
-            redacted = re.replace_all(&redacted, "connection string: ***").to_string();
+            redacted = re
+                .replace_all(&redacted, "connection string: ***")
+                .to_string();
         }
 
         redacted
@@ -1867,7 +2009,11 @@ impl TestAssertions {
     /// Assert that output contains expected number of rows
     pub fn assert_row_count(actual: usize, expected: usize) -> Result<()> {
         if actual != expected {
-            return Err(anyhow::anyhow!("Row count mismatch: expected {}, got {}", expected, actual));
+            return Err(anyhow::anyhow!(
+                "Row count mismatch: expected {}, got {}",
+                expected,
+                actual
+            ));
         }
         Ok(())
     }
@@ -1875,7 +2021,11 @@ impl TestAssertions {
     /// Assert that output contains expected number of columns
     pub fn assert_column_count(actual: usize, expected: usize) -> Result<()> {
         if actual != expected {
-            return Err(anyhow::anyhow!("Column count mismatch: expected {}, got {}", expected, actual));
+            return Err(anyhow::anyhow!(
+                "Column count mismatch: expected {}, got {}",
+                expected,
+                actual
+            ));
         }
         Ok(())
     }

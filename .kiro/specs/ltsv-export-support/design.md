@@ -2,13 +2,9 @@
 
 ## Overview
 
-This design implements LTSV (Labeled Tab-Separated Values) export support for Gold Digger through a
-two-tier architecture: a standalone `ltsv-rs` workspace crate that provides general-purpose LTSV
-reading/writing capabilities, and integration within Gold Digger's existing output format system.
+This design implements LTSV (Labeled Tab-Separated Values) export support for Gold Digger through a two-tier architecture: a standalone `ltsv-rs` workspace crate that provides general-purpose LTSV reading/writing capabilities, and integration within Gold Digger's existing output format system.
 
-The design follows Gold Digger's established patterns for output formats while creating a reusable
-library that benefits the broader Rust ecosystem. The LTSV format specification follows the standard
-where each line contains `label:value` pairs separated by tab characters.
+The design follows Gold Digger's established patterns for output formats while creating a reusable library that benefits the broader Rust ecosystem. The LTSV format specification follows the standard where each line contains `label:value` pairs separated by tab characters.
 
 ## Architecture
 
@@ -34,8 +30,7 @@ gold_digger/
 ### Integration Points
 
 1. **Workspace Crate (`ltsv-rs`)**: Standalone library following csv crate patterns
-2. **Gold Digger Integration (`src/ltsv.rs`)**: Thin wrapper implementing Gold Digger's format
-   interface
+2. **Gold Digger Integration (`src/ltsv.rs`)**: Thin wrapper implementing Gold Digger's format interface
 3. **CLI Integration**: Extension detection (`.ltsv`) and format flag (`--format ltsv`)
 4. **Feature Flag**: `ltsv` feature included in default features
 
@@ -191,7 +186,7 @@ pub fn escape_value(value: &str, style: EscapeStyle) -> String {
             .replace(':', "\\:"),
         EscapeStyle::Minimal => {
             // Only escape if value contains problematic characters
-        },
+        }
         EscapeStyle::None => value.to_string(),
     }
 }
@@ -224,16 +219,24 @@ pub enum LtsvError {
 
 // Gold Digger integration uses anyhow for application errors
 pub fn write<W: Write>(rows: Vec<Vec<String>>, output: W) -> anyhow::Result<()> {
-    let mut writer = WriterBuilder::new().escape_style(EscapeStyle::Standard).build(output);
+    let mut writer = WriterBuilder::new()
+        .escape_style(EscapeStyle::Standard)
+        .build(output);
 
     // Convert and handle errors with context
     for row in rows {
         writer
-            .write_record(row.into_iter().enumerate().map(|(i, v)| (format!("field_{}", i), v)))
+            .write_record(
+                row.into_iter()
+                    .enumerate()
+                    .map(|(i, v)| (format!("field_{}", i), v)),
+            )
             .with_context(|| "Failed to write LTSV record")?;
     }
 
-    writer.flush().with_context(|| "Failed to flush LTSV output")?;
+    writer
+        .flush()
+        .with_context(|| "Failed to flush LTSV output")?;
 
     Ok(())
 }
@@ -265,7 +268,10 @@ mod tests {
     #[test]
     fn test_escaping() {
         let mut output = Vec::new();
-        let records = vec![vec![("field".to_string(), "val:ue\twith\ttabs".to_string())]];
+        let records = vec![vec![(
+            "field".to_string(),
+            "val:ue\twith\ttabs".to_string(),
+        )]];
 
         write_records(&mut output, records).unwrap();
 

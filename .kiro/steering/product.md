@@ -4,8 +4,7 @@ inclusion: always
 
 # Gold Digger Product Requirements
 
-Gold Digger is a MySQL/MariaDB query tool that exports structured data to CSV/JSON/TSV formats. Core
-principles: type safety, security, and CLI-first design for automation workflows.
+Gold Digger is a MySQL/MariaDB query tool that exports structured data to CSV/JSON/TSV formats. Core principles: type safety, security, and CLI-first design for automation workflows.
 
 ## Product Identity
 
@@ -24,11 +23,9 @@ principles: type safety, security, and CLI-first design for automation workflows
 ### Airgap Compatibility
 
 - **Allowed**: Direct TCP egress to configured database host:port pairs (MySQL/MariaDB only)
-- **Prohibited**: All other outbound connections including DNS queries to external resolvers,
-  HTTP/HTTPS, telemetry/call-home, package registries, NTP, and any other non-DB ports/hosts
+- **Prohibited**: All other outbound connections including DNS queries to external resolvers, HTTP/HTTPS, telemetry/call-home, package registries, NTP, and any other non-DB ports/hosts
 - **Runtime**: No external dependencies during execution
-- **Configuration**: Product must be configurable to restrict egress to specific host:port entries;
-  any attempt to reach other endpoints must be denied or fail
+- **Configuration**: Product must be configurable to restrict egress to specific host:port entries; any attempt to reach other endpoints must be denied or fail
 
 ## Product Architecture
 

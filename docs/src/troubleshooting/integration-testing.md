@@ -4,8 +4,7 @@ Common issues and solutions for Gold Digger's integration testing framework.
 
 ## Current Implementation Status
 
-The integration testing framework is actively under development. Some tests may be incomplete or
-marked as TODO. This is expected during the development phase.
+The integration testing framework is actively under development. Some tests may be incomplete or marked as TODO. This is expected during the development phase.
 
 ## Docker-Related Issues
 
@@ -367,5 +366,4 @@ If you encounter issues not covered here:
 4. **CI reproduction**: Use `act` to reproduce CI failures locally
 5. **Create an issue**: Report bugs with detailed error messages and environment information
 
-For more information, see the [Integration Testing Framework](../development/integration-testing.md)
-documentation.
+For more information, see the [Integration Testing Framework](../development/integration-testing.md) documentation.

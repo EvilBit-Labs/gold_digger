@@ -8,7 +8,8 @@ use gold_digger::init_crypto_provider;
 
 mod fixtures;
 mod integration;
-use integration::{TestDatabase, containers::DatabaseContainer};
+use integration::TestDatabase;
+use integration::containers::database_container::DatabaseContainer;
 
 /// Test basic database seeding functionality
 #[test]
@@ -26,22 +27,36 @@ fn test_database_seeding_basic() -> Result<()> {
     let container = DatabaseContainer::new(TestDatabase::mysql())?;
 
     // Test that the container is healthy
-    assert!(container.test_connection(), "Container should be healthy after creation");
+    assert!(
+        container.test_connection(),
+        "Container should be healthy after creation"
+    );
 
     // Seed the database with comprehensive test data
     container.seed_data()?;
 
     // Verify that basic tables were created
     let basic_results = container.query_results("SELECT COUNT(*) as count FROM test_basic")?;
-    assert!(!basic_results.is_empty(), "Should have results from test_basic table");
+    assert!(
+        !basic_results.is_empty(),
+        "Should have results from test_basic table"
+    );
 
     // Verify that data types table was created and has data
-    let data_types_results = container.query_results("SELECT COUNT(*) as count FROM test_data_types")?;
-    assert!(!data_types_results.is_empty(), "Should have results from test_data_types table");
+    let data_types_results =
+        container.query_results("SELECT COUNT(*) as count FROM test_data_types")?;
+    assert!(
+        !data_types_results.is_empty(),
+        "Should have results from test_data_types table"
+    );
 
     // Verify that edge cases table was created
-    let edge_cases_results = container.query_results("SELECT COUNT(*) as count FROM test_edge_cases")?;
-    assert!(!edge_cases_results.is_empty(), "Should have results from test_edge_cases table");
+    let edge_cases_results =
+        container.query_results("SELECT COUNT(*) as count FROM test_edge_cases")?;
+    assert!(
+        !edge_cases_results.is_empty(),
+        "Should have results from test_edge_cases table"
+    );
 
     // Test idempotency - seeding again should not fail
     container.seed_data()?;
@@ -66,14 +81,20 @@ fn test_database_seeding_mariadb() -> Result<()> {
     let container = DatabaseContainer::new(TestDatabase::mariadb())?;
 
     // Test that the container is healthy
-    assert!(container.test_connection(), "MariaDB container should be healthy after creation");
+    assert!(
+        container.test_connection(),
+        "MariaDB container should be healthy after creation"
+    );
 
     // Seed the database with comprehensive test data
     container.seed_data()?;
 
     // Verify that basic tables were created
     let basic_results = container.query_results("SELECT COUNT(*) as count FROM test_basic")?;
-    assert!(!basic_results.is_empty(), "Should have results from test_basic table in MariaDB");
+    assert!(
+        !basic_results.is_empty(),
+        "Should have results from test_basic table in MariaDB"
+    );
 
     // Test idempotency - seeding again should not fail
     container.seed_data()?;
@@ -106,11 +127,17 @@ fn test_database_version_detection() -> Result<()> {
 
         // Test version query
         let version_result: Option<String> = conn.query_first("SELECT VERSION()")?;
-        assert!(version_result.is_some(), "Should be able to query MySQL version");
+        assert!(
+            version_result.is_some(),
+            "Should be able to query MySQL version"
+        );
 
         let version = version_result.unwrap();
         println!("MySQL version: {}", version);
-        assert!(version.contains("8.") || version.contains("5."), "Should be MySQL 5.x or 8.x");
+        assert!(
+            version.contains("8.") || version.contains("5."),
+            "Should be MySQL 5.x or 8.x"
+        );
     }
 
     // Test MariaDB version detection
@@ -125,11 +152,17 @@ fn test_database_version_detection() -> Result<()> {
 
         // Test version query
         let version_result: Option<String> = conn.query_first("SELECT VERSION()")?;
-        assert!(version_result.is_some(), "Should be able to query MariaDB version");
+        assert!(
+            version_result.is_some(),
+            "Should be able to query MariaDB version"
+        );
 
         let version = version_result.unwrap();
         println!("MariaDB version: {}", version);
-        assert!(version.to_lowercase().contains("mariadb"), "Should be MariaDB");
+        assert!(
+            version.to_lowercase().contains("mariadb"),
+            "Should be MariaDB"
+        );
     }
 
     println!("Database version detection test completed successfully");
@@ -179,7 +212,10 @@ fn test_comprehensive_data_types() -> Result<()> {
          LIMIT 3",
     )?;
 
-    assert!(!unicode_results.is_empty(), "Should have Unicode test results");
+    assert!(
+        !unicode_results.is_empty(),
+        "Should have Unicode test results"
+    );
     println!("Unicode handling test completed");
 
     println!("Comprehensive data types test completed successfully");

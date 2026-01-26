@@ -8,8 +8,9 @@
 use anyhow::{Context, Result};
 use std::time::Duration;
 
+pub use crate::integration::containers::database_container::DatabaseContainer;
 /// Re-export container types from integration module
-pub use crate::integration::containers::{ContainerManager, DatabaseContainer};
+pub use crate::integration::containers::utils::ContainerManager;
 pub use crate::integration::{TestDatabase, is_ci_environment};
 
 /// Simplified container factory for common test scenarios
@@ -36,7 +37,8 @@ impl TestContainerFactory {
 
     /// Check if Docker is available and fail fast if not
     fn check_docker_available() -> Result<()> {
-        ContainerManager::check_docker_availability().context("Docker is required for container-based tests")
+        ContainerManager::check_docker_availability()
+            .context("Docker is required for container-based tests")
     }
 }
 
@@ -61,7 +63,10 @@ impl ContainerTestUtils {
     }
 
     /// Wait for container to be ready with custom timeout
-    pub fn wait_for_container_ready(container: &DatabaseContainer, timeout: Duration) -> Result<()> {
+    pub fn wait_for_container_ready(
+        container: &DatabaseContainer,
+        timeout: Duration,
+    ) -> Result<()> {
         let start = std::time::Instant::now();
 
         while start.elapsed() < timeout {
@@ -71,6 +76,9 @@ impl ContainerTestUtils {
             std::thread::sleep(Duration::from_millis(500));
         }
 
-        Err(anyhow::anyhow!("Container failed to become ready within {} seconds", timeout.as_secs()))
+        Err(anyhow::anyhow!(
+            "Container failed to become ready within {} seconds",
+            timeout.as_secs()
+        ))
     }
 }

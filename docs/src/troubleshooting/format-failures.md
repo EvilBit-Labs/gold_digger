@@ -1,7 +1,6 @@
 # Format and Linting Failure Troubleshooting
 
-This guide provides comprehensive solutions for code formatting violations, linting warnings, and
-style issues in the Gold Digger project.
+This guide provides comprehensive solutions for code formatting violations, linting warnings, and style issues in the Gold Digger project.
 
 ## Quick Reference
 
@@ -580,10 +579,16 @@ error: clippy not installed
 
    ```rust
    // Problem: Long macro call
-   println!("Processing item {} with value {} and status {}", item.id, item.value, item.status);
+   println!(
+       "Processing item {} with value {} and status {}",
+       item.id, item.value, item.status
+   );
 
    // Solution: Break into multiple lines
-   println!("Processing item {} with value {} and status {}", item.id, item.value, item.status,);
+   println!(
+       "Processing item {} with value {} and status {}",
+       item.id, item.value, item.status,
+   );
    ```
 
 ## Configuration Management
@@ -807,8 +812,7 @@ cargo clippy -- -D warnings -W clippy::pedantic -W clippy::nursery
 **CI vs Local Differences:**
 
 - **Local (just lint):** `cargo clippy -- -D warnings` (standard warnings only)
-- **CI (recommended):** `cargo clippy -- -D warnings -W clippy::pedantic -W clippy::nursery`
-  (comprehensive)
+- **CI (recommended):** `cargo clippy -- -D warnings -W clippy::pedantic -W clippy::nursery` (comprehensive)
 
 **Handling Noisy Pedantic/Nursery Lints:**
 

@@ -1,0 +1,5 @@
+---
+source: tests/output_format_snapshots.rs
+expression: result
+---
+{"data":[]}

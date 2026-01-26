@@ -2,14 +2,9 @@
 
 ## Overview
 
-This design outlines a comprehensive integration testing framework for Gold Digger that uses
-testcontainers to create isolated MySQL environments with seeded test data. The framework will
-validate the complete query-to-output pipeline, ensuring robust operation across different data
-scenarios, output formats, and error conditions.
+This design outlines a comprehensive integration testing framework for Gold Digger that uses testcontainers to create isolated MySQL environments with seeded test data. The framework will validate the complete query-to-output pipeline, ensuring robust operation across different data scenarios, output formats, and error conditions.
 
-The integration tests will complement the existing TLS-focused tests by providing end-to-end
-validation of Gold Digger's core functionality using real MySQL instances rather than mocked
-components.
+The integration tests will complement the existing TLS-focused tests by providing end-to-end validation of Gold Digger's core functionality using real MySQL instances rather than mocked components.
 
 ## Architecture
 
@@ -56,8 +51,10 @@ impl TestDatabase {
             .with_env_var("MYSQL_PASSWORD", "test_pass")
             .start()?;
 
-        let connection_url =
-            format!("mysql://test_user:test_pass@127.0.0.1:{}/gold_digger_test", container.get_host_port_ipv4(3306));
+        let connection_url = format!(
+            "mysql://test_user:test_pass@127.0.0.1:{}/gold_digger_test",
+            container.get_host_port_ipv4(3306)
+        );
 
         let temp_dir = tempfile::tempdir()?;
 
@@ -243,9 +240,9 @@ impl TestRunner for IntegrationTestRunner {
         // Create TestResult with the execution results
         Ok(TestResult {
             test_name: test_case.name.clone(),
-            status: TestStatus::Passed,             // Will be validated later
+            status: TestStatus::Passed, // Will be validated later
             execution_time: Duration::from_secs(0), // Will be measured by caller
-            output_file: None,                      // Will be set by caller
+            output_file: None,          // Will be set by caller
             error_message: None,
             validation_results: vec![],
             performance_metrics: None,
@@ -308,7 +305,7 @@ impl TestRunner for IntegrationTestRunner {
                     .has_headers(true)
                     .from_reader(output_content.as_bytes());
                 reader.records().count()
-            },
+            }
             OutputFormat::Json => {
                 // Parse JSON to count rows in data array
                 let json: serde_json::Value = serde_json::from_str(&output_content)?;
@@ -321,7 +318,7 @@ impl TestRunner for IntegrationTestRunner {
                 } else {
                     0
                 }
-            },
+            }
             OutputFormat::Tsv => {
                 // Use csv crate with tab delimiter to properly handle quoted fields with embedded newlines
                 let mut reader = ReaderBuilder::new()
@@ -329,10 +326,13 @@ impl TestRunner for IntegrationTestRunner {
                     .delimiter(b'\t')
                     .from_reader(output_content.as_bytes());
                 reader.records().count()
-            },
+            }
         };
 
-        Ok(GoldDiggerResult { row_count, output_size })
+        Ok(GoldDiggerResult {
+            row_count,
+            output_size,
+        })
     }
 
     fn cleanup(&mut self) -> Result<()> {
