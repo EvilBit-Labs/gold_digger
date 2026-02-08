@@ -1,4 +1,6 @@
-use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
+use std::hint::black_box;
+
+use criterion::{Criterion, Throughput, criterion_group, criterion_main};
 use gold_digger::{csv, json, rows_to_strings, tab};
 use mysql::{OptsBuilder, Pool, prelude::*};
 use std::io::Cursor;
