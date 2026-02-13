@@ -1,0 +1,5 @@
+---
+source: tests/output_format_snapshots.rs
+expression: result
+---
+{"data":[{"bigint":9223372036854775807,"id":1,"uint":18446744073709551615},{"bigint":-9223372036854775808,"id":2,"uint":0}]}

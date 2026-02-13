@@ -118,3 +118,4 @@ docs/book/
 .direnv/
 
 megalinter-reports/
+.claude/settings.local.json

@@ -1,19 +1,15 @@
 # TLS and Non-TLS Database Variants
 
-Gold Digger's integration testing framework provides comprehensive support for testing both
-TLS-enabled and plain (non-TLS) database connections through specialized database variants.
+Gold Digger's integration testing framework provides comprehensive support for testing both TLS-enabled and plain (non-TLS) database connections through specialized database variants.
 
 ## Overview
 
 The TLS variants system provides:
 
-- **TestDatabaseTls**: TLS-enabled database containers with SSL certificate mounting and MySQL TLS
-  settings
+- **TestDatabaseTls**: TLS-enabled database containers with SSL certificate mounting and MySQL TLS settings
 - **TestDatabasePlain**: Standard unencrypted database containers for basic connection testing
-- **TlsContainerConfig**: Configuration for TLS settings including certificate management and
-  security policies
-- **Connection URL generation**: Helper methods to generate appropriate connection URLs for each
-  configuration type
+- **TlsContainerConfig**: Configuration for TLS settings including certificate management and security policies
+- **Connection URL generation**: Helper methods to generate appropriate connection URLs for each configuration type
 - **Connection validation**: Test utilities to validate TLS vs non-TLS connection establishment
 
 ## Database Variants
@@ -190,22 +186,17 @@ just test-all         # Run all tests including integration tests
 
 ### Current Limitations
 
-1. **Certificate Generation**: Currently uses placeholder certificates. Full integration with
-   ephemeral certificate generation is planned.
+1. **Certificate Generation**: Currently uses placeholder certificates. Full integration with ephemeral certificate generation is planned.
 
-2. **Container TLS Configuration**: Basic TLS container setup is implemented. Full SSL certificate
-   mounting and MySQL TLS settings configuration will be enhanced in subsequent development phases.
+2. **Container TLS Configuration**: Basic TLS container setup is implemented. Full SSL certificate mounting and MySQL TLS settings configuration will be enhanced in subsequent development phases.
 
-3. **Connection Validation**: Basic connection testing is implemented. More comprehensive TLS
-   handshake validation will be added as the TLS infrastructure matures.
+3. **Connection Validation**: Basic connection testing is implemented. More comprehensive TLS handshake validation will be added as the TLS infrastructure matures.
 
 ### Future Enhancements
 
-- **Dynamic Certificate Generation**: Integration with `rcgen` crate for ephemeral certificate
-  generation
+- **Dynamic Certificate Generation**: Integration with `rcgen` crate for ephemeral certificate generation
 - **Full SSL Certificate Mounting**: Complete SSL certificate mounting into containers
-- **MySQL/MariaDB TLS Configuration**: Comprehensive TLS configuration (require_secure_transport,
-  cipher suites, etc.)
+- **MySQL/MariaDB TLS Configuration**: Comprehensive TLS configuration (require_secure_transport, cipher suites, etc.)
 - **Advanced TLS Validation**: Comprehensive TLS handshake and certificate validation testing
 - **Performance Comparison**: Performance testing with TLS vs non-TLS connections
 
@@ -213,8 +204,7 @@ just test-all         # Run all tests including integration tests
 
 ### Test Design
 
-- **Use Appropriate Variants**: Choose TLS variants for security testing, plain variants for basic
-  functionality
+- **Use Appropriate Variants**: Choose TLS variants for security testing, plain variants for basic functionality
 - **Validate Connections**: Always validate connection establishment before running tests
 - **Clean Resource Management**: Ensure proper container cleanup after tests
 - **Environment Detection**: Use CI-aware timeouts and resource limits
@@ -232,5 +222,4 @@ just test-all         # Run all tests including integration tests
 - **Connection Overhead**: TLS connections have additional handshake overhead
 - **Resource Usage**: TLS containers may use more memory and CPU resources
 
-This TLS variants system provides a solid foundation for comprehensive database connection testing
-that can be enhanced as the integration test infrastructure continues to mature.
+This TLS variants system provides a solid foundation for comprehensive database connection testing that can be enhanced as the integration test infrastructure continues to mature.

@@ -41,7 +41,10 @@ mod consolidated_tls_tests {
     #[test]
     fn test_docker_availability() {
         let docker_available = is_docker_available();
-        println!("Docker available for TLS container tests: {}", docker_available);
+        println!(
+            "Docker available for TLS container tests: {}",
+            docker_available
+        );
 
         if !docker_available {
             println!("Skipping Docker-dependent TLS tests");

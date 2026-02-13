@@ -6,7 +6,7 @@
 #![allow(dead_code)]
 
 use anyhow::{Context, Result};
-use assert_cmd::Command;
+use assert_cmd::cargo;
 use std::collections::HashMap;
 use std::path::Path;
 use std::process::Output;
@@ -141,7 +141,9 @@ impl GoldDiggerCommand {
     pub fn execute(self) -> Result<CommandResult> {
         let start_time = Instant::now();
 
-        let mut cmd = Command::cargo_bin("gold_digger")?;
+        // Using assert_cmd v2.1+ cargo::cargo_bin_cmd! macro for command construction
+        // See: https://github.com/assert-rs/assert_cmd/blob/main/CHANGELOG.md#210
+        let mut cmd = cargo::cargo_bin_cmd!("gold_digger");
 
         // Add database URL
         if let Some(url) = &self.db_url {
@@ -189,7 +191,9 @@ impl GoldDiggerCommand {
         }
 
         // Execute command
-        let output = cmd.output().context("Failed to execute Gold Digger command")?;
+        let output = cmd
+            .output()
+            .context("Failed to execute Gold Digger command")?;
 
         let execution_time = start_time.elapsed();
         let exit_code = output.status.code().unwrap_or(-1);
@@ -224,7 +228,10 @@ impl GoldDiggerCommand {
     pub fn execute_failure(self) -> Result<CommandResult> {
         let result = self.execute()?;
         if result.exit_code == 0 {
-            return Err(anyhow::anyhow!("Command unexpectedly succeeded. Stdout: {}", result.stdout));
+            return Err(anyhow::anyhow!(
+                "Command unexpectedly succeeded. Stdout: {}",
+                result.stdout
+            ));
         }
         Ok(result)
     }
@@ -285,7 +292,11 @@ impl CommandResult {
     /// Assert that the command was successful
     pub fn assert_success(&self) -> Result<()> {
         if !self.is_success() {
-            return Err(anyhow::anyhow!("Command failed with exit code {}. Stderr: {}", self.exit_code, self.stderr));
+            return Err(anyhow::anyhow!(
+                "Command failed with exit code {}. Stderr: {}",
+                self.exit_code,
+                self.stderr
+            ));
         }
         Ok(())
     }
@@ -315,11 +326,17 @@ impl CliTestUtils {
 
     /// Create a command for testing database connectivity
     pub fn connectivity_test_command(db_url: &str) -> GoldDiggerCommand {
-        GoldDiggerCommand::new().db_url(db_url).query("SELECT 1 as test_column")
+        GoldDiggerCommand::new()
+            .db_url(db_url)
+            .query("SELECT 1 as test_column")
     }
 
     /// Create a command for testing output formats
-    pub fn format_test_command(db_url: &str, output_path: &Path, format: &str) -> GoldDiggerCommand {
+    pub fn format_test_command(
+        db_url: &str,
+        output_path: &Path,
+        format: &str,
+    ) -> GoldDiggerCommand {
         GoldDiggerCommand::new()
             .db_url(db_url)
             .query("SELECT 'test' as column1, 123 as column2")
@@ -341,7 +358,9 @@ impl CliTestUtils {
 
         // Redact mysql:// URLs
         if let Ok(re) = regex::Regex::new(r"mysql://[^:]+:[^@]+@[^/]+/[^\s]+") {
-            redacted = re.replace_all(&redacted, "mysql://***:***@***/***").to_string();
+            redacted = re
+                .replace_all(&redacted, "mysql://***:***@***/***")
+                .to_string();
         }
 
         // Redact DATABASE_URL references

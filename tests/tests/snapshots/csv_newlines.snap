@@ -1,0 +1,10 @@
+---
+source: tests/output_format_snapshots.rs
+expression: result
+---
+id,text,data
+1,normal,value
+2,"text,with,commas","value""with""quotes"
+3,"text
+with
+newlines",text	with	tabs

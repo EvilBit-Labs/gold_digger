@@ -3,7 +3,7 @@ use mysql::{Pool, SslOpts};
 use std::path::PathBuf;
 use thiserror::Error;
 
-use rustls::pki_types::CertificateDer;
+use rustls_pki_types::{CertificateDer, pem::PemObject};
 
 /// TLS-specific error types for better error handling and user guidance
 #[derive(Error, Debug)]
@@ -16,16 +16,22 @@ pub enum TlsError {
     #[error("CA certificate file not found: {path}. Ensure the file exists and is readable")]
     CaFileNotFound { path: String },
 
-    #[error("Invalid CA certificate format in {path}: {message}. Ensure the file contains valid PEM certificates")]
+    #[error(
+        "Invalid CA certificate format in {path}: {message}. Ensure the file contains valid PEM certificates"
+    )]
     InvalidCaFormat { path: String, message: String },
 
     #[error("TLS handshake failed: {message}. Check server TLS configuration")]
     HandshakeFailed { message: String },
 
-    #[error("Hostname verification failed for {hostname}: {message}. Use --insecure-skip-hostname-verify to bypass")]
+    #[error(
+        "Hostname verification failed for {hostname}: {message}. Use --insecure-skip-hostname-verify to bypass"
+    )]
     HostnameVerificationFailed { hostname: String, message: String },
 
-    #[error("Certificate expired or not yet valid: {message}. Use --allow-invalid-certificate to bypass")]
+    #[error(
+        "Certificate expired or not yet valid: {message}. Use --allow-invalid-certificate to bypass"
+    )]
     CertificateTimeInvalid { message: String },
 
     #[error("Mutually exclusive TLS flags provided: {flags}. Use only one TLS security option")]
@@ -37,10 +43,14 @@ pub enum TlsError {
     #[error("Unsupported TLS version: {version}. Only TLS 1.2 and 1.3 are supported")]
     UnsupportedTlsVersion { version: String },
 
-    #[error("Database URL contains credentials but TLS is not enabled. Use TLS to protect credentials in transit")]
+    #[error(
+        "Database URL contains credentials but TLS is not enabled. Use TLS to protect credentials in transit"
+    )]
     InsecureCredentials,
 
-    #[error("Certificate has invalid signature: {message}. Use --allow-invalid-certificate to bypass for testing")]
+    #[error(
+        "Certificate has invalid signature: {message}. Use --allow-invalid-certificate to bypass for testing"
+    )]
     InvalidSignature { message: String },
 
     #[error(
@@ -48,19 +58,27 @@ pub enum TlsError {
     )]
     UnknownCertificateAuthority { message: String },
 
-    #[error("Certificate not valid for server authentication: {message}. Use --allow-invalid-certificate to bypass")]
+    #[error(
+        "Certificate not valid for server authentication: {message}. Use --allow-invalid-certificate to bypass"
+    )]
     InvalidCertificatePurpose { message: String },
 
-    #[error("Certificate chain validation failed: {message}. Use --allow-invalid-certificate to bypass")]
+    #[error(
+        "Certificate chain validation failed: {message}. Use --allow-invalid-certificate to bypass"
+    )]
     CertificateChainInvalid { message: String },
 
-    #[error("Server certificate revoked: {message}. Use --allow-invalid-certificate to bypass (not recommended)")]
+    #[error(
+        "Server certificate revoked: {message}. Use --allow-invalid-certificate to bypass (not recommended)"
+    )]
     CertificateRevoked { message: String },
 
     #[error("TLS protocol version mismatch: {message}. Server may not support TLS 1.2/1.3")]
     ProtocolVersionMismatch { message: String },
 
-    #[error("TLS cipher suite negotiation failed: {message}. Server and client have no compatible cipher suites")]
+    #[error(
+        "TLS cipher suite negotiation failed: {message}. Server and client have no compatible cipher suites"
+    )]
     CipherSuiteNegotiationFailed { message: String },
 
     #[error("Server sent TLS alert: {alert}. Check server logs for details")]
@@ -115,7 +133,9 @@ impl TlsError {
 
     /// Creates a mutually exclusive flags error
     pub fn mutually_exclusive_flags<S: Into<String>>(flags: S) -> Self {
-        Self::MutuallyExclusiveFlags { flags: flags.into() }
+        Self::MutuallyExclusiveFlags {
+            flags: flags.into(),
+        }
     }
 
     /// Creates a connection failed error with context
@@ -188,7 +208,9 @@ impl TlsError {
 
     /// Creates a server alert error
     pub fn server_alert<S: Into<String>>(alert: S) -> Self {
-        Self::ServerAlert { alert: alert.into() }
+        Self::ServerAlert {
+            alert: alert.into(),
+        }
     }
 
     /// Creates a peer misbehaved error
@@ -204,7 +226,9 @@ impl TlsError {
             Self::HostnameVerificationFailed { .. } => Some("--insecure-skip-hostname-verify"),
             Self::CertificateTimeInvalid { .. } => Some("--allow-invalid-certificate"),
             Self::InvalidSignature { .. } => Some("--allow-invalid-certificate"),
-            Self::UnknownCertificateAuthority { .. } => Some("--tls-ca-file <path> or --allow-invalid-certificate"),
+            Self::UnknownCertificateAuthority { .. } => {
+                Some("--tls-ca-file <path> or --allow-invalid-certificate")
+            }
             Self::InvalidCertificatePurpose { .. } => Some("--allow-invalid-certificate"),
             Self::CertificateChainInvalid { .. } => Some("--allow-invalid-certificate"),
             Self::CertificateRevoked { .. } => Some("--allow-invalid-certificate"),
@@ -258,7 +282,9 @@ impl TlsError {
     pub fn is_client_configuration_error(&self) -> bool {
         matches!(
             self,
-            Self::CaFileNotFound { .. } | Self::InvalidCaFormat { .. } | Self::MutuallyExclusiveFlags { .. },
+            Self::CaFileNotFound { .. }
+                | Self::InvalidCaFormat { .. }
+                | Self::MutuallyExclusiveFlags { .. },
         )
     }
 
@@ -364,10 +390,14 @@ pub mod cert_utils {
     /// # Performance Note
     /// This function reads the entire file into memory. For very large CA bundles,
     /// consider streaming parsing if memory usage becomes an issue.
-    pub fn load_ca_certificates(ca_file_path: &PathBuf) -> Result<Vec<CertificateDer<'static>>, TlsError> {
+    pub fn load_ca_certificates(
+        ca_file_path: &PathBuf,
+    ) -> Result<Vec<CertificateDer<'static>>, TlsError> {
         // Check if file exists
         if !ca_file_path.exists() {
-            return Err(TlsError::ca_file_not_found(ca_file_path.display().to_string()));
+            return Err(TlsError::ca_file_not_found(
+                ca_file_path.display().to_string(),
+            ));
         }
 
         // Open and read the file
@@ -380,8 +410,8 @@ pub mod cert_utils {
 
         let mut reader = BufReader::new(file);
 
-        // Parse PEM certificates
-        let certs = rustls_pemfile::certs(&mut reader)
+        // Parse PEM certificates using rustls-pki-types
+        let certs: Vec<CertificateDer<'static>> = CertificateDer::pem_reader_iter(&mut reader)
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| {
                 TlsError::invalid_ca_format(
@@ -432,25 +462,25 @@ pub fn create_tls_connection(
                     match config.validation_mode() {
                         TlsValidationMode::Platform => {
                             eprintln!("🔒 TLS: Using platform certificate store");
-                        },
+                        }
                         TlsValidationMode::CustomCa { ca_file_path } => {
                             eprintln!("🔒 TLS: Using custom CA file: {}", ca_file_path.display());
-                        },
+                        }
                         TlsValidationMode::SkipHostnameVerification => {
                             eprintln!("⚠️  TLS: Hostname verification disabled");
-                        },
+                        }
                         TlsValidationMode::AcceptInvalid => {
                             eprintln!("🚨 TLS: Certificate validation disabled (DANGEROUS)");
-                        },
+                        }
                     }
                 }
-            },
+            }
             Ok(None) => {
                 // TLS is enabled but no SSL options needed (shouldn't happen)
-            },
+            }
             Err(tls_error) => {
                 return Err(tls_error);
-            },
+            }
         }
     } else {
         // No explicit TLS configuration provided - explicitly configure TLS with platform certificates
@@ -462,7 +492,9 @@ pub fn create_tls_connection(
         opts_builder = opts_builder.ssl_opts(ssl_opts);
 
         if verbose {
-            eprintln!("🔒 TLS: Using explicit configuration (platform certificates, hostname verification enabled)");
+            eprintln!(
+                "🔒 TLS: Using explicit configuration (platform certificates, hostname verification enabled)"
+            );
         }
     }
 
@@ -574,9 +606,10 @@ pub fn redact_url(url: &str) -> String {
 }
 
 /// TLS validation modes for different security requirements
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum TlsValidationMode {
     /// Use platform certificate store with full validation (default)
+    #[default]
     Platform,
     /// Use custom CA file with full validation
     CustomCa { ca_file_path: PathBuf },
@@ -584,12 +617,6 @@ pub enum TlsValidationMode {
     SkipHostnameVerification,
     /// Accept any certificate (no validation) - DANGEROUS
     AcceptInvalid,
-}
-
-impl Default for TlsValidationMode {
-    fn default() -> Self {
-        Self::Platform
-    }
 }
 
 /// TLS configuration for MySQL connections
@@ -645,7 +672,9 @@ impl TlsConfig {
         let validation_mode = if let Some(ca_file_path) = ca_file {
             // Validate CA file exists and is readable
             if !ca_file_path.exists() {
-                return Err(TlsError::ca_file_not_found(ca_file_path.display().to_string()));
+                return Err(TlsError::ca_file_not_found(
+                    ca_file_path.display().to_string(),
+                ));
             }
             TlsValidationMode::CustomCa {
                 ca_file_path: ca_file_path.clone(),
@@ -669,15 +698,19 @@ impl TlsConfig {
                     "⚠️  WARNING: Hostname verification disabled. Connection is vulnerable to man-in-the-middle attacks."
                 );
                 eprintln!("   Only use this option if you understand the security implications.");
-            },
+            }
             TlsValidationMode::AcceptInvalid => {
                 eprintln!("🚨 DANGER: Certificate validation completely disabled!");
-                eprintln!("   This connection provides NO security against man-in-the-middle attacks.");
-                eprintln!("   Only use this for testing with self-signed certificates in secure environments.");
-            },
+                eprintln!(
+                    "   This connection provides NO security against man-in-the-middle attacks."
+                );
+                eprintln!(
+                    "   Only use this for testing with self-signed certificates in secure environments."
+                );
+            }
             TlsValidationMode::Platform | TlsValidationMode::CustomCa { .. } => {
                 // No warnings for secure modes
-            },
+            }
         }
     }
 
@@ -721,21 +754,21 @@ impl TlsConfig {
             TlsValidationMode::Platform => {
                 // Use default SslOpts which will use rustls with platform certificates
                 SslOpts::default()
-            },
+            }
             TlsValidationMode::CustomCa { ca_file_path } => {
                 // Set the CA file path for custom CA validation
                 SslOpts::default().with_root_cert_path(Some(ca_file_path.clone()))
-            },
+            }
             TlsValidationMode::SkipHostnameVerification => {
                 // Use SslOpts that skips hostname verification
                 SslOpts::default().with_danger_skip_domain_validation(true)
-            },
+            }
             TlsValidationMode::AcceptInvalid => {
                 // Use SslOpts that accepts invalid certificates
                 SslOpts::default()
                     .with_danger_accept_invalid_certs(true)
                     .with_danger_skip_domain_validation(true)
-            },
+            }
         };
 
         Ok(Some(ssl_opts))
@@ -757,25 +790,40 @@ mod tests {
     #[test]
     fn test_tls_config_default() {
         let config = TlsConfig::default();
-        assert!(matches!(config.validation_mode, TlsValidationMode::Platform));
+        assert!(matches!(
+            config.validation_mode,
+            TlsValidationMode::Platform
+        ));
     }
 
     #[test]
     fn test_tls_config_new() {
         let config = TlsConfig::new();
-        assert!(matches!(config.validation_mode, TlsValidationMode::Platform));
+        assert!(matches!(
+            config.validation_mode,
+            TlsValidationMode::Platform
+        ));
     }
 
     #[test]
     fn test_tls_config_builder_patterns() {
         let config = TlsConfig::with_custom_ca("/path/to/ca.pem");
-        assert!(matches!(config.validation_mode, TlsValidationMode::CustomCa { .. }));
+        assert!(matches!(
+            config.validation_mode,
+            TlsValidationMode::CustomCa { .. }
+        ));
 
         let config = TlsConfig::with_skip_hostname_verification();
-        assert!(matches!(config.validation_mode, TlsValidationMode::SkipHostnameVerification));
+        assert!(matches!(
+            config.validation_mode,
+            TlsValidationMode::SkipHostnameVerification
+        ));
 
         let config = TlsConfig::with_accept_invalid();
-        assert!(matches!(config.validation_mode, TlsValidationMode::AcceptInvalid));
+        assert!(matches!(
+            config.validation_mode,
+            TlsValidationMode::AcceptInvalid
+        ));
     }
 
     #[test]
@@ -791,19 +839,31 @@ mod tests {
     fn test_tls_error_suggest_cli_flag() {
         // Test hostname verification error
         let error = TlsError::hostname_verification_failed("example.com", "hostname mismatch");
-        assert_eq!(error.suggest_cli_flag(), Some("--insecure-skip-hostname-verify"));
+        assert_eq!(
+            error.suggest_cli_flag(),
+            Some("--insecure-skip-hostname-verify")
+        );
 
         // Test certificate time invalid error
         let error = TlsError::certificate_time_invalid("certificate expired");
-        assert_eq!(error.suggest_cli_flag(), Some("--allow-invalid-certificate"));
+        assert_eq!(
+            error.suggest_cli_flag(),
+            Some("--allow-invalid-certificate")
+        );
 
         // Test invalid signature error
         let error = TlsError::invalid_signature("bad signature");
-        assert_eq!(error.suggest_cli_flag(), Some("--allow-invalid-certificate"));
+        assert_eq!(
+            error.suggest_cli_flag(),
+            Some("--allow-invalid-certificate")
+        );
 
         // Test unknown CA error
         let error = TlsError::unknown_certificate_authority("unknown issuer");
-        assert_eq!(error.suggest_cli_flag(), Some("--tls-ca-file <path> or --allow-invalid-certificate"));
+        assert_eq!(
+            error.suggest_cli_flag(),
+            Some("--tls-ca-file <path> or --allow-invalid-certificate")
+        );
 
         // Test server configuration errors (no CLI flag suggestion)
         let error = TlsError::protocol_version_mismatch("version mismatch");
@@ -867,12 +927,18 @@ mod tests {
         // Test unknown issuer
         let rustls_error = RustlsError::InvalidCertificate(CertificateError::UnknownIssuer);
         let tls_error = TlsError::from_rustls_error(rustls_error, Some("example.com"));
-        assert!(matches!(tls_error, TlsError::UnknownCertificateAuthority { .. }));
+        assert!(matches!(
+            tls_error,
+            TlsError::UnknownCertificateAuthority { .. }
+        ));
 
         // Test invalid purpose
         let rustls_error = RustlsError::InvalidCertificate(CertificateError::InvalidPurpose);
         let tls_error = TlsError::from_rustls_error(rustls_error, Some("example.com"));
-        assert!(matches!(tls_error, TlsError::InvalidCertificatePurpose { .. }));
+        assert!(matches!(
+            tls_error,
+            TlsError::InvalidCertificatePurpose { .. }
+        ));
     }
 
     #[test]
@@ -897,7 +963,10 @@ mod tests {
         // Test no certificates presented
         let rustls_error = RustlsError::NoCertificatesPresented;
         let tls_error = TlsError::from_rustls_error(rustls_error, Some("example.com"));
-        assert!(matches!(tls_error, TlsError::CertificateValidationFailed { .. }));
+        assert!(matches!(
+            tls_error,
+            TlsError::CertificateValidationFailed { .. }
+        ));
     }
 
     #[test]
@@ -914,10 +983,11 @@ mod tests {
         }
 
         // Test hostname verification with NotValidForNameContext
-        let rustls_error = RustlsError::InvalidCertificate(CertificateError::NotValidForNameContext {
-            expected: rustls::pki_types::ServerName::try_from("example.com").unwrap(),
-            presented: vec!["wrong.com".to_string()],
-        });
+        let rustls_error =
+            RustlsError::InvalidCertificate(CertificateError::NotValidForNameContext {
+                expected: rustls::pki_types::ServerName::try_from("example.com").unwrap(),
+                presented: vec!["wrong.com".to_string()],
+            });
         let tls_error = TlsError::from_rustls_error(rustls_error, Some("example.com"));
         if let TlsError::HostnameVerificationFailed { hostname, .. } = tls_error {
             assert_eq!(hostname, "example.com");
@@ -942,7 +1012,10 @@ mod tests {
         assert!(matches!(error, TlsError::InvalidSignature { .. }));
 
         let error = TlsError::unknown_certificate_authority("test message");
-        assert!(matches!(error, TlsError::UnknownCertificateAuthority { .. }));
+        assert!(matches!(
+            error,
+            TlsError::UnknownCertificateAuthority { .. }
+        ));
 
         let error = TlsError::invalid_certificate_purpose("test message");
         assert!(matches!(error, TlsError::InvalidCertificatePurpose { .. }));
@@ -957,7 +1030,10 @@ mod tests {
         assert!(matches!(error, TlsError::ProtocolVersionMismatch { .. }));
 
         let error = TlsError::cipher_suite_negotiation_failed("test message");
-        assert!(matches!(error, TlsError::CipherSuiteNegotiationFailed { .. }));
+        assert!(matches!(
+            error,
+            TlsError::CipherSuiteNegotiationFailed { .. }
+        ));
 
         let error = TlsError::server_alert("test alert");
         assert!(matches!(error, TlsError::ServerAlert { .. }));
@@ -1011,7 +1087,10 @@ mod tests {
     #[test]
     fn test_from_cli_args_platform_default() {
         let config = TlsConfig::from_cli_args(None, false, false).unwrap();
-        assert!(matches!(config.validation_mode, TlsValidationMode::Platform));
+        assert!(matches!(
+            config.validation_mode,
+            TlsValidationMode::Platform
+        ));
     }
 
     #[test]
@@ -1034,13 +1113,19 @@ mod tests {
     #[test]
     fn test_from_cli_args_skip_hostname() {
         let config = TlsConfig::from_cli_args(None, true, false).unwrap();
-        assert!(matches!(config.validation_mode, TlsValidationMode::SkipHostnameVerification));
+        assert!(matches!(
+            config.validation_mode,
+            TlsValidationMode::SkipHostnameVerification
+        ));
     }
 
     #[test]
     fn test_from_cli_args_accept_invalid() {
         let config = TlsConfig::from_cli_args(None, false, true).unwrap();
-        assert!(matches!(config.validation_mode, TlsValidationMode::AcceptInvalid));
+        assert!(matches!(
+            config.validation_mode,
+            TlsValidationMode::AcceptInvalid
+        ));
     }
 
     #[test]
@@ -1049,7 +1134,12 @@ mod tests {
         let path = PathBuf::from("/path");
         let result = TlsConfig::from_cli_args(Some(&path), true, false);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Mutually exclusive TLS flags"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Mutually exclusive TLS flags")
+        );
 
         // Test ca_file + accept_invalid
         let path = PathBuf::from("/path");
@@ -1071,7 +1161,10 @@ mod tests {
         // Test unknown issuer error
         let cert_error = rustls::Error::InvalidCertificate(rustls::CertificateError::UnknownIssuer);
         let tls_error = TlsError::from_rustls_error(cert_error, Some("example.com"));
-        assert!(matches!(tls_error, TlsError::UnknownCertificateAuthority { .. }));
+        assert!(matches!(
+            tls_error,
+            TlsError::UnknownCertificateAuthority { .. }
+        ));
         assert!(tls_error.to_string().contains("--tls-ca-file"));
     }
 
@@ -1096,13 +1189,23 @@ mod tests {
         // Test skip_hostname + accept_invalid
         let result = TlsConfig::from_cli_args(None, true, true);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Mutually exclusive TLS flags"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Mutually exclusive TLS flags")
+        );
 
         // Test ca_file + skip_hostname + accept_invalid (all three)
         let path = PathBuf::from("/path");
         let result = TlsConfig::from_cli_args(Some(&path), true, true);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Mutually exclusive TLS flags"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Mutually exclusive TLS flags")
+        );
 
         // Test that error message contains all conflicting flags
         let path = PathBuf::from("/path");
@@ -1127,7 +1230,11 @@ mod tests {
 
         // This test will fail with an actual connection, but tests the function signature
         // and basic error handling
-        let result = create_tls_connection("mysql://invalid:invalid@nonexistent:3306/test", Some(tls_config), false);
+        let result = create_tls_connection(
+            "mysql://invalid:invalid@nonexistent:3306/test",
+            Some(tls_config),
+            false,
+        );
 
         match result {
             Ok(pool) => {
@@ -1135,18 +1242,19 @@ mod tests {
                 let conn_result = pool.get_conn();
                 // We expect this to fail due to invalid connection details, but not panic
                 assert!(conn_result.is_err());
-            },
+            }
             Err(_) => {
                 // Pool creation failed, which is also expected for invalid connection details
                 // This is fine - the test passes as long as it doesn't panic
-            },
+            }
         }
     }
 
     #[test]
     fn test_create_tls_connection_without_config() {
         // Test with no TLS config
-        let result = create_tls_connection("mysql://invalid:invalid@nonexistent:3306/test", None, false);
+        let result =
+            create_tls_connection("mysql://invalid:invalid@nonexistent:3306/test", None, false);
 
         match result {
             Ok(pool) => {
@@ -1154,19 +1262,27 @@ mod tests {
                 let conn_result = pool.get_conn();
                 // We expect this to fail due to invalid connection details, but not panic
                 assert!(conn_result.is_err());
-            },
+            }
             Err(_) => {
                 // Pool creation failed, which is also expected for invalid connection details
                 // This is fine - the test passes as long as it doesn't panic
-            },
+            }
         }
     }
 
     #[test]
     fn test_tls_error_types() {
         let error = TlsError::certificate_validation_failed("cert error");
-        assert!(error.to_string().contains("Certificate validation failed: cert error"));
-        assert!(error.to_string().contains("--insecure-skip-hostname-verify"));
+        assert!(
+            error
+                .to_string()
+                .contains("Certificate validation failed: cert error")
+        );
+        assert!(
+            error
+                .to_string()
+                .contains("--insecure-skip-hostname-verify")
+        );
         assert!(error.to_string().contains("--allow-invalid-certificate"));
 
         let error = TlsError::ca_file_not_found("/path/to/cert");
@@ -1185,7 +1301,11 @@ mod tests {
         assert!(error.to_string().contains("PEM certificates"));
 
         let error = TlsError::handshake_failed("handshake error");
-        assert!(error.to_string().contains("TLS handshake failed: handshake error"));
+        assert!(
+            error
+                .to_string()
+                .contains("TLS handshake failed: handshake error")
+        );
 
         let error = TlsError::hostname_verification_failed("example.com", "mismatch");
         assert!(
@@ -1193,7 +1313,11 @@ mod tests {
                 .to_string()
                 .contains("Hostname verification failed for example.com: mismatch")
         );
-        assert!(error.to_string().contains("--insecure-skip-hostname-verify"));
+        assert!(
+            error
+                .to_string()
+                .contains("--insecure-skip-hostname-verify")
+        );
 
         let error = TlsError::certificate_time_invalid("expired");
         assert!(
@@ -1211,14 +1335,22 @@ mod tests {
         );
 
         let error = TlsError::connection_failed("test message");
-        assert!(error.to_string().contains("TLS connection failed: test message"));
+        assert!(
+            error
+                .to_string()
+                .contains("TLS connection failed: test message")
+        );
 
         let error = TlsError::unsupported_tls_version("1.0");
         assert!(error.to_string().contains("Unsupported TLS version: 1.0"));
         assert!(error.to_string().contains("TLS 1.2 and 1.3"));
 
         let error = TlsError::insecure_credentials();
-        assert!(error.to_string().contains("credentials but TLS is not enabled"));
+        assert!(
+            error
+                .to_string()
+                .contains("credentials but TLS is not enabled")
+        );
     }
 
     #[test]
@@ -1303,7 +1435,12 @@ mod tests {
 
         let result = cert_utils::load_ca_certificates(&temp_file.path().to_path_buf());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("No valid certificates found"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("No valid certificates found")
+        );
     }
 
     #[test]
@@ -1348,10 +1485,19 @@ mod tests {
     #[test]
     fn test_tls_error_from_rustls_error() {
         // Test certificate validation error
-        let rustls_error = rustls::Error::InvalidCertificate(rustls::CertificateError::BadSignature);
+        let rustls_error =
+            rustls::Error::InvalidCertificate(rustls::CertificateError::BadSignature);
         let tls_error = TlsError::from_rustls_error(rustls_error, None);
-        assert!(tls_error.to_string().contains("Certificate has invalid signature"));
-        assert!(tls_error.to_string().contains("--allow-invalid-certificate"));
+        assert!(
+            tls_error
+                .to_string()
+                .contains("Certificate has invalid signature")
+        );
+        assert!(
+            tls_error
+                .to_string()
+                .contains("--allow-invalid-certificate")
+        );
 
         // Test certificate expired error
         let rustls_error = rustls::Error::InvalidCertificate(rustls::CertificateError::Expired);
@@ -1361,10 +1507,15 @@ mod tests {
         // Test certificate not yet valid error
         let rustls_error = rustls::Error::InvalidCertificate(rustls::CertificateError::NotValidYet);
         let tls_error = TlsError::from_rustls_error(rustls_error, None);
-        assert!(tls_error.to_string().contains("Certificate is not yet valid"));
+        assert!(
+            tls_error
+                .to_string()
+                .contains("Certificate is not yet valid")
+        );
 
         // Test invalid purpose error
-        let rustls_error = rustls::Error::InvalidCertificate(rustls::CertificateError::InvalidPurpose);
+        let rustls_error =
+            rustls::Error::InvalidCertificate(rustls::CertificateError::InvalidPurpose);
         let tls_error = TlsError::from_rustls_error(rustls_error, None);
         assert!(
             tls_error
@@ -1418,24 +1569,96 @@ mod tests {
         let mut temp_file = NamedTempFile::new().unwrap();
         // This is a valid self-signed certificate for testing
         writeln!(temp_file, "-----BEGIN CERTIFICATE-----").unwrap();
-        writeln!(temp_file, "MIIDXTCCAkWgAwIBAgIJAKoK/heBjcOuMA0GCSqGSIb3DQEBBQUAMEUxCzAJBgNV").unwrap();
-        writeln!(temp_file, "BAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBX").unwrap();
-        writeln!(temp_file, "aWRnaXRzIFB0eSBMdGQwHhcNMTcwODI4MTkzNDA5WhcNMTgwODI4MTkzNDA5WjBF").unwrap();
-        writeln!(temp_file, "MQswCQYDVQQGEwJBVTETMBEGA1UECAwKU29tZS1TdGF0ZTEhMB8GA1UECgwYSW50").unwrap();
-        writeln!(temp_file, "ZXJuZXQgV2lkZ2l0cyBQdHkgTHRkMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIB").unwrap();
-        writeln!(temp_file, "CgKCAQEAuuExKvY1nOmAHO13nPiOxvTnoFrL23apFR9W+VdtPGrb+sQXebHjZ/UU").unwrap();
-        writeln!(temp_file, "kKtjWQqLQlHgHOgFbt7jr8I2J2jFiaNBBBYuHBw6NMVBnhkdXRJDn9LxMa02cx1q").unwrap();
-        writeln!(temp_file, "BxuFqV7zUg4EQVXveZd0HFDZrpVeUiA21IlQpFYxyFveOiGspMdYjI5u3Ngkqbz6").unwrap();
-        writeln!(temp_file, "pXrbRqZzjXaFUcuJpPMFRNKGWv5wyAcb5B2fHX1sGtSaYvNilgxnE8+ykQs6rp+j").unwrap();
-        writeln!(temp_file, "kVf3lbVvB4zUHg9S5RoQBQ1CuHnRkl9wjw03EBEQ4h2z4k5cyR2DpmdJ0b+2cxJl").unwrap();
-        writeln!(temp_file, "Ww9cDcTgWwIDAQABo1AwTjAdBgNVHQ4EFgQUhG9lFWZWnPfLwB9gQQd8it/u+MQw").unwrap();
-        writeln!(temp_file, "HwYDVR0jBBgwFoAUhG9lFWZWnPfLwB9gQQd8it/u+MQwDAYDVR0TBAUwAwEB/zAN").unwrap();
-        writeln!(temp_file, "BgkqhkiG9w0BAQUFAAOCAQEAeM9ahJ6iAJfyFq4wzSmpOddgfGqJWjXiH+OqZlHO").unwrap();
-        writeln!(temp_file, "2k8sVjCjmHylI+XleLu2dDxwjNuBllhid/Qs6TRcZxEqn+cAskHReXlZjQoHuSHx").unwrap();
-        writeln!(temp_file, "VxHp2+PpVUFnuU19LFbmqZ3+/dvTVc0V0QNFS4HgBXkKwA9fPQ+k/roUe0is7d+8").unwrap();
-        writeln!(temp_file, "O4ArHZka85ZMd1qY4z0xvFvbMmJuC0KJvEieakGFkCEc7trGwfIuXgFMLJLBB5uZ").unwrap();
-        writeln!(temp_file, "F74imqDbImh5tbwQcQYBYVHhkCjDOw+XdXUSPiOBueno0soKjOxjVmooPdxyaAuW").unwrap();
-        writeln!(temp_file, "fuFhiGI+bI90H4+17ceuJAOzOFvhPH1RTwf5k+7+BzXrqbHlt+2RfEECAwEAAQ==").unwrap();
+        writeln!(
+            temp_file,
+            "MIIDXTCCAkWgAwIBAgIJAKoK/heBjcOuMA0GCSqGSIb3DQEBBQUAMEUxCzAJBgNV"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "BAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBX"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "aWRnaXRzIFB0eSBMdGQwHhcNMTcwODI4MTkzNDA5WhcNMTgwODI4MTkzNDA5WjBF"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "MQswCQYDVQQGEwJBVTETMBEGA1UECAwKU29tZS1TdGF0ZTEhMB8GA1UECgwYSW50"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "ZXJuZXQgV2lkZ2l0cyBQdHkgTHRkMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIB"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "CgKCAQEAuuExKvY1nOmAHO13nPiOxvTnoFrL23apFR9W+VdtPGrb+sQXebHjZ/UU"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "kKtjWQqLQlHgHOgFbt7jr8I2J2jFiaNBBBYuHBw6NMVBnhkdXRJDn9LxMa02cx1q"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "BxuFqV7zUg4EQVXveZd0HFDZrpVeUiA21IlQpFYxyFveOiGspMdYjI5u3Ngkqbz6"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "pXrbRqZzjXaFUcuJpPMFRNKGWv5wyAcb5B2fHX1sGtSaYvNilgxnE8+ykQs6rp+j"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "kVf3lbVvB4zUHg9S5RoQBQ1CuHnRkl9wjw03EBEQ4h2z4k5cyR2DpmdJ0b+2cxJl"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "Ww9cDcTgWwIDAQABo1AwTjAdBgNVHQ4EFgQUhG9lFWZWnPfLwB9gQQd8it/u+MQw"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "HwYDVR0jBBgwFoAUhG9lFWZWnPfLwB9gQQd8it/u+MQwDAYDVR0TBAUwAwEB/zAN"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "BgkqhkiG9w0BAQUFAAOCAQEAeM9ahJ6iAJfyFq4wzSmpOddgfGqJWjXiH+OqZlHO"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "2k8sVjCjmHylI+XleLu2dDxwjNuBllhid/Qs6TRcZxEqn+cAskHReXlZjQoHuSHx"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "VxHp2+PpVUFnuU19LFbmqZ3+/dvTVc0V0QNFS4HgBXkKwA9fPQ+k/roUe0is7d+8"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "O4ArHZka85ZMd1qY4z0xvFvbMmJuC0KJvEieakGFkCEc7trGwfIuXgFMLJLBB5uZ"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "F74imqDbImh5tbwQcQYBYVHhkCjDOw+XdXUSPiOBueno0soKjOxjVmooPdxyaAuW"
+        )
+        .unwrap();
+        writeln!(
+            temp_file,
+            "fuFhiGI+bI90H4+17ceuJAOzOFvhPH1RTwf5k+7+BzXrqbHlt+2RfEECAwEAAQ=="
+        )
+        .unwrap();
         writeln!(temp_file, "-----END CERTIFICATE-----").unwrap();
         temp_file.flush().unwrap();
 
@@ -1459,11 +1682,12 @@ mod tests {
                 assert!(!ssl_opts.accept_invalid_certs());
                 assert!(ssl_opts.root_cert_path().is_some());
                 assert_eq!(ssl_opts.root_cert_path().unwrap(), temp_file.path());
-            },
-            Err(TlsError::CertificateValidationFailed { .. }) | Err(TlsError::InvalidCaFormat { .. }) => {
+            }
+            Err(TlsError::CertificateValidationFailed { .. })
+            | Err(TlsError::InvalidCaFormat { .. }) => {
                 // This is expected with an invalid test certificate
                 // The important thing is that the error is properly classified
-            },
+            }
             other => panic!("Unexpected result: {:?}", other),
         }
     }
@@ -1511,7 +1735,10 @@ mod tests {
             allow_invalid_certificate: false,
         };
         let config = TlsConfig::from_tls_options(&tls_options).unwrap();
-        assert!(matches!(config.validation_mode(), TlsValidationMode::Platform));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::Platform
+        ));
 
         // Test skip hostname mode
         let tls_options = TlsOptions {
@@ -1520,7 +1747,10 @@ mod tests {
             allow_invalid_certificate: false,
         };
         let config = TlsConfig::from_tls_options(&tls_options).unwrap();
-        assert!(matches!(config.validation_mode(), TlsValidationMode::SkipHostnameVerification));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::SkipHostnameVerification
+        ));
 
         // Test accept invalid mode
         let tls_options = TlsOptions {
@@ -1529,7 +1759,10 @@ mod tests {
             allow_invalid_certificate: true,
         };
         let config = TlsConfig::from_tls_options(&tls_options).unwrap();
-        assert!(matches!(config.validation_mode(), TlsValidationMode::AcceptInvalid));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::AcceptInvalid
+        ));
     }
 
     #[test]
@@ -1542,22 +1775,34 @@ mod tests {
         // Test ca_file + skip_hostname (should fail)
         let result = TlsConfig::from_cli_args(Some(&fake_cert_path), true, false);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TlsError::MutuallyExclusiveFlags { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            TlsError::MutuallyExclusiveFlags { .. }
+        ));
 
         // Test ca_file + accept_invalid (should fail)
         let result = TlsConfig::from_cli_args(Some(&fake_cert_path), false, true);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TlsError::MutuallyExclusiveFlags { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            TlsError::MutuallyExclusiveFlags { .. }
+        ));
 
         // Test skip_hostname + accept_invalid (should fail)
         let result = TlsConfig::from_cli_args(None, true, true);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TlsError::MutuallyExclusiveFlags { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            TlsError::MutuallyExclusiveFlags { .. }
+        ));
 
         // Test all three flags (should fail)
         let result = TlsConfig::from_cli_args(Some(&fake_cert_path), true, true);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TlsError::MutuallyExclusiveFlags { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            TlsError::MutuallyExclusiveFlags { .. }
+        ));
     }
 
     #[test]
@@ -1568,13 +1813,19 @@ mod tests {
         let nonexistent_path = PathBuf::from("/nonexistent/path/to/cert.pem");
         let result = TlsConfig::from_cli_args(Some(&nonexistent_path), false, false);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TlsError::CaFileNotFound { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            TlsError::CaFileNotFound { .. }
+        ));
 
         // Test empty path
         let empty_path = PathBuf::from("");
         let result = TlsConfig::from_cli_args(Some(&empty_path), false, false);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TlsError::CaFileNotFound { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            TlsError::CaFileNotFound { .. }
+        ));
     }
 
     #[test]
@@ -1613,7 +1864,10 @@ mod tests {
 
         let ssl_opts_result = config.to_ssl_opts();
         assert!(ssl_opts_result.is_err());
-        assert!(matches!(ssl_opts_result.unwrap_err(), TlsError::CaFileNotFound { .. }));
+        assert!(matches!(
+            ssl_opts_result.unwrap_err(),
+            TlsError::CaFileNotFound { .. }
+        ));
     }
 
     #[test]
@@ -1656,15 +1910,27 @@ mod tests {
     #[test]
     fn test_tls_config_accessors() {
         let config = TlsConfig::new();
-        assert!(matches!(config.validation_mode(), TlsValidationMode::Platform));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::Platform
+        ));
 
         let config = TlsConfig::default();
-        assert!(matches!(config.validation_mode(), TlsValidationMode::Platform));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::Platform
+        ));
 
         let config = TlsConfig::with_skip_hostname_verification();
-        assert!(matches!(config.validation_mode(), TlsValidationMode::SkipHostnameVerification));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::SkipHostnameVerification
+        ));
 
         let config = TlsConfig::with_accept_invalid();
-        assert!(matches!(config.validation_mode(), TlsValidationMode::AcceptInvalid));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::AcceptInvalid
+        ));
     }
 }

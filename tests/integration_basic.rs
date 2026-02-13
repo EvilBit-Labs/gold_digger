@@ -12,7 +12,7 @@ mod tests {
 
     use crate::integration::{
         TestDatabase,
-        containers::{DatabaseContainer, utils::skip_if_no_docker},
+        containers::{database_container::DatabaseContainer, utils::skip_if_no_docker},
     };
 
     #[test]

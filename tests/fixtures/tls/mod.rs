@@ -30,9 +30,14 @@ impl CertificateLoader {
     /// # Returns
     /// * `Result<(NamedTempFile, NamedTempFile)>` - Tuple of (cert_file, key_file)
     #[allow(dead_code)]
-    pub fn create_temp_files(cert_pem: &str, key_pem: &str) -> Result<(NamedTempFile, NamedTempFile)> {
-        let cert_file = NamedTempFile::new().context("Failed to create temporary certificate file")?;
-        fs::write(cert_file.path(), cert_pem).context("Failed to write certificate to temporary file")?;
+    pub fn create_temp_files(
+        cert_pem: &str,
+        key_pem: &str,
+    ) -> Result<(NamedTempFile, NamedTempFile)> {
+        let cert_file =
+            NamedTempFile::new().context("Failed to create temporary certificate file")?;
+        fs::write(cert_file.path(), cert_pem)
+            .context("Failed to write certificate to temporary file")?;
 
         let key_file = NamedTempFile::new().context("Failed to create temporary key file")?;
         fs::write(key_file.path(), key_pem).context("Failed to write key to temporary file")?;
@@ -49,8 +54,12 @@ impl CertificateLoader {
     /// * `Result<String>` - Certificate content in PEM format
     #[allow(dead_code)]
     pub fn load_cert_from_file<P: AsRef<Path>>(cert_path: P) -> Result<String> {
-        fs::read_to_string(cert_path.as_ref())
-            .with_context(|| format!("Failed to read certificate from {}", cert_path.as_ref().display()))
+        fs::read_to_string(cert_path.as_ref()).with_context(|| {
+            format!(
+                "Failed to read certificate from {}",
+                cert_path.as_ref().display()
+            )
+        })
     }
 
     /// Validate certificate PEM format
@@ -135,8 +144,11 @@ impl CertificateValidator {
         // Validate PEM format for all components
         Self::validate_certificate_pair(&ephemeral_cert.ca_cert_pem, &ephemeral_cert.ca_key_pem)
             .context("CA certificate pair validation failed")?;
-        Self::validate_certificate_pair(&ephemeral_cert.server_cert_pem, &ephemeral_cert.server_key_pem)
-            .context("Server certificate pair validation failed")?;
+        Self::validate_certificate_pair(
+            &ephemeral_cert.server_cert_pem,
+            &ephemeral_cert.server_key_pem,
+        )
+        .context("Server certificate pair validation failed")?;
 
         Ok(())
     }
@@ -182,7 +194,8 @@ mod tests {
 
     #[test]
     fn test_certificate_validator_pem_validation() -> Result<()> {
-        let valid_cert = "-----BEGIN CERTIFICATE-----\ntest cert content\n-----END CERTIFICATE-----";
+        let valid_cert =
+            "-----BEGIN CERTIFICATE-----\ntest cert content\n-----END CERTIFICATE-----";
         let valid_key = "-----BEGIN PRIVATE KEY-----\ntest key content\n-----END PRIVATE KEY-----";
 
         // Valid certificates should pass
@@ -221,10 +234,18 @@ mod tests {
 
     #[test]
     fn test_certificate_hostname_validation() {
-        let cert_with_localhost = "-----BEGIN CERTIFICATE-----\nlocalhost content\n-----END CERTIFICATE-----";
-        let cert_without_localhost = "-----BEGIN CERTIFICATE-----\nother content\n-----END CERTIFICATE-----";
+        let cert_with_localhost =
+            "-----BEGIN CERTIFICATE-----\nlocalhost content\n-----END CERTIFICATE-----";
+        let cert_without_localhost =
+            "-----BEGIN CERTIFICATE-----\nother content\n-----END CERTIFICATE-----";
 
-        assert!(CertificateValidator::certificate_contains_hostname(cert_with_localhost, "localhost"));
-        assert!(!CertificateValidator::certificate_contains_hostname(cert_without_localhost, "localhost"));
+        assert!(CertificateValidator::certificate_contains_hostname(
+            cert_with_localhost,
+            "localhost"
+        ));
+        assert!(!CertificateValidator::certificate_contains_hostname(
+            cert_without_localhost,
+            "localhost"
+        ));
     }
 }

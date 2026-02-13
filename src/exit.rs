@@ -67,7 +67,8 @@ pub fn map_error_to_exit_code(error: &Error) -> i32 {
         || error_string.contains("tls handshake failed")
         || error_string.contains("certificate validation failed")
         || error_string.contains("unsupported tls version")
-        || error_string.contains("mysql") && (error_string.contains("auth") || error_string.contains("connect"))
+        || error_string.contains("mysql")
+            && (error_string.contains("auth") || error_string.contains("connect"))
     {
         return EXIT_DB_AUTH_ERROR;
     }

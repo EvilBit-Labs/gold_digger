@@ -3,9 +3,10 @@
 # https://docs.coderabbit.ai/guides/review-instructions
 
 # Language and project context
-language: en
-tone_instructions: "Be thorough and focus on security and maintainability"
+language: en-US
+tone_instructions: "Be thorough and focus on security, maintainability, and Rust best practices. Never log credentials. Flag unsafe database value conversions. Verify proper error handling and exit codes."
 enable_free_tier: true
+
 early_access: true
 
 reviews:
@@ -13,17 +14,57 @@ reviews:
   profile: assertive
   request_changes_workflow: true
   high_level_summary: true
-  poem: true
+  high_level_summary_instructions: "Create concise release notes as a bullet-point list, followed by a Markdown table showing lines added and removed by each contributing author."
+  high_level_summary_placeholder: "@coderabbitai summary"
   review_status: true
-  auto_apply_labels: true
+  commit_status: true
+  suggested_labels: true
 
-  # Auto-reviews configuration
-  auto_review:
-    enabled: true
-    drafts: false
-    base_branches:
-      - main
-      - develop
+  # Walkthrough enhancements
+  collapse_walkthrough: false
+  changed_files_summary: true
+  sequence_diagrams: true
+  estimate_code_review_effort: true
+  assess_linked_issues: true
+  related_issues: true
+  related_prs: true
+
+  # Auto-title generation
+  auto_title_placeholder: "@coderabbitai"
+  auto_title_instructions: "Generate concise titles following conventional commits format (feat:, fix:, docs:, etc.) with appropriate scope."
+
+  # Auto-labeling configuration
+  labeling_instructions:
+    - label: rust
+      instructions: Apply when the PR/MR contains changes to Rust source code files (src/**/*.rs, tests/**/*.rs, benches/**/*.rs).
+    - label: dependencies
+      instructions: Apply when the PR/MR updates Cargo.toml, Cargo.lock, or package.json dependency files.
+    - label: github_actions
+      instructions: Apply when the PR/MR contains changes to GitHub Actions workflow files (.github/workflows/**/*.yml, .github/workflows/**/*.yaml).
+    - label: documentation
+      instructions: Apply when the PR/MR contains changes to documentation files (docs/**/*.md, README.md, CHANGELOG.md, *.md).
+    - label: category/security
+      instructions: Apply when the PR/MR addresses security vulnerabilities, implements security features, or modifies security-related code (TLS configuration, credential handling, authentication).
+    - label: category/ci-cd
+      instructions: Apply when the PR/MR modifies CI/CD pipelines, GitHub Actions workflows, or release processes.
+    - label: category/testing
+      instructions: Apply when the PR/MR adds, modifies, or improves tests (tests/**/*.rs, test fixtures, test utilities).
+    - label: category/docs
+      instructions: Apply when the PR/MR improves documentation, adds examples, or updates user guides.
+    - label: category/code-quality
+      instructions: Apply when the PR/MR improves code quality, refactors code, fixes linting issues, or improves error handling.
+    - label: category/release
+      instructions: Apply when the PR/MR modifies release processes, versioning, or distribution configuration.
+    - label: type/enhancement
+      instructions: Apply when the PR/MR adds new features, improves functionality, or extends existing capabilities.
+    - label: type/chore
+      instructions: Apply when the PR/MR performs maintenance tasks, updates configuration files, or makes infrastructure changes without changing core functionality.
+    - label: area/ci-cd
+      instructions: Apply when the PR/MR modifies CI/CD workflows, GitHub Actions, or automation scripts.
+    - label: area/docs
+      instructions: Apply when the PR/MR modifies documentation in docs/ directory or documentation-related configuration.
+
+  # Pre-merge checks
   pre_merge_checks:
     docstrings:
       mode: warning
@@ -35,11 +76,6 @@ reviews:
       mode: warning
 
   # Path-based review rules
-  path_filters:
-    - "target/**"
-    - "**/*.lock"
-    - ".kiro/hooks/**"
-
   path_instructions:
     - path: "src/**"
       instructions: |
@@ -48,8 +84,21 @@ reviews:
         - Proper use of anyhow::Result for error propagation
         - Safe database value conversion (avoid panics on NULL values)
         - Feature-gated compilation patterns
-        - Security: never log DATABASE_URL or credentials
+        - Security: NEVER allow DATABASE_URL to appear in logs, error messages, or debug output
+        - Ensure all credential handling includes proper redaction
+        - Verify TLS/SSL configuration uses mysql::SslOpts programmatically
+        - Flag any use of from_value::<String>() without NULL checking (causes panics)
+        - Recommend SQL CAST(column AS CHAR) for type safety
+        - Ensure mysql::Value::NULL is handled explicitly in all conversions
         - Type safety with MySQL value conversions
+        - Verify 100-character line limit compliance
+        - Check for proper anyhow::Result usage in fallible functions
+        - Ensure feature gates are used correctly for conditional compilation
+        - Validate proper exit code usage (not -1 or generic codes)
+        - Verify CLI flags take precedence over environment variables
+        - Check output format detection by file extension
+        - Ensure justfile integration for CI parity
+        - Validate cross-platform compatibility
 
     - path: "**/*.rs"
       instructions: |
@@ -84,6 +133,7 @@ reviews:
         - Proper test isolation
         - Cross-platform compatibility
         - Security test scenarios
+
     - path: "docs/book/**"
       instructions: |
         Review documentation for:
@@ -93,41 +143,39 @@ reviews:
         - Tone, flow, and style guide adherence
         - Security best practices
 
-# Review focus areas
-focus_areas:
-  - security
-  - performance
-  - maintainability
-  - testing
-  - documentation
+# Code generation settings
+code_generation:
+  docstrings:
+    language: en-US
+    path_instructions:
+      - path: "src/**/*.rs"
+        instructions: |
+          Generate comprehensive Rust doc comments for all public functions, structs, and modules.
+          Include:
+          - Clear description of purpose and behavior
+          - Arguments section with parameter descriptions
+          - Returns section describing the return value
+          - Example section with code examples when helpful
+          - Safety section for unsafe functions
+          - Error conditions and when errors are returned
+          Follow Rust documentation conventions and use proper markdown formatting.
 
-# Custom instructions for specific patterns
-custom_instructions: |
-  ## Gold Digger Specific Review Guidelines
+  unit_tests:
+    path_instructions:
+      - path: "tests/**/*.rs"
+        instructions: |
+          Generate comprehensive unit tests following Rust testing best practices.
+          Include:
+          - Tests for happy paths and edge cases
+          - Tests for error conditions
+          - Tests for NULL value handling in database conversions
+          - Tests for security scenarios (credential redaction, TLS configuration)
+          - Cross-platform compatibility tests where applicable
+          Use testcontainers for integration tests with real MySQL/MariaDB instances.
 
-  ### Critical Security Patterns
-  - NEVER allow DATABASE_URL to appear in logs, error messages, or debug output
-  - Ensure all credential handling includes proper redaction
-  - Verify TLS/SSL configuration uses mysql::SslOpts programmatically
-
-  ### Database Safety Patterns
-  - Flag any use of from_value::<String>() without NULL checking (causes panics)
-  - Recommend SQL CAST(column AS CHAR) for type safety
-  - Ensure mysql::Value::NULL is handled explicitly in all conversions
-
-  ### Code Quality Standards
-  - Verify 100-character line limit compliance
-  - Check for proper anyhow::Result usage in fallible functions
-  - Ensure feature gates are used correctly for conditional compilation
-  - Validate proper exit code usage (not -1 or generic codes)
-
-  ### Architecture Compliance
-  - Verify CLI flags take precedence over environment variables
-  - Check output format detection by file extension
-  - Ensure justfile integration for CI parity
-  - Validate cross-platform compatibility
-
-# Enable specific review types
-enable_auto_security_review: true
-enable_auto_incremental_review: true
-enable_auto_review_triggers_on_push: true
+# Issue enrichment settings
+issue_enrichment:
+  auto_enrich:
+    enabled: true
+  planning:
+    enabled: true

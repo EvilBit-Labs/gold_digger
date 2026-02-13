@@ -10,7 +10,9 @@ use serde_json::Value;
 use std::path::Path;
 
 /// Re-export parsing types from integration module
-pub use crate::integration::common::{CsvParseResult, JsonParseResult, OutputParser, TsvParseResult};
+pub use crate::integration::common::{
+    CsvParseResult, JsonParseResult, OutputParser, TsvParseResult,
+};
 
 /// Simplified output parsing utilities
 pub struct OutputParsingUtils;
@@ -21,21 +23,24 @@ impl OutputParsingUtils {
         let content = std::fs::read_to_string(file_path)
             .with_context(|| format!("Failed to read output file: {}", file_path.display()))?;
 
-        let extension = file_path.extension().and_then(|ext| ext.to_str()).unwrap_or("");
+        let extension = file_path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or("");
 
         match extension.to_lowercase().as_str() {
             "csv" => {
                 let csv_result = OutputParser::parse_csv(&content)?;
                 Ok(ParsedOutput::Csv(csv_result))
-            },
+            }
             "json" => {
                 let json_result = OutputParser::parse_json(&content)?;
                 Ok(ParsedOutput::Json(json_result))
-            },
+            }
             "tsv" => {
                 let tsv_result = OutputParser::parse_tsv(&content)?;
                 Ok(ParsedOutput::Tsv(tsv_result))
-            },
+            }
             _ => Err(anyhow::anyhow!("Unsupported file extension: {}", extension)),
         }
     }
@@ -103,11 +108,11 @@ impl OutputParsingUtils {
         let json_result = OutputParser::parse_json(json_content)?;
         let tsv_result = OutputParser::parse_tsv(tsv_content)?;
 
-        let row_counts_match =
-            csv_result.row_count == json_result.row_count && json_result.row_count == tsv_result.row_count;
+        let row_counts_match = csv_result.row_count == json_result.row_count
+            && json_result.row_count == tsv_result.row_count;
 
-        let column_counts_match =
-            csv_result.column_count == json_result.column_count && json_result.column_count == tsv_result.column_count;
+        let column_counts_match = csv_result.column_count == json_result.column_count
+            && json_result.column_count == tsv_result.column_count;
 
         Ok(FormatConsistency {
             row_counts_match,
@@ -223,7 +228,11 @@ impl OutputAssertions {
     pub fn assert_row_count(output: &ParsedOutput, expected: usize) -> Result<()> {
         let actual = output.row_count();
         if actual != expected {
-            return Err(anyhow::anyhow!("Row count mismatch: expected {}, got {}", expected, actual));
+            return Err(anyhow::anyhow!(
+                "Row count mismatch: expected {}, got {}",
+                expected,
+                actual
+            ));
         }
         Ok(())
     }
@@ -232,7 +241,11 @@ impl OutputAssertions {
     pub fn assert_column_count(output: &ParsedOutput, expected: usize) -> Result<()> {
         let actual = output.column_count();
         if actual != expected {
-            return Err(anyhow::anyhow!("Column count mismatch: expected {}, got {}", expected, actual));
+            return Err(anyhow::anyhow!(
+                "Column count mismatch: expected {}, got {}",
+                expected,
+                actual
+            ));
         }
         Ok(())
     }

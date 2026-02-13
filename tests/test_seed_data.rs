@@ -8,7 +8,8 @@ use gold_digger::init_crypto_provider;
 
 mod fixtures;
 mod integration;
-use integration::{TestDatabase, containers::DatabaseContainer};
+use integration::TestDatabase;
+use integration::containers::database_container::DatabaseContainer;
 
 #[test]
 fn test_seed_data_mysql() -> Result<()> {
@@ -26,7 +27,10 @@ fn test_seed_data_mysql() -> Result<()> {
     let container = DatabaseContainer::new(db_type)?;
 
     // Test that container is ready
-    assert!(container.test_connection(), "Container should be ready for connections");
+    assert!(
+        container.test_connection(),
+        "Container should be ready for connections"
+    );
 
     // Seed the database
     container.seed_data()?;
@@ -51,7 +55,10 @@ fn test_seed_data_mariadb() -> Result<()> {
     let container = DatabaseContainer::new(db_type)?;
 
     // Test that container is ready
-    assert!(container.test_connection(), "Container should be ready for connections");
+    assert!(
+        container.test_connection(),
+        "Container should be ready for connections"
+    );
 
     // Seed the database
     container.seed_data()?;

@@ -1,19 +1,2 @@
-# Rust formatting configuration
-# See: https://rust-lang.github.io/rustfmt/
-
-# Maximum line length
-max_width = 119
-
-# Use spaces for indentation
-hard_tabs = false
-tab_spaces = 4
-
-# Function formatting
-fn_call_width = 119
-
-# Match expression formatting
-match_block_trailing_comma = true
-
-# Other formatting options
-merge_derives = true
-use_small_heuristics = "Default"
+edition = "2024"
+style_edition = "2024"

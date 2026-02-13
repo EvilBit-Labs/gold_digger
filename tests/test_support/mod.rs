@@ -73,6 +73,7 @@ impl TestUtils {
 
     /// Read file content as string with error context
     pub fn read_file_content(path: &Path) -> Result<String> {
-        std::fs::read_to_string(path).map_err(|e| anyhow::anyhow!("Failed to read file {}: {}", path.display(), e))
+        std::fs::read_to_string(path)
+            .map_err(|e| anyhow::anyhow!("Failed to read file {}: {}", path.display(), e))
     }
 }

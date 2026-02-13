@@ -166,7 +166,7 @@ id  name email created_at
 Different formats handle database NULL values differently:
 
 | Format | NULL Representation | Example                                 |
-|--------|---------------------|-----------------------------------------|
+| ------ | ------------------- | --------------------------------------- |
 | CSV    | Empty string        | `1,John,,2024-01-15`                    |
 | JSON   | JSON `null`         | `{"id":"1","name":"John","email":null}` |
 | TSV    | Empty string        | `1 John  2024-01-15`                    |
@@ -188,7 +188,7 @@ FROM products;
 ### Type Conversion Rules
 
 | MySQL Type         | CSV/TSV Output        | JSON Output                        | NULL Handling         |
-|--------------------|-----------------------|------------------------------------|-----------------------|
+| ------------------ | --------------------- | ---------------------------------- | --------------------- |
 | `INT`, `BIGINT`    | String representation | Number (if valid)                  | Empty string / `null` |
 | `DECIMAL`, `FLOAT` | String representation | Number (if valid)                  | Empty string / `null` |
 | `VARCHAR`, `TEXT`  | Direct string         | String                             | Empty string / `null` |

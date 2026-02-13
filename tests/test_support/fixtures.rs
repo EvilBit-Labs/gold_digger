@@ -25,7 +25,8 @@ impl TestFixtures {
     /// Load fixture content as string
     pub fn load_fixture(name: &str) -> Result<String> {
         let path = Self::fixture_path(name);
-        std::fs::read_to_string(&path).with_context(|| format!("Failed to load fixture: {}", path.display()))
+        std::fs::read_to_string(&path)
+            .with_context(|| format!("Failed to load fixture: {}", path.display()))
     }
 
     /// Check if a fixture exists
@@ -241,8 +242,12 @@ impl FixtureFiles {
     pub fn ensure_fixtures_dir() -> Result<()> {
         let fixtures_dir = TestFixtures::fixtures_dir();
         if !fixtures_dir.exists() {
-            std::fs::create_dir_all(&fixtures_dir)
-                .with_context(|| format!("Failed to create fixtures directory: {}", fixtures_dir.display()))?;
+            std::fs::create_dir_all(&fixtures_dir).with_context(|| {
+                format!(
+                    "Failed to create fixtures directory: {}",
+                    fixtures_dir.display()
+                )
+            })?;
         }
         Ok(())
     }
@@ -251,7 +256,8 @@ impl FixtureFiles {
     pub fn write_fixture(name: &str, content: &str) -> Result<()> {
         Self::ensure_fixtures_dir()?;
         let path = TestFixtures::fixture_path(name);
-        std::fs::write(&path, content).with_context(|| format!("Failed to write fixture: {}", path.display()))?;
+        std::fs::write(&path, content)
+            .with_context(|| format!("Failed to write fixture: {}", path.display()))?;
         Ok(())
     }
 
@@ -304,12 +310,30 @@ impl FixtureFiles {
         }
 
         // Create individual query files
-        std::fs::write(queries_dir.join("basic_select.sql"), SampleQueries::basic_select())?;
-        std::fs::write(queries_dir.join("data_types.sql"), SampleQueries::data_types_query())?;
-        std::fs::write(queries_dir.join("empty_result.sql"), SampleQueries::empty_result_query())?;
-        std::fs::write(queries_dir.join("special_chars.sql"), SampleQueries::special_chars_query())?;
-        std::fs::write(queries_dir.join("unicode.sql"), SampleQueries::unicode_query())?;
-        std::fs::write(queries_dir.join("invalid.sql"), SampleQueries::invalid_sql())?;
+        std::fs::write(
+            queries_dir.join("basic_select.sql"),
+            SampleQueries::basic_select(),
+        )?;
+        std::fs::write(
+            queries_dir.join("data_types.sql"),
+            SampleQueries::data_types_query(),
+        )?;
+        std::fs::write(
+            queries_dir.join("empty_result.sql"),
+            SampleQueries::empty_result_query(),
+        )?;
+        std::fs::write(
+            queries_dir.join("special_chars.sql"),
+            SampleQueries::special_chars_query(),
+        )?;
+        std::fs::write(
+            queries_dir.join("unicode.sql"),
+            SampleQueries::unicode_query(),
+        )?;
+        std::fs::write(
+            queries_dir.join("invalid.sql"),
+            SampleQueries::invalid_sql(),
+        )?;
 
         Ok(())
     }

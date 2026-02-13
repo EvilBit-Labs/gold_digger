@@ -197,6 +197,21 @@ VALUES (
     'Currency: $€£¥₹₽₩₪₫₱₡₦₨₩₪₫₱₡₦₨'
 );
 
+-- Ensure utf8mb4_text contains a rocket emoji for multibyte tests
+INSERT IGNORE INTO test_unicode (ascii_text, latin1_text, utf8_text, utf8mb4_text, chinese_text, japanese_text, arabic_text, cyrillic_text, emoji_text, mixed_unicode)
+VALUES (
+    'Rocket ASCII placeholder',
+    'Latin1 placeholder',
+    'UTF8 placeholder',
+    'Launch 🚀 sequence initiated',
+    '占位',
+    'テスト',
+    'اختبار',
+    'тест',
+    '🚀',
+    'Mixed 🚀'
+);
+
 -- ============================================================================
 -- Large Content Test Data
 -- ============================================================================

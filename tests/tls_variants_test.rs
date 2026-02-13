@@ -10,7 +10,9 @@ mod integration;
 use integration::{TestDatabasePlain, TestDatabaseTls, TlsContainerConfig};
 
 #[cfg(feature = "integration_tests")]
-use integration::{containers::DatabaseContainer, is_ci_environment, is_docker_available};
+use integration::containers::database_container::DatabaseContainer;
+#[cfg(feature = "integration_tests")]
+use integration::{is_ci_environment, is_docker_available};
 
 /// Skip test if Docker is not available
 #[cfg(feature = "integration_tests")]
@@ -176,8 +178,11 @@ fn test_tls_config_validation() -> Result<()> {
     assert_eq!(strict_config.min_tls_version, "TLSv1.3");
 
     // Test configuration with custom certificate paths (will fail validation since files don't exist)
-    let custom_config =
-        TlsContainerConfig::with_custom_certs("/nonexistent/ca.pem", "/nonexistent/cert.pem", "/nonexistent/key.pem");
+    let custom_config = TlsContainerConfig::with_custom_certs(
+        "/nonexistent/ca.pem",
+        "/nonexistent/cert.pem",
+        "/nonexistent/key.pem",
+    );
     assert!(custom_config.validate().is_err());
 
     eprintln!("✓ TLS configuration validation test completed");
@@ -230,8 +235,11 @@ fn test_tls_container_config_methods() -> Result<()> {
     );
 
     // Test custom certificate configuration
-    let custom_config =
-        TlsContainerConfig::with_custom_certs("/path/to/ca.pem", "/path/to/cert.pem", "/path/to/key.pem");
+    let custom_config = TlsContainerConfig::with_custom_certs(
+        "/path/to/ca.pem",
+        "/path/to/cert.pem",
+        "/path/to/key.pem",
+    );
     assert!(!custom_config.use_ephemeral_certs);
     assert!(custom_config.ca_cert_path.is_some());
     assert!(custom_config.server_cert_path.is_some());

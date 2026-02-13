@@ -2,21 +2,17 @@
 
 ## Purpose and Scope
 
-These instructions are specifically for **GitHub Copilot AI Coding Assistant**. For comprehensive
-project details, see:
+These instructions are specifically for **GitHub Copilot AI Coding Assistant**. For comprehensive project details, see:
 
 - **[WARP.md](../WARP.md)** - Authoritative development guide with architecture, TLS, and commands
 - **[AGENTS.md](../AGENTS.md)** - Rules of engagement for AI assistants
-- **[project_spec/requirements.md](../project_spec/requirements.md)** - Complete requirements and
-  roadmap
+- **[project_spec/requirements.md](../project_spec/requirements.md)** - Complete requirements and roadmap
 
-**Project Summary:** Gold Digger is a Rust MySQL/MariaDB query tool that outputs structured data
-(CSV/JSON/TSV) via CLI and environment variables for headless automation workflows.
+**Project Summary:** Gold Digger is a Rust MySQL/MariaDB query tool that outputs structured data (CSV/JSON/TSV) via CLI and environment variables for headless automation workflows.
 
 ## Reviewer Preference and PR Etiquette
 
-**⚠️ IMPORTANT:** This project uses **CodeRabbit.ai** as the primary reviewer. GitHub Copilot
-should:
+**⚠️ IMPORTANT:** This project uses **CodeRabbit.ai** as the primary reviewer. GitHub Copilot should:
 
 - Provide code suggestions and diffs only
 - **DO NOT** enable "Copilot for Pull Requests" auto-reviews
@@ -31,7 +27,7 @@ should:
 **Use these safe helpers instead:**
 
 ```rust
-use mysql::{from_value_opt, Value};
+use mysql::{Value, from_value_opt};
 
 /// Safe conversion for CSV/TSV output
 fn mysql_value_to_string(v: &Value) -> String {
@@ -44,19 +40,38 @@ fn mysql_value_to_string(v: &Value) -> String {
         Value::Double(d) => d.to_string(),
         Value::Date(year, month, day, hour, minute, second, micro) => {
             if *micro > 0 {
-                format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:06}", year, month, day, hour, minute, second, micro)
+                format!(
+                    "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:06}",
+                    year, month, day, hour, minute, second, micro
+                )
             } else {
-                format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", year, month, day, hour, minute, second)
+                format!(
+                    "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+                    year, month, day, hour, minute, second
+                )
             }
-        },
+        }
         Value::Time(neg, days, hours, minutes, seconds, micros) => {
             let sign = if *neg { "-" } else { "" };
             if *micros > 0 {
-                format!("{}{}:{:02}:{:02}:{:02}.{:06}", sign, days * 24 + *hours as u32, minutes, seconds, micros)
+                format!(
+                    "{}{}:{:02}:{:02}:{:02}.{:06}",
+                    sign,
+                    days * 24 + *hours as u32,
+                    minutes,
+                    seconds,
+                    micros
+                )
             } else {
-                format!("{}{}:{:02}:{:02}:{:02}", sign, days * 24 + *hours as u32, minutes, seconds)
+                format!(
+                    "{}{}:{:02}:{:02}:{:02}",
+                    sign,
+                    days * 24 + *hours as u32,
+                    minutes,
+                    seconds
+                )
             }
-        },
+        }
     }
 }
 
@@ -74,10 +89,11 @@ fn mysql_value_to_json(v: &Value) -> serde_json::Value {
                 Ok(s) => serde_json::Value::String(s.to_owned()),
                 Err(_) => serde_json::Value::String(format!("0x{}", hex::encode(b))),
             }
-        },
-        Value::Date(y, m, d, hh, mm, ss, micros) => {
-            serde_json::Value::String(format!("{y:04}-{m:02}-{d:02}T{hh:02}:{mm:02}:{ss:02}.{:06}Z", micros))
-        },
+        }
+        Value::Date(y, m, d, hh, mm, ss, micros) => serde_json::Value::String(format!(
+            "{y:04}-{m:02}-{d:02}T{hh:02}:{mm:02}:{ss:02}.{:06}Z",
+            micros
+        )),
         Value::Time(is_neg, d, h, m, s, micros) => serde_json::Value::String(format!(
             "{}{}:{:02}:{:02}:{:02}.{:06}",
             if *is_neg { "-" } else { "" },
@@ -92,13 +108,10 @@ fn mysql_value_to_json(v: &Value) -> serde_json::Value {
 
 **Usage:** CSV/TSV → `mysql_value_to_string()`, JSON → `mysql_value_to_json()`
 
-**SQL Queries:** ⚠️ **WARNING**: `CAST(column AS CHAR)` can corrupt binary data or produce mojibake
-for text in lossy encodings. Use safer alternatives:
+**SQL Queries:** ⚠️ **WARNING**: `CAST(column AS CHAR)` can corrupt binary data or produce mojibake for text in lossy encodings. Use safer alternatives:
 
-- **BLOB/BINARY columns**: Use `HEX(column)` or `TO_BASE64(column)` for lossless binary
-  representation
-- **Text columns**: Use `CAST(column AS CHAR CHARACTER SET utf8mb4)` or
-  `CONVERT(column USING utf8mb4)` to specify explicit encoding
+- **BLOB/BINARY columns**: Use `HEX(column)` or `TO_BASE64(column)` for lossless binary representation
+- **Text columns**: Use `CAST(column AS CHAR CHARACTER SET utf8mb4)` or `CONVERT(column USING utf8mb4)` to specify explicit encoding
 - **Numeric/Date columns**: `CAST(column AS CHAR)` is generally safe for these types
 
 ## Security Requirements (NEVER VIOLATE)
@@ -134,8 +147,7 @@ println!("Connecting to database...");
 - Safe type conversion; deterministic JSON; pretty-print option
 - Streaming support for large result sets; structured logging with redaction
 
-*See [WARP.md](../WARP.md) and [project_spec/requirements.md](../project_spec/requirements.md) for
-details.*
+*See [WARP.md](../WARP.md) and [project_spec/requirements.md](../project_spec/requirements.md) for details.*
 
 ## TLS and Feature Flags Quick Guide
 
@@ -168,8 +180,7 @@ cargo build --release --no-default-features --features "json csv"
 
 ### TLS Configuration
 
-TLS is configured programmatically using the `TlsConfig` struct and `create_tls_connection()`
-function. URL-based ssl-mode parameters are not supported by the mysql crate.
+TLS is configured programmatically using the `TlsConfig` struct and `create_tls_connection()` function. URL-based ssl-mode parameters are not supported by the mysql crate.
 
 ```rust
 use gold_digger::tls::{TlsConfig, create_tls_connection};
@@ -229,13 +240,10 @@ cargo test
 
 ## References
 
-- **[WARP.md](../WARP.md)** - Complete development guide (architecture, TLS, commands, Mermaid
-  diagrams)
+- **[WARP.md](../WARP.md)** - Complete development guide (architecture, TLS, commands, Mermaid diagrams)
 - **[AGENTS.md](../AGENTS.md)** - AI assistant rules of engagement
-- **[project_spec/requirements.md](../project_spec/requirements.md)** - Requirements roadmap and
-  feature gaps
+- **[project_spec/requirements.md](../project_spec/requirements.md)** - Requirements roadmap and feature gaps
 
 ---
 
-**Maintainer:** UncleSp1d3r • **Primary Reviewer:** CodeRabbit.ai • **No auto-commits** • **Use `gh`
-CLI**
+**Maintainer:** UncleSp1d3r • **Primary Reviewer:** CodeRabbit.ai • **No auto-commits** • **Use `gh` CLI**

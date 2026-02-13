@@ -1,129 +1,530 @@
 # Gold Digger Justfile
 # Task runner for the MySQL/MariaDB query tool
+# Run `just` or `just --list` to see available recipes
 
-# Use PowerShell for Windows targets
-set windows-shell := ["powershell.exe", "-c"]
+set shell := ["bash", "-cu"]
+set windows-powershell := true
+set dotenv-load := true
+set ignore-comments := true
 
-# Default recipe (runs linting)
-default:
-    @just --choose
+# Use mise to manage all dev tools
+# See mise.toml for tool versions
+mise_exec := "mise exec --"
 
+# ─────────────────────────────────────────────────────────────────────────────
 # Variables
-export RUST_BACKTRACE := "1"
-export CARGO_TERM_COLOR := "always"
+# ─────────────────────────────────────────────────────────────────────────────
 
-# =============================================================================
-# SETUP & INSTALLATION
-# =============================================================================
+project_dir := justfile_directory()
+binary_name := "gold_digger"
 
-# Development setup
+# Platform-specific commands
+_null := if os_family() == "windows" { "nul" } else { "/dev/null" }
+
+# Act configuration
+act_cmd := "act --container-architecture linux/amd64"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Default & Help
+# ─────────────────────────────────────────────────────────────────────────────
+
+[private]
+default:
+    @just --list --unsorted
+
+alias h := help
+alias l := list
+
+# Show available recipes
+[group('help')]
+help:
+    @just --list
+
+# Show recipes in a specific group
+[group('help')]
+list group="":
+    @just --list --unsorted {{ if group != "" { "--list-heading='' --list-prefix='  ' | grep -A999 '" + group + "'" } else { "" } }}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Setup & Installation
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Development setup - mise handles all tool installation via mise.toml
+[group('setup')]
 setup:
-    cd {{justfile_dir()}}
-    rustup component add rustfmt clippy llvm-tools-preview rust-src
-    cargo install cargo-nextest --locked || echo "cargo-nextest already installed"
+    @mise install
+    @{{ mise_exec }} pre-commit install --hook-type commit-msg 2>{{ _null }} || true
 
-# Install development tools (extended setup)
-install-tools:
-    cargo install cargo-llvm-cov --locked || echo "cargo-llvm-cov already installed"
-    cargo install cargo-audit --locked || echo "cargo-audit already installed"
-    cargo install cargo-deny --locked || echo "cargo-deny already installed"
-    cargo install cargo-dist --locked || echo "cargo-dist already installed"
+# ─────────────────────────────────────────────────────────────────────────────
+# Code Quality
+# ─────────────────────────────────────────────────────────────────────────────
 
-# Install mdBook and plugins for documentation
-docs-install:
-    cargo install mdbook mdbook-admonish mdbook-mermaid mdbook-linkcheck mdbook-toc mdbook-open-on-gh mdbook-tabs mdbook-i18n-helpers
-
-# =============================================================================
-# CODE QUALITY
-# =============================================================================
-
-format: fmt
+alias f := fmt
+alias format := fmt
+alias c := check
 
 # Format code
+[group('quality')]
 fmt:
-    cd {{justfile_dir()}}
-    just pre-commit-run || true
-    cargo fmt
+    @{{ mise_exec }} cargo fmt
 
 # Check formatting
+[group('quality')]
 fmt-check:
-    cd {{justfile_dir()}}
-    cargo fmt --check
+    @{{ mise_exec }} cargo fmt --check
 
 # Run clippy linting
+[group('quality')]
 lint:
-    cd {{justfile_dir()}}
-    cargo clippy --all-targets --release -- -D warnings
-    cargo clippy --all-targets --no-default-features --features "json csv additional_mysql_types verbose" -- -D warnings
-
-# Run MegaLinter with Rust flavor
-megalinter:
-    cd {{justfile_dir()}}
-    npx mega-linter-runner --flavor rust
+    @{{ mise_exec }} cargo clippy --all-targets --release -- -D warnings
+    @{{ mise_exec }} cargo clippy --all-targets --no-default-features --features "json csv additional_mysql_types verbose" -- -D warnings
 
 # Lint SQL files with sqlfluff
+[group('quality')]
 lint-sql:
-    cd {{justfile_dir()}}
-    @if command -v sqlfluff >/dev/null 2>&1; then \
-        echo "Linting SQL files..."; \
-        sqlfluff lint tests/fixtures/**/*.sql || echo "Note: Expected errors from invalid.sql test file are normal"; \
-    else \
-        echo "sqlfluff not installed - install with 'pip install sqlfluff'"; \
-        exit 1; \
-    fi
+    @{{ mise_exec }} sqlfluff lint tests/fixtures/**/*.sql
 
 # Fix SQL formatting with sqlfluff
+[group('quality')]
 fix-sql:
-    cd {{justfile_dir()}}
-    @if command -v sqlfluff >/dev/null 2>&1; then \
-        echo "Fixing SQL formatting..."; \
-        sqlfluff fix tests/fixtures/**/*.sql; \
-    else \
-        echo "sqlfluff not installed - install with 'pip install sqlfluff'"; \
-        exit 1; \
-    fi
+    @{{ mise_exec }} sqlfluff fix tests/fixtures/**/*.sql
 
 # Run clippy with fixes
+[group('quality')]
 fix:
-    cargo clippy --fix --allow-dirty --allow-staged
+    @{{ mise_exec }} cargo clippy --fix --allow-dirty --allow-staged
 
 # Quick development check
-check: pre-commit-run
-    just lint
-    just test-no-docker
+[group('quality')]
+check: lint test-no-docker
+    @{{ mise_exec }} pre-commit run -a 2>{{ _null }} || true
 
-pre-commit-run:
-    pre-commit run -a
+# Format files (for pre-commit hooks)
+[private]
+_format-files +FILES:
+    @{{ mise_exec }} npx prettier --write --config .prettierrc.json {{FILES}}
 
-# Format a single file (for pre-commit hooks)
-format-files +FILES:
-    npx prettier --write --config .prettierrc.json {{FILES}}
+# ─────────────────────────────────────────────────────────────────────────────
+# Build
+# ─────────────────────────────────────────────────────────────────────────────
+
+alias b := build
+
+# Build debug version
+[group('build')]
+build:
+    @{{ mise_exec }} cargo build
+
+# Build release version
+[group('build')]
+build-release:
+    @{{ mise_exec }} cargo build --release
+
+# Build minimal version (no default features)
+[group('build')]
+build-minimal:
+    @{{ mise_exec }} cargo build --release --no-default-features --features "csv,json"
+
+# Build all feature combinations
+[group('build')]
+build-all: build build-release build-minimal
+
+# Install locally from workspace
+[group('build')]
+install:
+    @{{ mise_exec }} cargo install --path .
+
+# Clean build artifacts
+[group('build')]
+[confirm("This will remove all build artifacts. Continue?")]
+clean:
+    @{{ mise_exec }} cargo clean
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Testing
+# ─────────────────────────────────────────────────────────────────────────────
+
+alias t := test
+
+# Run all tests (including ignored)
+[group('test')]
+test:
+    @{{ mise_exec }} cargo nextest run --run-ignored all
+
+# Run tests without Docker tests (non-ignored only)
+[group('test')]
+test-no-docker:
+    @{{ mise_exec }} cargo nextest run
+
+# Run integration tests (requires Docker)
+[group('test')]
+test-integration:
+    @{{ mise_exec }} cargo nextest run --features integration_tests
+
+# Run all tests including integration tests
+[group('test')]
+test-all:
+    @{{ mise_exec }} cargo nextest run --features integration_tests
+
+# Run integration tests with flaky test quarantine
+[group('test')]
+test-integration-nextest:
+    @GOLD_DIGGER_QUARANTINE_FLAKY_TESTS=1 GOLD_DIGGER_FLAKY_TEST_RETRIES=3 \
+        {{ mise_exec }} cargo nextest run --test integration_tests --features integration_tests
+
+# Run integration tests with JUnit XML output for CI
+[group('test')]
+test-integration-ci:
+    @mkdir -p target/nextest-reports
+    @GOLD_DIGGER_QUARANTINE_FLAKY_TESTS=1 GOLD_DIGGER_FLAKY_TEST_RETRIES=3 \
+        {{ mise_exec }} cargo nextest run --test integration_tests --features integration_tests \
+            --message-format json-pretty \
+            --junit-path target/nextest-reports/integration-tests.xml
+
+# Run fast integration test subset for PR validation
+[group('test')]
+test-integration-fast:
+    @GOLD_DIGGER_INTEGRATION_FAST=1 \
+        {{ mise_exec }} cargo nextest run --test integration_tests --features integration_tests \
+            --test-threads 2 --timeout 300
+
+# Run comprehensive integration test suite for main branch
+[group('test')]
+test-integration-comprehensive:
+    @GOLD_DIGGER_INTEGRATION_COMPREHENSIVE=1 GOLD_DIGGER_QUARANTINE_FLAKY_TESTS=1 \
+        {{ mise_exec }} cargo nextest run --test integration_tests --features integration_tests \
+            --test-threads 4 --timeout 900
+
+# Check Docker availability for integration tests
+[group('test')]
+check-docker:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Checking Docker availability..."
+    if ! command -v docker &>/dev/null; then
+        echo "Docker is not installed"
+        exit 1
+    fi
+    if ! docker info &>/dev/null; then
+        echo "Docker daemon is not running"
+        exit 1
+    fi
+    echo "Docker is available"
+    docker --version
+
+# Run integration tests with Docker availability check
+[group('test')]
+test-integration-safe: check-docker test-integration-nextest
+
+# Run integration tests with artifact collection on failure
+[group('test')]
+test-integration-debug:
+    @mkdir -p target/integration-test-artifacts
+    @GOLD_DIGGER_TEST_DEBUG=1 GOLD_DIGGER_COLLECT_ARTIFACTS=1 \
+        {{ mise_exec }} cargo nextest run --test integration_tests --features integration_tests \
+            --failure-output immediate --success-output never || \
+        echo "Integration tests failed - check target/integration-test-artifacts/ for debug info"
+
+# Run integration tests with performance benchmarking
+[group('test')]
+test-integration-perf:
+    @GOLD_DIGGER_INTEGRATION_PERF=1 \
+        {{ mise_exec }} cargo nextest run --test integration_tests --features integration_tests \
+            --test-threads 1 --timeout 600
+
+# Run integration tests with both TLS and non-TLS database configurations
+[group('test')]
+test-integration-matrix: check-docker
+    @echo "Testing non-TLS configurations..."
+    @GOLD_DIGGER_TEST_TLS=false {{ mise_exec }} cargo nextest run --test integration_tests --features integration_tests
+    @echo "Testing TLS configurations..."
+    @GOLD_DIGGER_TEST_TLS=true {{ mise_exec }} cargo nextest run --test integration_tests --features integration_tests
+
+# Run integration tests with flaky test quarantine enabled
+[group('test')]
+test-integration-quarantine:
+    @GOLD_DIGGER_QUARANTINE_FLAKY_TESTS=1 GOLD_DIGGER_FLAKY_TEST_RETRIES=5 \
+        {{ mise_exec }} cargo nextest run --test integration_tests --features integration_tests --retries 3
+
+# Test the new test execution utilities
+[group('test')]
+test-execution-utilities:
+    @{{ mise_exec }} cargo nextest run --test test_execution_utilities
+
+# Generate integration test reports for CI
+[group('test')]
+generate-test-reports:
+    @mkdir -p target/test-reports
+    @NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 {{ mise_exec }} cargo nextest run --test integration_tests --features integration_tests \
+        --message-format libtest-json > target/test-reports/integration-tests.json || true
+    @NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 {{ mise_exec }} cargo nextest run --test test_execution_utilities \
+        --message-format libtest-json > target/test-reports/execution-utilities.json || true
+    @echo "Test reports generated in target/test-reports/"
+
+# Validate CI integration and test execution utilities
+[group('test')]
+validate-ci-integration: test-execution-utilities
+    @echo "Test execution utilities validated"
+    @echo "CI environment detection working"
+    @echo "Nextest integration configured"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Benchmarking
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Run full Criterion benchmark suite (mirrors CI)
+[group('bench')]
+bench:
+    @{{ mise_exec }} cargo bench --bench rows_processing --bench output_formats --bench value_conversion --bench memory_usage
+
+# Run benchmarks and save current performance as a named baseline
+[group('bench')]
+bench-baseline BASELINE_NAME:
+    @{{ mise_exec }} cargo bench --bench rows_processing --bench output_formats --bench value_conversion --bench memory_usage -- --save-baseline {{BASELINE_NAME}}
+
+# Run benchmarks and compare against a previously saved baseline
+[group('bench')]
+bench-compare BASELINE_NAME:
+    @{{ mise_exec }} cargo bench --bench rows_processing --bench output_formats --bench value_conversion --bench memory_usage -- --baseline {{BASELINE_NAME}}
+
+# Open the generated HTML report from Criterion output directory
+[group('bench')]
+bench-report:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    REPORT_PATH=$(find target/criterion -name 'index.html' 2>/dev/null | head -1)
+    if [ -z "$REPORT_PATH" ]; then
+        echo "No benchmark report found. Run 'just bench' first."
+        exit 1
+    fi
+    if command -v xdg-open &>/dev/null; then
+        xdg-open "$REPORT_PATH"
+    elif command -v open &>/dev/null; then
+        open "$REPORT_PATH"
+    else
+        echo "Open manually: $REPORT_PATH"
+    fi
+
+# Run a specific benchmark by name
+[group('bench')]
+bench-specific BENCHMARK_NAME:
+    @{{ mise_exec }} cargo bench --bench {{BENCHMARK_NAME}}
+
+# Run benchmarks with reduced sample size for faster feedback during development
+[group('bench')]
+bench-quick:
+    @{{ mise_exec }} cargo bench --bench rows_processing --bench output_formats --bench value_conversion --bench memory_usage -- --quick
+
+# Profile release build
+[group('bench')]
+profile:
+    @{{ mise_exec }} cargo build --release
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Coverage
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Run tests with coverage (HTML report)
+[group('coverage')]
+coverage:
+    @{{ mise_exec }} cargo llvm-cov --package gold_digger --html
+
+# Run tests with coverage (LCOV for CI)
+[group('coverage')]
+coverage-llvm:
+    @{{ mise_exec }} cargo llvm-cov --workspace --lcov --output-path lcov.info
+
+alias cover := coverage-llvm
+
+# Run coverage with threshold check (for CI)
+[group('coverage')]
+coverage-ci:
+    @{{ mise_exec }} cargo llvm-cov --package gold_digger --json --output-path coverage.json
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Security & Auditing
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Security audit with cargo-audit
+[group('security')]
+audit:
+    @{{ mise_exec }} cargo audit
+
+# Check for license/security issues
+[group('security')]
+deny-check:
+    @{{ mise_exec }} cargo deny check
+
+alias deny := deny-check
+
+# Check for license/security issues (CI strict enforcement)
+[group('security')]
+deny-ci:
+    @{{ mise_exec }} cargo deny check --config deny.ci.toml
+
+# Comprehensive security scanning (combines audit, deny, and grype)
+[group('security')]
+security: audit deny-ci
+    @{{ mise_exec }} grype . --fail-on high || echo "High or critical vulnerabilities found"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dependencies & Validation
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Validate TLS dependency tree
+[group('deps')]
+validate-deps:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Validating TLS dependencies..."
+    if ! {{ mise_exec }} cargo tree -e=no-dev -f "{p} {f}" | grep -q "rustls"; then
+        echo "ERROR: rustls not found in standard build"
+        {{ mise_exec }} cargo tree -e=no-dev -f "{p} {f}"
+        exit 1
+    fi
+    if {{ mise_exec }} cargo tree -e=no-dev -f "{p} {f}" | grep -q "native-tls"; then
+        echo "ERROR: native-tls found in build (should be rustls-only)"
+        {{ mise_exec }} cargo tree -e=no-dev -f "{p} {f}"
+        exit 1
+    fi
+    echo "Standard build includes rustls TLS support"
+    echo "No native-tls dependencies found"
+    echo "TLS validation passed"
+
+# Check for outdated dependencies
+[group('deps')]
+outdated:
+    @{{ mise_exec }} cargo outdated
+
+# Update dependencies
+[group('deps')]
+update:
+    @{{ mise_exec }} cargo update
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Documentation
+# ─────────────────────────────────────────────────────────────────────────────
+
+alias d := docs
+alias docs-serve := docs
+
+# Build complete documentation (mdBook + rustdoc)
+[group('docs')]
+docs-build:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Build rustdoc
+    {{ mise_exec }} cargo doc --no-deps --document-private-items --target-dir docs/book/api-temp
+    # Move rustdoc output to final location
+    mkdir -p docs/book/api
+    cp -r docs/book/api-temp/doc/* docs/book/api/
+    rm -rf docs/book/api-temp
+    # Build mdBook
+    cd docs && {{ mise_exec }} mdbook build
+
+# Serve documentation locally with live reload
+[group('docs')]
+[unix]
+docs:
+    @cd docs && {{ mise_exec }} mdbook serve --open
+
+[group('docs')]
+[windows]
+docs:
+    @echo "mdbook serve requires a Unix-like environment"
+
+# Clean documentation artifacts
+[group('docs')]
+docs-clean:
+    @rm -rf docs/book target/doc
+
+# Check documentation (build + link validation + formatting)
+[group('docs')]
+docs-check:
+    @cd docs && {{ mise_exec }} mdbook build
+    @just fmt-check
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SBOM
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Generate Software Bill of Materials (SBOM) using cargo-cyclonedx
+[group('sbom')]
+sbom:
+    @{{ mise_exec }} cargo cyclonedx --override-filename sbom.json
+    @{{ mise_exec }} cargo tree --format "{p} {f}" | head -20
+
+# Generate SBOM using syft (alternative)
+[group('sbom')]
+sbom-syft:
+    @{{ mise_exec }} syft packages . -o cyclonedx-json=sbom.json
+    @{{ mise_exec }} syft packages . -o table
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Distribution (cargo-dist)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Initialize cargo-dist configuration
+[group('dist')]
+dist-init:
+    @echo "Initializing cargo-dist configuration..."
+    @{{ mise_exec }} cargo dist init --yes
+    @echo "cargo-dist initialized successfully"
+
+# Plan cargo-dist release (dry-run)
+[group('dist')]
+dist-plan:
+    @{{ mise_exec }} cargo dist plan
+
+# Build cargo-dist artifacts locally
+[group('dist')]
+dist-build:
+    @{{ mise_exec }} cargo dist build
+    @find target/distrib -type f -name "*" 2>/dev/null | head -10 || echo "  (no artifacts found)"
+
+# Generate cargo-dist installers
+[group('dist')]
+dist-generate:
+    @{{ mise_exec }} cargo dist generate
+
+# Validate cargo-dist configuration
+[group('dist')]
+dist-check:
+    @{{ mise_exec }} cargo dist plan >/dev/null && echo "cargo-dist configuration check passed"
+
+# Validate cargo-dist configuration (verbose)
+[group('dist')]
+validate-cargo-dist:
+    @test -f dist-workspace.toml && echo "dist-workspace.toml exists" || echo "Missing: dist-workspace.toml"
+    @{{ mise_exec }} cargo dist plan >/dev/null && echo "cargo-dist configuration is valid"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CI
+# ─────────────────────────────────────────────────────────────────────────────
 
 # Quality gates (CI equivalent)
+[group('ci')]
 ci-check: check fmt-check lint-sql test validate-deps deny-check
 
 # Full CI workflow equivalent - mirrors .github/workflows/ci.yml exactly
+[group('ci')]
 ci-full:
     #!/usr/bin/env bash
     set -euo pipefail
-    cd {{justfile_dir()}}
-
-    echo "🚀 Running full CI workflow equivalent..."
+    echo "Running full CI workflow equivalent..."
 
     # Job 1: Quality checks (mirrors quality job)
-    echo "📋 Quality checks..."
-    cargo fmt --check
-    cargo clippy -- -D warnings
-    cargo clippy --no-default-features --features "json csv additional_mysql_types verbose" -- -D warnings
+    echo "[1/6] Quality checks..."
+    {{ mise_exec }} cargo fmt --check
+    {{ mise_exec }} cargo clippy -- -D warnings
+    {{ mise_exec }} cargo clippy --no-default-features --features "json csv additional_mysql_types verbose" -- -D warnings
 
     # Job 2: Test TLS functionality (mirrors test-tls job)
-    echo "🔒 Testing TLS functionality..."
-    cargo build --release
+    echo "[2/6] Testing TLS functionality..."
+    {{ mise_exec }} cargo build --release
 
     BIN="./target/release/gold_digger"
-    if [ -f "${BIN}.exe" ]; then
-        BIN="${BIN}.exe"
-    fi
+    [[ -f "${BIN}.exe" ]] && BIN="${BIN}.exe"
 
     # Test mutually exclusive TLS flags (should fail)
     ! "$BIN" --tls-ca-file /tmp/nonexistent.pem --insecure-skip-hostname-verify \
@@ -133,40 +534,37 @@ ci-full:
     ! "$BIN" --insecure-skip-hostname-verify --allow-invalid-certificate \
         --db-url "mysql://test" --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
 
-    cargo nextest run --test tls_config_unit_tests
-    "$BIN" --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)" || exit 1
-    cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
-    ! cargo tree | grep "native-tls" || exit 1
+    {{ mise_exec }} cargo nextest run --test tls_config_unit_tests
+    "$BIN" --help | grep -qE "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)"
+    {{ mise_exec }} cargo tree | grep -qE "(rustls|rustls-native-certs)"
+    ! {{ mise_exec }} cargo tree | grep -q "native-tls"
 
     # Job 3: Test with different feature combinations (mirrors test-features job)
-    echo "🧪 Testing feature combinations..."
-    cargo nextest run
-    cargo nextest run --no-default-features --features "json csv additional_mysql_types verbose"
-    cargo build --release
-    cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
+    echo "[3/6] Testing feature combinations..."
+    {{ mise_exec }} cargo nextest run
+    {{ mise_exec }} cargo nextest run --no-default-features --features "json csv additional_mysql_types verbose"
+    {{ mise_exec }} cargo build --release
+    {{ mise_exec }} cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
 
-    "$BIN" --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)" || exit 1
-    cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
-    cargo tree --no-default-features --features "json csv additional_mysql_types verbose" \
-        | grep -E "(rustls|rustls-native-certs)" || exit 1
-    ! cargo tree | grep "native-tls" || exit 1
+    "$BIN" --help | grep -qE "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)"
+    {{ mise_exec }} cargo tree | grep -qE "(rustls|rustls-native-certs)"
+    {{ mise_exec }} cargo tree --no-default-features --features "json csv additional_mysql_types verbose" \
+        | grep -qE "(rustls|rustls-native-certs)"
+    ! {{ mise_exec }} cargo tree | grep -q "native-tls"
 
     # Job 4: Test TLS functionality (mirrors test-cross-platform job - Linux only)
-    echo "🌐 Testing cross-platform TLS functionality..."
-    cargo nextest run --test tls_config_unit_tests
-    cargo nextest run --test tls_integration
-    cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
-    ! cargo tree | grep "native-tls" || exit 1
-    cargo build --release
-    cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
-    ! cargo tree | grep "native-tls" || exit 1
-    "$BIN" --help | grep -E "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)" || exit 1
+    echo "[4/6] Testing cross-platform TLS functionality..."
+    {{ mise_exec }} cargo nextest run --test tls_config_unit_tests
+    {{ mise_exec }} cargo nextest run --test tls_integration
+    {{ mise_exec }} cargo tree | grep -qE "(rustls|rustls-native-certs)"
+    ! {{ mise_exec }} cargo tree | grep -q "native-tls"
+    {{ mise_exec }} cargo build --release
+    "$BIN" --help | grep -qE "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)"
 
     # Job 5: Test TLS error handling and configuration validation (mirrors test-tls-validation job)
-    echo "⚠️  Testing TLS error handling and validation..."
-    cargo build --release
-    cargo nextest run tls_error_handling_tests 2>/dev/null || true
-    cargo nextest run security_warning_tests 2>/dev/null || true
+    echo "[5/6] Testing TLS error handling and validation..."
+    {{ mise_exec }} cargo nextest run tls_error_handling_tests 2>/dev/null || true
+    {{ mise_exec }} cargo nextest run security_warning_tests 2>/dev/null || true
 
     ! "$BIN" --tls-ca-file /nonexistent/path.pem --db-url "mysql://test" \
         --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
@@ -174,779 +572,155 @@ ci-full:
     ! "$BIN" --tls-ca-file /tmp/invalid-cert.pem --db-url "mysql://test" \
         --query "SELECT 1" --output /tmp/test.json 2>/dev/null || exit 1
 
-    cargo tree | grep -E "(rustls|rustls-native-certs)" || exit 1
-    ! cargo tree | grep "native-tls" || exit 1
+    {{ mise_exec }} cargo tree | grep -qE "(rustls|rustls-native-certs)"
+    ! {{ mise_exec }} cargo tree | grep -q "native-tls"
 
     # Job 6: Generate coverage (mirrors coverage job)
-    echo "📊 Generating coverage reports..."
-    cargo llvm-cov --workspace --lcov --output-path lcov-default.info
-    cargo llvm-cov --workspace --lcov --output-path lcov-minimal.info \
+    echo "[6/6] Generating coverage reports..."
+    {{ mise_exec }} cargo llvm-cov --workspace --lcov --output-path lcov-default.info
+    {{ mise_exec }} cargo llvm-cov --workspace --lcov --output-path lcov-minimal.info \
         --no-default-features --features "json csv additional_mysql_types verbose"
     cat lcov-default.info lcov-minimal.info > lcov.info
 
-    echo "🎉 CI workflow equivalent completed successfully!"
+    echo "CI workflow equivalent completed successfully!"
 
 # Comprehensive full checks (all non-destructive validation)
-full-checks: ci-check audit deny docs-check coverage-llvm build-all validate-cargo-dist
+[group('ci')]
+full-checks: ci-check audit deny-check docs-check coverage-llvm build-all validate-cargo-dist
 
-# =============================================================================
-# BUILD
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
+# GitHub Actions (act)
+# ─────────────────────────────────────────────────────────────────────────────
 
-# Build debug version
-build:
-    cd {{justfile_dir()}}
-    cargo build
-
-# Build release version
-build-release:
-    cargo build --release
-
-# Build minimal version (no default features)
-build-minimal:
-    cargo build --release --no-default-features --features "csv,json"
-
-# Build all feature combinations
-build-all: build build-release build-minimal
-
-# Install locally from workspace
-install:
-    cargo install --path .
-
-# =============================================================================
-# TESTING
-# =============================================================================
-
-# Run tests (prefer nextest, fallback to cargo test)
-test:
-    cd {{justfile_dir()}}
-    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
-        echo "Running tests with nextest..."; \
-        cargo nextest run --run-ignored all; \
-    else \
-        echo "nextest not available, falling back to cargo test..."; \
-        cargo test -- --include-ignored; \
-    fi
-
-# Run tests without Docker tests (non-ignored only)
-test-no-docker:
-    cd {{justfile_dir()}}
-    cargo nextest run || cargo test
-
-# Run integration tests (requires Docker)
-test-integration:
-    cd {{justfile_dir()}}
-    cargo test --features integration_tests
-
-# Run all tests including integration tests
-test-all:
-    cd {{justfile_dir()}}
-    cargo test --features integration_tests
-
-# Run integration tests with nextest (parallel execution and flaky test quarantine)
-test-integration-nextest:
-    cd {{justfile_dir()}}
-    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
-        echo "Running integration tests with nextest..."; \
-        GOLD_DIGGER_QUARANTINE_FLAKY_TESTS=1 GOLD_DIGGER_FLAKY_TEST_RETRIES=3 \
-        cargo nextest run --test integration_tests --features integration_tests; \
-    else \
-        echo "nextest not available, falling back to cargo test..."; \
-        cargo test --test integration_tests --features integration_tests; \
-    fi
-
-# Run integration tests with JUnit XML output for CI
-test-integration-ci:
-    cd {{justfile_dir()}}
-    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
-        echo "Running integration tests with nextest and JUnit output..."; \
-        mkdir -p target/nextest-reports; \
-        GOLD_DIGGER_QUARANTINE_FLAKY_TESTS=1 GOLD_DIGGER_FLAKY_TEST_RETRIES=3 \
-        cargo nextest run --test integration_tests --features integration_tests \
-            --message-format json-pretty \
-            --junit-path target/nextest-reports/integration-tests.xml; \
-    else \
-        echo "nextest not available, falling back to cargo test..."; \
-        cargo test --test integration_tests --features integration_tests; \
-    fi
-
-# Run fast integration test subset for PR validation (< 5 minutes)
-test-integration-fast:
-    cd {{justfile_dir()}}
-    @echo "Running fast integration test subset for PR validation..."
-    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
-        GOLD_DIGGER_INTEGRATION_FAST=1 \
-        cargo nextest run --test integration_tests --features integration_tests \
-            --test-threads 2 --timeout 300; \
-    else \
-        GOLD_DIGGER_INTEGRATION_FAST=1 \
-        cargo test --test integration_tests --features integration_tests; \
-    fi
-
-# Run comprehensive integration test suite for main branch
-test-integration-comprehensive:
-    cd {{justfile_dir()}}
-    @echo "Running comprehensive integration test suite..."
-    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
-        GOLD_DIGGER_INTEGRATION_COMPREHENSIVE=1 GOLD_DIGGER_QUARANTINE_FLAKY_TESTS=1 \
-        cargo nextest run --test integration_tests --features integration_tests \
-            --test-threads 4 --timeout 900; \
-    else \
-        GOLD_DIGGER_INTEGRATION_COMPREHENSIVE=1 \
-        cargo test --test integration_tests --features integration_tests; \
-    fi
-
-# Check Docker availability for integration tests
-check-docker:
-    @echo "Checking Docker availability for integration tests..."
-    @if command -v docker >/dev/null 2>&1; then \
-        if docker info >/dev/null 2>&1; then \
-            echo "✓ Docker is available and daemon is running"; \
-            docker --version; \
-        else \
-            echo "✗ Docker is installed but daemon is not running"; \
-            echo "  Please start Docker daemon to run integration tests"; \
-            exit 1; \
-        fi; \
-    else \
-        echo "✗ Docker is not installed"; \
-        echo "  Please install Docker to run integration tests"; \
-        exit 1; \
-    fi
-
-# Run integration tests with Docker availability check
-test-integration-safe:
-    just check-docker
-    just test-integration-nextest
-
-# Run integration tests with artifact collection on failure
-test-integration-debug:
-    cd {{justfile_dir()}}
-    @echo "Running integration tests with debug artifact collection..."
-    @mkdir -p target/integration-test-artifacts
-    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
-        GOLD_DIGGER_TEST_DEBUG=1 GOLD_DIGGER_COLLECT_ARTIFACTS=1 \
-        cargo nextest run --test integration_tests --features integration_tests \
-            --failure-output immediate --success-output never || \
-        echo "Integration tests failed - check target/integration-test-artifacts/ for debug info"; \
-    else \
-        GOLD_DIGGER_TEST_DEBUG=1 GOLD_DIGGER_COLLECT_ARTIFACTS=1 \
-        cargo test --test integration_tests --features integration_tests || \
-        echo "Integration tests failed - check target/integration-test-artifacts/ for debug info"; \
-    fi
-
-# Run integration tests with performance benchmarking
-test-integration-perf:
-    cd {{justfile_dir()}}
-    @echo "Running integration tests with performance benchmarking..."
-    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
-        GOLD_DIGGER_INTEGRATION_PERF=1 \
-        cargo nextest run --test integration_tests --features integration_tests \
-            --test-threads 1 --timeout 600; \
-    else \
-        GOLD_DIGGER_INTEGRATION_PERF=1 \
-        cargo test --test integration_tests --features integration_tests; \
-    fi
-
-# Run integration tests with both TLS and non-TLS database configurations
-test-integration-matrix:
-    cd {{justfile_dir()}}
-    @echo "Running integration tests with TLS/non-TLS matrix..."
-    just check-docker
-    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
-        echo "Testing non-TLS configurations..."; \
-        GOLD_DIGGER_TEST_TLS=false \
-        cargo nextest run --test integration_tests --features integration_tests; \
-        echo "Testing TLS configurations..."; \
-        GOLD_DIGGER_TEST_TLS=true \
-        cargo nextest run --test integration_tests --features integration_tests; \
-    else \
-        echo "Testing non-TLS configurations..."; \
-        GOLD_DIGGER_TEST_TLS=false \
-        cargo test --test integration_tests --features integration_tests; \
-        echo "Testing TLS configurations..."; \
-        GOLD_DIGGER_TEST_TLS=true \
-        cargo test --test integration_tests --features integration_tests; \
-    fi
-
-# Run integration tests with flaky test quarantine enabled
-test-integration-quarantine:
-    cd {{justfile_dir()}}
-    @echo "Running integration tests with flaky test quarantine..."
-    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
-        GOLD_DIGGER_QUARANTINE_FLAKY_TESTS=1 GOLD_DIGGER_FLAKY_TEST_RETRIES=5 \
-        cargo nextest run --test integration_tests --features integration_tests \
-            --retries 3; \
-    else \
-        echo "Flaky test quarantine requires cargo-nextest - falling back to standard test"; \
-        cargo test --test integration_tests --features integration_tests; \
-    fi
-
-# Test the new test execution utilities
-test-execution-utilities:
-    cd {{justfile_dir()}}
-    @echo "Testing test execution utilities..."
-    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
-        cargo nextest run --test test_execution_utilities; \
-    else \
-        cargo test --test test_execution_utilities; \
-    fi
-
-# Generate integration test reports for CI
-generate-test-reports:
-    cd {{justfile_dir()}}
-    @echo "Generating integration test reports..."
-    @mkdir -p target/test-reports
-    @if command -v cargo-nextest >/dev/null 2>&1 || cargo nextest --version >/dev/null 2>&1; then \
-        echo "Running tests with nextest and JSON output..."; \
-        NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --test integration_tests --features integration_tests \
-            --message-format libtest-json > target/test-reports/integration-tests.json || true; \
-        NEXTEST_EXPERIMENTAL_LIBTEST_JSON=1 cargo nextest run --test test_execution_utilities \
-            --message-format libtest-json > target/test-reports/execution-utilities.json || true; \
-        echo "JSON test reports generated in target/test-reports/"; \
-        echo "Note: JUnit XML generation would require additional tooling or custom implementation"; \
-    else \
-        echo "Nextest not available, using standard cargo test"; \
-        cargo test --test integration_tests --features integration_tests || true; \
-        cargo test --test test_execution_utilities || true; \
-    fi
-    @echo "Test reports generated in target/test-reports/"
-
-# Validate CI integration and test execution utilities
-validate-ci-integration:
-    cd {{justfile_dir()}}
-    @echo "Validating CI integration and test execution utilities..."
-    just test-execution-utilities
-    @echo "✓ Test execution utilities validated"
-    @echo "✓ CI environment detection working"
-    @echo "✓ Nextest integration configured"
-    @echo "✓ JUnit report generation available"
-
-# Run tests with coverage (llvm-cov)
-coverage:
-    cd {{justfile_dir()}}
-    cargo llvm-cov --package gold_digger --html
-
-# Run tests with coverage (llvm-cov for CI)
-coverage-llvm:
-    cd {{justfile_dir()}}
-    cargo llvm-cov --workspace --lcov --output-path lcov.info
-
-# Coverage alias for CI naming consistency
-cover: coverage-llvm
-
-# Run coverage with threshold check (for CI)
-coverage-ci:
-    cd {{justfile_dir()}}
-    cargo llvm-cov --package gold_digger --json --output-path coverage.json
-
-# Benchmark (when criterion tests exist)
-bench:
-    cargo bench || echo "No benchmarks found"
-
-# Profile release build
-profile:
-    cargo build --release
-
-# =============================================================================
-# SECURITY
-# =============================================================================
-
-# Security audit
-audit:
-    cargo audit
-
-# Check for license/security issues (local development - tolerant)
-deny:
-    cargo deny check || echo "cargo-deny not installed - run 'just install-tools'"
-
-# Check for license/security issues with all features
-deny-check:
-    cargo deny check || echo "cargo-deny not installed - run 'just install-tools'"
-
-# Check for license/security issues (CI strict enforcement)
-deny-ci:
-    cargo deny check --config deny.ci.toml
-
-# Comprehensive security scanning (combines audit, deny, and grype)
-security:
-    just audit
-    just deny-ci
-    @if command -v grype >/dev/null 2>&1; then \
-    grype . --fail-on high || echo "High or critical vulnerabilities found"; \
-    else \
-    echo "grype not installed - install with:"; \
-    echo "   curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin"; \
-    fi
-
-# =============================================================================
-# DEPENDENCIES & VALIDATION
-# =============================================================================
-
-# Validate TLS dependency tree
-validate-deps:
-    @echo "Validating TLS dependencies..."
-    @if ! cargo tree -e=no-dev -f "{p} {f}" | grep -q "rustls"; then \
-    echo "ERROR: rustls not found in standard build"; \
-    cargo tree -e=no-dev -f "{p} {f}"; \
-    exit 1; \
-    fi
-    @if cargo tree -e=no-dev -f "{p} {f}" | grep -q "native-tls"; then \
-    echo "ERROR: native-tls found in build (should be rustls-only)"; \
-    cargo tree -e=no-dev -f "{p} {f}"; \
-    exit 1; \
-    fi
-    @echo "✓ Standard build includes rustls TLS support"
-    @echo "✓ No native-tls dependencies found"
-    @echo "✓ TLS validation passed"
-
-# Check for outdated dependencies
-outdated:
-    cargo outdated || echo "Install cargo-outdated: cargo install cargo-outdated"
-
-# Update dependencies
-update:
-    cargo update
-
-# =============================================================================
-# DOCUMENTATION
-# =============================================================================
-
-# Build complete documentation (mdBook + rustdoc)
-docs-build:
+[private]
+_require-act:
     #!/usr/bin/env bash
-    set -euo pipefail
-    # Build rustdoc
-    cargo doc --no-deps --document-private-items --target-dir docs/book/api-temp
-    # Move rustdoc output to final location
-    mkdir -p docs/book/api
-    cp -r docs/book/api-temp/doc/* docs/book/api/
-    rm -rf docs/book/api-temp
-    # Build mdBook
-    cd docs && mdbook build
-
-# Serve documentation locally with live reload
-docs-serve:
-    cd docs && mdbook serve --open
-
-# Clean documentation artifacts
-docs-clean:
-    rm -rf docs/book target/doc
-
-# Check documentation (build + link validation + formatting)
-docs-check:
-    cd docs && mdbook build
-    @just fmt-check
-
-# Generate and serve documentation
-[unix]
-docs:
-    cd docs && mdbook serve --open
-
-[windows]
-docs:
-    @echo "mdbook requires a Unix-like environment to serve"
-
-# =============================================================================
-# RUNNING & DEVELOPMENT
-# =============================================================================
-
-# Run with example environment variables
-run OUTPUT_FILE DATABASE_URL DATABASE_QUERY:
-    OUTPUT_FILE={{OUTPUT_FILE}} DATABASE_URL={{DATABASE_URL}} DATABASE_QUERY={{DATABASE_QUERY}} cargo run --release
-
-# Run with safe example (casting to avoid panics)
-run-safe:
-    DB_URL=sqlite://dummy.db API_KEY=dummy NODE_ENV=testing APP_ENV=safe cargo run --release
-
-# Development server (watch for changes) - requires cargo-watch
-watch:
-    cargo watch -x "run --release" || echo "Install cargo-watch: cargo install cargo-watch"
-
-# =============================================================================
-# UTILITIES & INFORMATION
-# =============================================================================
-
-# Show feature matrix
-features:
-    @echo "Available feature combinations:"
-    @echo ""
-    @echo "Standard build:"
-    @echo "  cargo build --release"
-    @echo ""
-    @echo "Minimal build (fewer features):"
-    @echo "  cargo build --no-default-features --features \"csv json\""
-    @echo ""
-    @echo "All MySQL types:"
-    @echo "  cargo build --release --features \"default additional_mysql_types\""
-
-# Check current version
-version:
-    @echo "Current version information:"
-    @echo "Cargo.toml version: $(grep '^version' Cargo.toml | cut -d'"' -f2)"
-    @echo "CHANGELOG.md version: $(grep -m1 '## \[v' CHANGELOG.md | sed 's/.*\[v/v/' | sed 's/\].*//')"
-    @echo ""
-    @echo "Note: Versions may be out of sync - check WARP.md for details"
-
-# Show project status
-status:
-    @echo "Gold Digger Project Status:"
-    @echo ""
-    @echo "Architecture: Environment variable driven, structured output"
-    @echo "Current: v0.2.6 (check version discrepancy)"
-    @echo "Target: v1.0 with CLI interface"
-    @echo "Maintainer: EvilBit-Labs"
-    @echo ""
-    @echo "Critical Issues:"
-    @echo "  • Type conversion panics on NULL/non-string values"
-    @echo "  • No dotenv support (use exported env vars)"
-    @echo "  • Non-deterministic JSON output"
-    @echo "  • Pattern matching bug in src/main.rs:59"
-    @echo ""
-    @echo "cargo-dist: Automated versioning and distribution enabled"
-    @echo "See WARP.md for detailed information"
-
-# Clean build artifacts
-clean:
-    cargo clean
-
-# =============================================================================
-# SBOM & SECURITY
-# =============================================================================
-
-# Generate Software Bill of Materials (SBOM) for local inspection
-sbom:
-    @if command -v cargo-cyclonedx >/dev/null 2>&1 || cargo cyclonedx --help >/dev/null 2>&1; then \
-    cargo cyclonedx --override-filename sbom.json; \
-    cargo tree --format "{p} {f}" | head -20; \
-    elif command -v syft >/dev/null 2>&1; then \
-    syft packages . -o cyclonedx-json=sbom.json; \
-    syft packages . -o table; \
-    else \
-    echo "Neither cargo-cyclonedx nor syft installed"; \
-    echo ""; \
-    echo "Install cargo-cyclonedx (preferred):"; \
-    echo "   cargo install cargo-cyclonedx"; \
-    echo ""; \
-    echo "Or install syft:"; \
-    echo "   curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin"; \
-    echo ""; \
-    echo "Alternative: Use cargo tree for dependency inspection:"; \
-    cargo tree --format "{p} {f}"; \
+    if ! command -v act >/dev/null 2>&1; then
+        echo "Error: act not found. Install: brew install act"
+        exit 1
     fi
 
-# =============================================================================
-# CARGO-DIST & DISTRIBUTION
-# =============================================================================
-
-# Initialize cargo-dist configuration
-dist-init:
-    @echo "Initializing cargo-dist configuration..."
-    @if command -v cargo-dist >/dev/null 2>&1; then \
-    echo "Running cargo-dist init..."; \
-    cargo dist init --yes; \
-    echo "cargo-dist initialized successfully"; \
-    echo "Configuration written to cargo-dist.toml"; \
-    else \
-    echo "cargo-dist not installed - run 'just install-tools' first"; \
-    exit 1; \
-    fi
-
-# Plan cargo-dist release (dry-run)
-dist-plan:
-    @if command -v cargo-dist >/dev/null 2>&1; then \
-    cargo dist plan; \
-    else \
-    echo "cargo-dist not installed - run 'just install-tools' first"; \
-    exit 1; \
-    fi
-
-# Build cargo-dist artifacts locally
-dist-build:
-    @if command -v cargo-dist >/dev/null 2>&1; then \
-    cargo dist build; \
-    find target/distrib -type f -name "*" | head -10 || echo "  (no artifacts found)"; \
-    else \
-    echo "cargo-dist not installed - run 'just install-tools' first"; \
-    exit 1; \
-    fi
-
-# Generate cargo-dist installers
-dist-generate:
-    @if command -v cargo-dist >/dev/null 2>&1; then \
-    cargo dist generate; \
-    else \
-    echo "cargo-dist not installed - run 'just install-tools' first"; \
-    exit 1; \
-    fi
-
-# Validate cargo-dist configuration
-dist-check:
-    @if command -v cargo-dist >/dev/null 2>&1; then \
-    if cargo dist plan >/dev/null 2>&1; then \
-    echo "cargo-dist configuration check passed"; \
-    else \
-    echo "cargo-dist configuration check failed"; \
-    exit 1; \
-    fi; \
-    else \
-    echo "cargo-dist not installed - run 'just install-tools' first"; \
-    exit 1; \
-    fi
-
-# Validate cargo-dist configuration
-validate-cargo-dist:
-    @test -f dist-workspace.toml && echo "dist-workspace.toml exists" || echo "Missing: dist-workspace.toml"
-    @if command -v cargo-dist >/dev/null 2>&1; then \
-    if cargo dist plan >/dev/null 2>&1; then \
-    echo "cargo-dist configuration is valid"; \
-    else \
-    echo "cargo-dist configuration is invalid"; \
-    exit 1; \
-    fi; \
-    else \
-    echo "cargo-dist not installed - run 'just install-tools' first"; \
-    fi
-
-# =============================================================================
-# ACT & GITHUB ACTIONS TESTING
-# =============================================================================
-
-# Local GitHub Actions Testing (requires act)
-act-setup:
-    @which act || echo "Please install act: brew install act (or see https://github.com/nektos/act)"
-    docker pull catthehacker/ubuntu:act-22.04 || echo "Could not pull Docker image - act may not work without it"
+# Pull required Docker image for local GitHub Actions testing
+[group('act')]
+act-setup: _require-act
+    @docker pull catthehacker/ubuntu:act-22.04
 
 # Run CI workflow locally (dry-run)
-act-ci-dry:
-    act -W .github/workflows/ci.yml --dryrun
+[group('act')]
+act-ci-dry: _require-act
+    @{{ mise_exec }} {{ act_cmd }} -W .github/workflows/ci.yml --dryrun
 
 # Run CI workflow locally (full execution)
-act-ci:
-    act -W .github/workflows/ci.yml
+[group('act')]
+act-ci: _require-act
+    @{{ mise_exec }} {{ act_cmd }} -W .github/workflows/ci.yml
 
 # Run push workflow locally (dry-run)
-act-push-dry:
-    act push --dryrun
+[group('act')]
+act-push-dry: _require-act
+    @{{ mise_exec }} {{ act_cmd }} push --dryrun
 
 # Run push workflow locally (full execution)
-act-push:
-    act push
+[group('act')]
+act-push: _require-act
+    @{{ mise_exec }} {{ act_cmd }} push
 
 # Run release workflow dry-run (requires tag parameter)
-act-release-dry TAG:
+[group('act')]
+act-release-dry TAG: _require-act
     @echo "Running release workflow dry-run for tag: {{TAG}}"
-    @echo "This simulates the full release pipeline without actually creating releases"
-    act push --input tag={{TAG}} -W .github/workflows/release.yml --dryrun
+    @{{ mise_exec }} {{ act_cmd }} push --input tag={{TAG}} -W .github/workflows/release.yml --dryrun
 
 # Test cargo-dist workflow locally
-act-cargo-dist-dry:
+[group('act')]
+act-cargo-dist-dry: _require-act
     @echo "Running cargo-dist workflow dry-run..."
-    @echo "This simulates the cargo-dist workflow without creating releases"
-    @if command -v cargo-dist >/dev/null 2>&1; then \
-    echo "Running cargo-dist plan..."; \
-    cargo dist plan; \
-    else \
-    echo "cargo-dist not installed - run 'just install-tools' first"; \
-    fi
+    @{{ mise_exec }} cargo dist plan
 
 # Test cargo-dist with sample conventional commits
+[group('act')]
 act-cargo-dist-test:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "feat: add new output format support" > test-commit-feat.txt
-    echo "fix: resolve connection timeout issue" > test-commit-fix.txt
-    echo "docs: update README with new examples" > test-commit-docs.txt
-    echo "feat!: migrate to new CLI interface" > test-commit-breaking.txt
+    @echo "feat: add new output format support" > test-commit-feat.txt
+    @echo "fix: resolve connection timeout issue" > test-commit-fix.txt
+    @echo "docs: update README with new examples" > test-commit-docs.txt
+    @echo "feat!: migrate to new CLI interface" > test-commit-breaking.txt
 
 # Test cargo-dist integration with release workflow
-act-cargo-dist-integration TAG:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if command -v cargo-dist >/dev/null 2>&1; then \
-    cargo dist plan; \
-    else \
-    echo "cargo-dist not installed - run 'just install-tools' first"; \
-    fi
-    act workflow_dispatch --input tag={{TAG}} -W .github/workflows/release.yml --dryrun
+[group('act')]
+act-cargo-dist-integration TAG: _require-act
+    @{{ mise_exec }} cargo dist plan
+    @{{ mise_exec }} {{ act_cmd }} workflow_dispatch --input tag={{TAG}} -W .github/workflows/release.yml --dryrun
 
 # List all available GitHub Actions workflows
-act-list:
-    act --list
+[group('act')]
+act-list: _require-act
+    @{{ mise_exec }} {{ act_cmd }} --list
 
 # Test specific workflow job
-act-job JOB:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd {{justfile_dir()}}
-    act -j {{JOB}} --dryrun
+[group('act')]
+act-job JOB: _require-act
+    @{{ mise_exec }} {{ act_cmd }} -j {{JOB}} --dryrun
 
 # Clean act cache and containers
+[group('act')]
 act-clean:
-    -docker ps -a | grep "act-" | awk '{print $1}' | xargs docker rm -f
-    -docker images | grep "act-" | awk '{print $3}' | xargs docker rmi -f
+    @-docker ps -a | grep "act-" | awk '{print $$1}' | xargs docker rm -f 2>/dev/null || true
+    @-docker images | grep "act-" | awk '{print $$3}' | xargs docker rmi -f 2>/dev/null || true
 
-# =============================================================================
-# RELEASE & VALIDATION
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
+# Release & Validation
+# ─────────────────────────────────────────────────────────────────────────────
 
 # Release preparation checklist
-release-check:
-    just ci-check
-    just audit
-    just build-all
-    just act-ci-dry
-    just dist-plan
-    just act-cargo-dist-integration v0.2.7
+[group('release')]
+release-check: ci-check audit build-all act-ci-dry dist-plan
+    @just act-cargo-dist-integration v0.2.7
 
 # Release simulation for local testing
+[group('release')]
 [unix]
-release-dry:
+release-dry: build-release
     #!/usr/bin/env bash
     set -euo pipefail
     if ! git diff-index --quiet HEAD --; then
-    echo "Warning: Working directory has uncommitted changes"
+        echo "Warning: Working directory has uncommitted changes"
     fi
-    just build-release
     BINARY_PATH="target/release/gold_digger"
-    if [[ ! -f "$BINARY_PATH" ]]; then
-    echo "Binary not found at $BINARY_PATH"
-    exit 1
-    fi
-    if command -v syft >/dev/null 2>&1; then
-    syft packages . -o cyclonedx-json=sbom-test.json
-    else
-    echo '{"bomFormat":"CycloneDX","specVersion":"1.5","components":[]}' > sbom-test.json
-    fi
-    if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$BINARY_PATH" > checksums-test.txt
-    sha256sum sbom-test.json >> checksums-test.txt
-    elif command -v shasum >/dev/null 2>&1; then
+    [[ -f "$BINARY_PATH" ]] || { echo "Binary not found at $BINARY_PATH"; exit 1; }
+    {{ mise_exec }} syft packages . -o cyclonedx-json=sbom-test.json
     shasum -a 256 "$BINARY_PATH" > checksums-test.txt
     shasum -a 256 sbom-test.json >> checksums-test.txt
-    else
-    touch checksums-test.txt
-    fi
 
+[group('release')]
 [windows]
-release-dry:
-    just build-release
+release-dry: build-release
+    #!pwsh
     $BINARY_PATH = "target\release\gold_digger.exe"
     if (-not (Test-Path $BINARY_PATH)) {
         Write-Error "Binary not found at $BINARY_PATH"
         exit 1
     }
-    if (Get-Command syft -ErrorAction SilentlyContinue) {
-        syft packages . -o cyclonedx-json=sbom-test.json
-    } else {
-        '{"bomFormat":"CycloneDX","specVersion":"1.5","components":[]}' | Out-File -FilePath sbom-test.json -Encoding UTF8
-    }
+    {{ mise_exec }} syft packages . -o cyclonedx-json=sbom-test.json
     (Get-FileHash -Path $BINARY_PATH -Algorithm SHA256).Hash | Out-File -FilePath checksums-test.txt
     (Get-FileHash -Path sbom-test.json -Algorithm SHA256).Hash | Add-Content -Path checksums-test.txt
 
-# =============================================================================
-# HELP & DOCUMENTATION
-# =============================================================================
+# ─────────────────────────────────────────────────────────────────────────────
+# Running & Development
+# ─────────────────────────────────────────────────────────────────────────────
 
-# Show help
-help:
-    @echo "Gold Digger Justfile Commands:"
-    @echo ""
-    @echo "Development:"
-    @echo "  setup          Set up development environment"
-    @echo "  install-tools  Install additional development tools"
-    @echo "  build         Build debug version"
-    @echo "  build-release Build release version"
-    @echo "  build-all     Build all feature combinations"
-    @echo "  install       Install locally from workspace"
-    @echo ""
-    @echo "Code Quality:"
-    @echo "  format           Format code"
-    @echo "  fmt-check     Check formatting"
-    @echo "  lint          Run clippy linting"
-    @echo "  lint-sql      Lint SQL files with sqlfluff"
-    @echo "  megalinter    Run MegaLinter with Rust flavor (comprehensive linting)"
-    @echo "  fix           Run clippy with automatic fixes"
-    @echo "  fix-sql       Fix SQL formatting with sqlfluff"
-    @echo "  check         Quick development checks"
-    @echo "  ci-check      Full CI equivalent checks (includes SQL linting)"
-    @echo "  ci-full       Complete CI workflow equivalent (mirrors .github/workflows/ci.yml)"
-    @echo "  full-checks   Comprehensive validation (all non-destructive checks)"
-    @echo "  deny-check    Run cargo-deny checks (license & duplicates)"
-    @echo ""
-    @echo "Testing:"
-    @echo "  test          Run tests with nextest (including ignored Docker tests)"
-    @echo "  test-no-docker Run tests with nextest (excluding Docker tests)"
-    @echo "  test-integration Run integration tests (requires Docker)"
-    @echo "  test-integration-nextest Run integration tests with nextest and flaky test quarantine"
-    @echo "  test-integration-ci Run integration tests with JUnit XML output for CI"
-    @echo "  test-integration-fast Run fast integration test subset for PR validation"
-    @echo "  test-integration-comprehensive Run comprehensive integration test suite"
-    @echo "  test-integration-debug Run integration tests with debug artifact collection"
-    @echo "  test-integration-perf Run integration tests with performance benchmarking"
-    @echo "  test-integration-matrix Run integration tests with TLS/non-TLS matrix"
-    @echo "  test-integration-quarantine Run integration tests with flaky test quarantine"
-    @echo "  test-execution-utilities Test the new test execution utilities"
-    @echo "  test-all      Run all tests including integration tests"
-    @echo "  coverage      Run tests with coverage report"
-    @echo "  coverage-llvm Run tests with llvm-cov (CI compatible)"
-    @echo "  cover         Alias for coverage-llvm (CI naming consistency)"
-    @echo "  bench         Run benchmarks"
-    @echo "  check-docker  Check Docker availability for integration tests"
-    @echo "  generate-test-reports Generate integration test reports for CI"
-    @echo "  validate-ci-integration Validate CI integration and test execution utilities"
-    @echo ""
-    @echo "Security:"
-    @echo "  audit         Security audit"
-    @echo "  deny          License and security checks"
-    @echo "  deny-check    License and security checks with all features"
-    @echo "  security      Comprehensive security scanning (audit + deny + grype)"
-    @echo "  sbom          Generate Software Bill of Materials for inspection"
-    @echo "  validate-deps Validate TLS dependency tree"
-    @echo ""
-    @echo "Running:"
-    @echo "  run OUTPUT_FILE DATABASE_URL DATABASE_QUERY  Run with custom env vars"
-    @echo "  run-safe      Run with safe example query"
-    @echo "  watch         Watch for changes (requires cargo-watch)"
-    @echo ""
-    @echo "Local GitHub Actions Testing (requires act):"
-    @echo "  act-setup     Set up act and pull Docker images"
-    @echo "  act-ci-dry    Run CI workflow dry-run (simulation)"
-    @echo "  act-ci        Run CI workflow locally (full execution)"
-    @echo "  act-release-dry TAG  Simulate release workflow for tag"
-    @echo "  act-cargo-dist-dry  Simulate cargo-dist workflow"
-    @echo "  act-cargo-dist-test  Test with sample conventional commits"
-    @echo "  act-cargo-dist-integration TAG  Test cargo-dist + release integration"
-    @echo "  act-list      List all available workflows"
-    @echo "  act-job JOB   Test specific workflow job"
-    @echo "  act-clean     Clean act cache and containers"
-    @echo ""
-    @echo "Documentation:"
-    @echo "  docs-install  Install mdBook and plugins"
-    @echo "  docs-build    Build complete documentation (mdBook + rustdoc)"
-    @echo "  docs-serve    Serve documentation locally with live reload"
-    @echo "  docs-clean    Clean documentation artifacts"
-    @echo "  docs-check    Check documentation (build + validation + formatting)"
-    @echo "  docs          Generate and open rustdoc only"
-    @echo ""
-    @echo "Maintenance:"
-    @echo "  clean         Clean build artifacts"
-    @echo "  outdated      Check for outdated dependencies"
-    @echo "  update        Update dependencies"
-    @echo "  features      Show available feature combinations"
-    @echo "  version       Show version information"
-    @echo "  status        Show project status and critical issues"
-    @echo ""
-    @echo "Release:"
-    @echo "  release-check Pre-release checklist and validation"
-    @echo "  release-dry   Simulate release process locally"
-    @echo "  validate-cargo-dist  Validate cargo-dist configuration"
-    @echo ""
-    @echo "Distribution (cargo-dist):"
-    @echo "  dist-init     Initialize cargo-dist configuration"
-    @echo "  dist-plan     Plan cargo-dist release (dry-run)"
-    @echo "  dist-build    Build cargo-dist artifacts locally"
-    @echo "  dist-generate Generate cargo-dist installers"
-    @echo "  dist-check    Validate cargo-dist configuration"
-    @echo ""
-    @echo "For detailed project information, see WARP.md, AGENTS.md, or .cursor/rules/"
+# Run with example environment variables
+[group('dev')]
+run OUTPUT_FILE DATABASE_URL DATABASE_QUERY:
+    @OUTPUT_FILE={{OUTPUT_FILE}} DATABASE_URL={{DATABASE_URL}} DATABASE_QUERY={{DATABASE_QUERY}} \
+        {{ mise_exec }} cargo run --release
+
+# Run with safe example (casting to avoid panics)
+[group('dev')]
+run-safe:
+    @DB_URL=sqlite://dummy.db API_KEY=dummy NODE_ENV=testing APP_ENV=safe \
+        {{ mise_exec }} cargo run --release
+
+# Development server (watch for changes)
+[group('dev')]
+watch:
+    @{{ mise_exec }} cargo watch -x "run --release"

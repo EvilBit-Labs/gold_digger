@@ -11,11 +11,11 @@ Always consult these files in order when working with this codebase:
 1. **AGENTS.md** (this file) - Primary AI assistant guidance
 2. **GEMINI.md** - Gemini-specific overrides (if present)
 3. **.cursor/rules/**/\*.mdc\*\* - Cursor-specific rules (if present)
+4. **.github/copilot-instructions.md** - Copilot-specific guidance
 
 ### Critical Restrictions
 
-- **NEVER** commit code, switch branches, or alter git settings without explicit maintainer
-  permission
+- **NEVER** commit code, switch branches, or alter git settings without explicit maintainer permission
 - **NEVER** log raw `DATABASE_URL`, connection strings, or credentials
 - **NEVER** use direct MySQL row indexing: `row[index]` or `mysql::from_value::<String>()`
 - **ALWAYS** ask clarifying questions before making risky changes
@@ -34,11 +34,90 @@ Always consult these files in order when working with this codebase:
 - Do **NOT** enable GitHub Copilot auto-review in pull requests
 - Maintainer: **UncleSp1d3r** (single-maintainer workflow)
 
+## Build/Lint/Test Commands
+
+### Tool Management
+
+All dev tools are managed via `mise.toml`. Commands in justfile use `{{ mise_exec }}` prefix.
+
+- `just setup` - Install all tools via mise
+- `mise use <tool>` - Add a new tool (e.g., `mise use cargo:cargo-watch`)
+- `mise install` - Reinstall all configured tools
+
+### Pre-commit Hooks
+
+Pre-commit hooks run automatically and may modify files. If commit fails with formatting changes:
+
+1. Review the auto-fixed files
+2. `git add -A` to stage fixes
+3. Commit again
+
+```bash
+# Quick development cycle
+just check                    # fmt + lint + test-no-docker
+just fmt                      # cargo fmt
+just lint                     # cargo clippy -- -D warnings
+just test                     # cargo nextest run (preferred) or cargo test
+just test-no-docker           # cargo nextest run (excludes Docker tests)
+
+# Single test execution
+cargo nextest run --test test_name
+cargo test --test test_name
+cargo test --lib module::function
+cargo test --bin gold_digger
+
+# Quality gates
+just ci-check                 # fmt-check + lint + lint-sql + test + deny-check
+just ci-full                  # Complete CI workflow equivalent
+just fmt-check                # cargo fmt --check
+just deny-check               # cargo deny check
+
+# Build variants
+cargo build                   # Debug build
+cargo build --release         # Release build
+cargo build --no-default-features --features "json csv additional_mysql_types verbose"  # Minimal build
+```
+
+## Code Style Guidelines
+
+### Formatting & Imports
+
+- **Line limit**: 100 characters (enforced by `rustfmt.toml`)
+- **Clippy**: Zero tolerance warnings (`-D warnings`)
+- **Imports**: Group by std, external crates, local modules (separated by newlines)
+- **Formatting**: Use `cargo fmt` (Rustfmt conventions)
+- Avoid using emojis and other non-ASCII characters in code, comments, or documentation, except when the code is handling non-plaintext characters (for example: em dash, en dash, or other non-ASCII symbols).
+
+### Types & Naming
+
+- **snake_case** for functions/variables, **CamelCase** for types/structs
+- Use explicit types for public APIs
+- Prefer `anyhow::Result<T>` for applications, `thiserror` for libraries
+- Use `?` operator for error propagation
+
+### Documentation
+
+- All public functions require doc comments (`///`)
+- Use proper markdown formatting with Arguments/Returns/Example sections
+- Keep files ≤1000 lines, preferably ≤500 lines
+
+### Error Handling
+
+- Never use `from_value::<String>()` - always handle `mysql::Value::NULL`
+- Use safe conversion helpers: `mysql_value_to_string()` for CSV/TSV, `mysql_value_to_json()` for JSON
+- Redact credentials in all log output
+- Use context with `.map_err()` for better debugging
+
+### Cursor Rules Compliance
+
+- Follow `.cursor/rules/rust-best-practices.mdc` for module organization
+- Use format module contract: `fn write<W: Write>(rows: impl IntoIterator<Item = impl IntoIterator<Item = impl AsRef<str>>>, output: &mut W) -> anyhow::Result<()>`
+- Implement streaming support with generic writers
+- Use `#[cfg(feature = "...")]` for conditional compilation
+
 ## Project Overview
 
-Gold Digger is a production-ready Rust CLI tool for MySQL/MariaDB database queries with structured
-output (CSV, JSON, TSV). It features comprehensive CLI interface, rustls-only TLS, and safe data
-type handling.
+Gold Digger is a production-ready Rust CLI tool for MySQL/MariaDB database queries with structured output (CSV, JSON, TSV). It features comprehensive CLI interface, rustls-only TLS, and safe data type handling.
 
 **Current Architecture (v0.2.6):**
 
@@ -101,27 +180,20 @@ fn mysql_value_to_json(mysql_value: &mysql::Value) -> serde_json::Value {
 
 - **NEVER** log `DATABASE_URL` or credentials - always redact
 - **NEVER** make external service calls at runtime (offline-first)
-- ⚠️ **WARNING**: `CAST(column AS CHAR)` can corrupt binary data or produce mojibake for text in
-  lossy encodings. Use safer alternatives:
-  - **BLOB/BINARY columns**: Use `HEX(column)` or `TO_BASE64(column)` for lossless binary
-    representation
-  - **Text columns**: Use `CAST(column AS CHAR CHARACTER SET utf8mb4)` or
-    `CONVERT(column USING utf8mb4)` to specify explicit encoding
+- ⚠️ **WARNING**: `CAST(column AS CHAR)` can corrupt binary data or produce mojibake for text in lossy encodings. Use safer alternatives:
+  - **BLOB/BINARY columns**: Use `HEX(column)` or `TO_BASE64(column)` for lossless binary representation
+  - **Text columns**: Use `CAST(column AS CHAR CHARACTER SET utf8mb4)` or `CONVERT(column USING utf8mb4)` to specify explicit encoding
   - **Numeric/Date columns**: `CAST(column AS CHAR)` is generally safe for these types
 
 ### Other Critical Issues
 
-1. **No Dotenv Support:** Despite README implications, there is no `.env` file support in the code.
-   Use exported environment variables only.
+1. **No Dotenv Support:** Despite README implications, there is no `.env` file support in the code. Use exported environment variables only.
 
-2. **Non-Standard Exit Codes:** `exit(-1)` becomes exit code 255, not the standard codes specified
-   in requirements.
+2. **Non-Standard Exit Codes:** `exit(-1)` becomes exit code 255, not the standard codes specified in requirements.
 
 3. **JSON Output:** Uses BTreeMap for deterministic key ordering as required.
 
-4. **Pattern Matching Bug:** In `src/main.rs`, the `if let Some(url) = &cli.db_url` pattern (and
-   similar patterns in the resolve functions) uses `Some(&_)` which should be `Some(_)` in the match
-   arm.
+4. **Pattern Matching Bug:** In `src/main.rs`, the `if let Some(url) = &cli.db_url` pattern (and similar patterns in the resolve functions) uses `Some(&_)` which should be `Some(_)` in the match arm.
 
 ### Configuration Architecture
 
@@ -213,8 +285,7 @@ The project has detailed requirements in `project_spec/requirements.md` but sign
 
 ### High Priority Missing Features
 
-- **F001-F003:** CLI interface exists (clap-based); finalize CLI flag precedence and documented
-  flags
+- **F001-F003:** CLI interface exists (clap-based); finalize CLI flag precedence and documented flags
 - **F005:** Non-standard exit codes (should be 0=success, 1=no rows, 2=config error, etc.)
 - **F014:** Type conversion panics on NULL/non-string values
 - **Extension dispatch bug fix**
@@ -271,8 +342,7 @@ pub fn rows_to_strings(rows: Vec<mysql::Row>) -> anyhow::Result<Vec<Vec<String>>
 - **No hardcoded secrets:** Use environment variables or GitHub OIDC
 - **Vulnerability policy:** Block releases with critical vulnerabilities
 - **Airgap compatibility:** No telemetry or external calls in production
-- **Configure TLS programmatically:** Use `mysql::OptsBuilder` and `SslOpts` instead of URL
-  parameters
+- **Configure TLS programmatically:** Use `mysql::OptsBuilder` and `SslOpts` instead of URL parameters
 - **TLS Implementation:** Always enabled with rustls (no feature flags)
 
 #### Error Handling Patterns
@@ -308,8 +378,7 @@ fn redact_database_url(url: &str) -> String {
 // Result: "mysql://****:****@localhost:3306/db"
 ```
 
-**Note:** Add `regex = "1"` to `Cargo.toml` dependencies. The `OnceLock` ensures thread-safe,
-one-time regex compilation.
+**Note:** Add `regex = "1"` to `Cargo.toml` dependencies. The `OnceLock` ensures thread-safe, one-time regex compilation.
 
 ## Common Tasks for AI Assistants
 

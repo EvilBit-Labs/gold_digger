@@ -17,8 +17,8 @@ use anyhow::Result;
 mod integration;
 
 use integration::{
-    CargoNextestIntegration, CiEnvironment, DatabaseType, OutputFormat, TestCase, TestDatabaseConfig, TestExecutor,
-    get_test_timeout, is_ci_environment,
+    CargoNextestIntegration, CiEnvironment, DatabaseType, OutputFormat, TestCase,
+    TestDatabaseConfig, TestExecutor, get_test_timeout, is_ci_environment,
 };
 use std::time::Duration;
 use tempfile::TempDir;
@@ -249,7 +249,10 @@ fn test_backward_compatibility() -> Result<()> {
     let is_ci = is_ci_environment();
     let timeout = get_test_timeout();
 
-    println!("Backward compatibility - CI: {}, Timeout: {:?}", is_ci, timeout);
+    println!(
+        "Backward compatibility - CI: {}, Timeout: {:?}",
+        is_ci, timeout
+    );
 
     // Verify they work the same as the new API
     assert_eq!(is_ci, CiEnvironment::is_ci());
@@ -308,8 +311,14 @@ fn test_performance_measurement() -> Result<()> {
     println!("Performance limits:");
     println!("  Max memory: {} MB", resource_limits.max_memory_usage_mb);
     println!("  Max disk: {} MB", resource_limits.max_disk_usage_mb);
-    println!("  Max execution time: {:?}", resource_limits.max_execution_time);
-    println!("  Max parallel tests: {}", resource_limits.max_parallel_tests);
+    println!(
+        "  Max execution time: {:?}",
+        resource_limits.max_execution_time
+    );
+    println!(
+        "  Max parallel tests: {}",
+        resource_limits.max_parallel_tests
+    );
 
     // Verify limits are reasonable for both CI and local environments
     assert!(resource_limits.max_memory_usage_mb >= 512); // At least 512MB

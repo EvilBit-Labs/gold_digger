@@ -7,8 +7,14 @@ mod tests {
 
     #[test]
     fn test_get_extension_from_filename() {
-        assert_eq!(gold_digger::get_extension_from_filename("test.csv"), Some("csv"));
-        assert_eq!(gold_digger::get_extension_from_filename("test.json"), Some("json"));
+        assert_eq!(
+            gold_digger::get_extension_from_filename("test.csv"),
+            Some("csv")
+        );
+        assert_eq!(
+            gold_digger::get_extension_from_filename("test.json"),
+            Some("json")
+        );
         assert_eq!(gold_digger::get_extension_from_filename("test"), None);
         assert_eq!(gold_digger::get_extension_from_filename("test."), Some(""));
     }
