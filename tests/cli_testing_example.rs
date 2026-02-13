@@ -144,6 +144,9 @@ fn test_snapshot_testing(cli_command: Command) -> Result<()> {
     let output = cmd.output()?;
     let stdout = String::from_utf8_lossy(&output.stdout);
 
+    // Normalize binary name across platforms (gold_digger.exe -> gold_digger)
+    let stdout = stdout.replace("gold_digger.exe", "gold_digger");
+
     // Create snapshot of help output for regression testing
     insta::assert_snapshot!("help_output", stdout);
 
