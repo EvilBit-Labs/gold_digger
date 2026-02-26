@@ -87,7 +87,10 @@ docs: update installation guide
 ### Testing
 
 - Write unit tests for new functions
-- Add integration tests for CLI features
+- Add integration tests for CLI features using the comprehensive testing framework
+- Test against both MySQL and MariaDB databases when applicable
+- Validate output format compliance (CSV, JSON, TSV)
+- Include error scenario testing with proper exit codes
 - Maintain test coverage above 80%
 
 ## Pull Request Process
@@ -111,6 +114,9 @@ pre-commit run --all-files
 
 # Test multiple feature combinations
 just build-all
+
+# Run integration tests (requires Docker)
+just test-integration
 
 # Test release workflow (optional)
 just release-dry

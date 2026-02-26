@@ -49,10 +49,13 @@ cargo install cargo-deny --locked
   - Warns about duplicate crate versions
   - Denies problematic licenses and sources
   - CI uses strict enforcement via `deny.ci.toml`
+- **cargo-dist**: Cross-platform release artifacts
+  - Generates SHA256 checksums and Cosign signatures
+  - Uses github attestation for SBOM generation (CycloneDX format)
 
 ### Testing Requirements
 
-- **Runner**: `cargo nextest run` (preferred) or `cargo test`
+- **Runner**: `cargo nextest run`
 - **Coverage**: Target ≥80% with `cargo llvm-cov`
 - **Cross-platform**: Must pass on macOS, Windows, Linux
 

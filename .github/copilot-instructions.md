@@ -27,7 +27,7 @@ These instructions are specifically for **GitHub Copilot AI Coding Assistant**. 
 **Use these safe helpers instead:**
 
 ```rust
-use mysql::{from_value_opt, Value};
+use mysql::{Value, from_value_opt};
 
 /// Safe conversion for CSV/TSV output
 fn mysql_value_to_string(v: &Value) -> String {
@@ -40,19 +40,38 @@ fn mysql_value_to_string(v: &Value) -> String {
         Value::Double(d) => d.to_string(),
         Value::Date(year, month, day, hour, minute, second, micro) => {
             if *micro > 0 {
-                format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:06}", year, month, day, hour, minute, second, micro)
+                format!(
+                    "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:06}",
+                    year, month, day, hour, minute, second, micro
+                )
             } else {
-                format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", year, month, day, hour, minute, second)
+                format!(
+                    "{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+                    year, month, day, hour, minute, second
+                )
             }
-        },
+        }
         Value::Time(neg, days, hours, minutes, seconds, micros) => {
             let sign = if *neg { "-" } else { "" };
             if *micros > 0 {
-                format!("{}{}:{:02}:{:02}:{:02}.{:06}", sign, days * 24 + *hours as u32, minutes, seconds, micros)
+                format!(
+                    "{}{}:{:02}:{:02}:{:02}.{:06}",
+                    sign,
+                    days * 24 + *hours as u32,
+                    minutes,
+                    seconds,
+                    micros
+                )
             } else {
-                format!("{}{}:{:02}:{:02}:{:02}", sign, days * 24 + *hours as u32, minutes, seconds)
+                format!(
+                    "{}{}:{:02}:{:02}:{:02}",
+                    sign,
+                    days * 24 + *hours as u32,
+                    minutes,
+                    seconds
+                )
             }
-        },
+        }
     }
 }
 
@@ -70,10 +89,11 @@ fn mysql_value_to_json(v: &Value) -> serde_json::Value {
                 Ok(s) => serde_json::Value::String(s.to_owned()),
                 Err(_) => serde_json::Value::String(format!("0x{}", hex::encode(b))),
             }
-        },
-        Value::Date(y, m, d, hh, mm, ss, micros) => {
-            serde_json::Value::String(format!("{y:04}-{m:02}-{d:02}T{hh:02}:{mm:02}:{ss:02}.{:06}Z", micros))
-        },
+        }
+        Value::Date(y, m, d, hh, mm, ss, micros) => serde_json::Value::String(format!(
+            "{y:04}-{m:02}-{d:02}T{hh:02}:{mm:02}:{ss:02}.{:06}Z",
+            micros
+        )),
         Value::Time(is_neg, d, h, m, s, micros) => serde_json::Value::String(format!(
             "{}{}:{:02}:{:02}:{:02}.{:06}",
             if *is_neg { "-" } else { "" },
@@ -215,6 +235,7 @@ cargo test
 - [ ] Use conventional commit format
 - [ ] Suggest small, focused diffs for single-maintainer workflow
 - [ ] Use `gh` CLI for GitHub interactions
+- [ ] Use context7 website or MCP tool to get current documentation for APIs and crates
 - [ ] Link to WARP.md/AGENTS.md for comprehensive context
 
 ## References

@@ -18,7 +18,7 @@ where
     F: IntoIterator<Item = String>,
     W: Write,
 {
-    let buffered_output = BufWriter::with_capacity(8 * 1024, output); // 8KB buffer for better performance
+    let buffered_output = BufWriter::with_capacity(64 * 1024, output); // 64KB buffer for better performance with large datasets
     let mut wtr = WriterBuilder::new()
         .quote_style(QuoteStyle::Necessary)
         .from_writer(buffered_output);
@@ -44,6 +44,11 @@ where
 /// # Returns
 ///
 /// A Result indicating success or failure.
+///
+/// # Performance
+///
+/// This function is more efficient than the string-based version when working
+/// with data that's already in byte format, as it avoids UTF-8 validation overhead.
 pub fn write_bytes<R, F, T, W>(rows: R, output: W) -> anyhow::Result<()>
 where
     R: IntoIterator<Item = F>,

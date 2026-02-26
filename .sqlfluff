@@ -1,0 +1,37 @@
+# sqlfluff configuration for Gold Digger
+# 
+# This configuration enforces SQL formatting standards for the Gold Digger
+# MySQL/MariaDB query tool. To use:
+#
+#   sqlfluff lint tests/fixtures/**/*.sql
+#   sqlfluff fix tests/fixtures/**/*.sql
+#
+# Or add to your development workflow via justfile/Makefile.
+
+[sqlfluff]
+# SQL dialect for Gold Digger - MySQL/MariaDB database tool
+dialect = mysql
+
+# Template processor (raw for no templating)
+templater = raw
+
+# Line length limit
+max_line_length = 80
+
+[sqlfluff:indentation]
+# Use spaces for indentation (4 spaces per indent level)
+indent_unit = space
+tab_space_size = 4
+
+[sqlfluff:rules:capitalisation.keywords]
+# Enforce uppercase keywords (SELECT, AS, FROM, WHERE, etc.)
+capitalisation_policy = upper
+
+[sqlfluff:rules:layout.long_lines]
+# Line length configuration - ignore long lines in comments
+ignore_comment_lines = true
+ignore_comment_clauses = true
+
+# Note: The tests/fixtures/test_queries/invalid.sql file
+# intentionally contains invalid SQL syntax for testing error handling.
+# The AM04 and parsing errors from this file are expected and correct.

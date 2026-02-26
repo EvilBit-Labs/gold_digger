@@ -1,0 +1,15 @@
+# MegaLinter Configuration
+# Documentation: https://megalinter.io/configuration/
+
+# Apply all formatters and linters
+# APPLY_FIXES: all
+
+# Disable spell checker (cspell)
+DISABLE_LINTERS:
+  - SPELL_CSPELL
+  - COPYPASTE_JSCPD
+  - SPELL_PROSELINT
+
+SHOW_ELAPSED_TIME: true
+FILEIO_REPORTER: true
+LOG_LEVEL: INFO

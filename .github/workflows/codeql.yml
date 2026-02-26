@@ -19,17 +19,15 @@ jobs:
     name: CodeQL Analyze
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v5
-        with:
-          persist-credentials: false # Disable caching to avoid leaking credentials
+      - uses: taiki-e/checkout-action@v1
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@v4
         with:
           languages: rust
 
-      - uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/autobuild@v4
 
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v4

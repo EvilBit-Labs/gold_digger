@@ -43,6 +43,4 @@ All runner labels are covered by the updated `.actrc` configuration:
 
 ## Verification Status
 
-✅ All workflow runner labels are covered by act mappings
-✅ Consistent Ubuntu 22.04 base across all mappings
-✅ Comment added explaining the choice
+✅ All workflow runner labels are covered by act mappings ✅ Consistent Ubuntu 22.04 base across all mappings ✅ Comment added explaining the choice

@@ -142,10 +142,10 @@ Fields are quoted only when they contain:
 ### Example Output
 
 ```tsv
-id  name	email	created_at
-1   John Doe	john@example.com	2024-01-15 10:30:00
-2   Jane Smith	jane@example.com	2024-01-16 14:22:33
-3	Bob Johnson		2024-01-17 09:15:45
+id  name email created_at
+1   John Doe john@example.com 2024-01-15 10:30:00
+2   Jane Smith jane@example.com 2024-01-16 14:22:33
+3 Bob Johnson  2024-01-17 09:15:45
 ```
 
 ### When to Use TSV
@@ -169,7 +169,7 @@ Different formats handle database NULL values differently:
 | ------ | ------------------- | --------------------------------------- |
 | CSV    | Empty string        | `1,John,,2024-01-15`                    |
 | JSON   | JSON `null`         | `{"id":"1","name":"John","email":null}` |
-| TSV    | Empty string        | `1	John		2024-01-15`                                         |
+| TSV    | Empty string        | `1 John  2024-01-15`                    |
 
 ## Type Safety and Data Conversion
 

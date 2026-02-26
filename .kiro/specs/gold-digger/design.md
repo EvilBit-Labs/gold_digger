@@ -217,16 +217,21 @@ impl Config {
             .or_else(|| std::env::var("OUTPUT_FILE").ok().map(PathBuf::from))
             .ok_or_else(|| {
                 GoldDiggerError::Config(
-                    "Missing output file. Provide --output or set OUTPUT_FILE environment variable".to_string(),
+                    "Missing output file. Provide --output or set OUTPUT_FILE environment variable"
+                        .to_string(),
                 )
             })?;
 
         // Determine format with CLI override support (Requirement 3.4)
-        let format = cli.format.unwrap_or_else(|| OutputFormat::from_extension(&output_path));
+        let format = cli
+            .format
+            .unwrap_or_else(|| OutputFormat::from_extension(&output_path));
 
         // Validate mutual exclusions (Requirement 7.4)
         if cli.verbose > 0 && cli.quiet {
-            return Err(GoldDiggerError::Config("Cannot specify both --verbose and --quiet".to_string()));
+            return Err(GoldDiggerError::Config(
+                "Cannot specify both --verbose and --quiet".to_string(),
+            ));
         }
 
         Ok(Self {
@@ -294,7 +299,9 @@ impl DatabaseConnector {
 
     /// Gets a connection from the pool with proper error handling (Requirement 5.2)
     pub fn get_connection(&self) -> Result<PooledConn> {
-        self.pool.get_conn().map_err(|e| GoldDiggerError::Connection(e))
+        self.pool
+            .get_conn()
+            .map_err(|e| GoldDiggerError::Connection(e))
     }
 }
 ```
@@ -302,7 +309,7 @@ impl DatabaseConnector {
 ### Query Execution and Streaming
 
 ```rust
-use mysql::{prelude::Queryable, QueryResult, Row};
+use mysql::{QueryResult, Row, prelude::Queryable};
 use tracing::{debug, error, info};
 
 pub struct QueryExecutor {
@@ -361,15 +368,15 @@ impl<'a> Iterator for RowStream<'a> {
                     debug!("Processed {} rows", self.row_count);
                 }
                 Some(TypeTransformer::row_to_strings(row, &self.columns))
-            },
+            }
             Some(Err(e)) => {
                 error!("Error reading row {}: {}", self.row_count + 1, e);
                 Some(Err(GoldDiggerError::Query(e)))
-            },
+            }
             None => {
                 info!("Completed processing {} rows", self.row_count);
                 None
-            },
+            }
         }
     }
 }
@@ -378,7 +385,7 @@ impl<'a> Iterator for RowStream<'a> {
 ### Type Transformation System
 
 ```rust
-use mysql::{consts::Column, from_value_opt, Row, Value};
+use mysql::{Row, Value, consts::Column, from_value_opt};
 use tracing::{debug, warn};
 
 pub struct TypeTransformer;
@@ -397,7 +404,7 @@ impl TypeTransformer {
                 Some(Value::NULL) => {
                     debug!("NULL value found in column '{}'", column.name_str());
                     String::new() // NULL values rendered as empty strings for CSV/TSV
-                },
+                }
                 Some(val) => Self::value_to_string(val, column.name_str()).map_err(|e| {
                     GoldDiggerError::TypeConversion(format!(
                         "Failed to convert value in column '{}': {}",
@@ -408,7 +415,7 @@ impl TypeTransformer {
                 None => {
                     warn!("Unexpected None value in column '{}'", column.name_str());
                     String::new()
-                },
+                }
             };
 
             values.push(string_value);
@@ -423,7 +430,10 @@ impl TypeTransformer {
         match value {
             Value::NULL => Ok(String::new()),
             Value::Bytes(bytes) => String::from_utf8(bytes).map_err(|e| {
-                warn!("UTF-8 conversion failed for column '{}': {}", column_name, e);
+                warn!(
+                    "UTF-8 conversion failed for column '{}': {}",
+                    column_name, e
+                );
                 anyhow::anyhow!("UTF-8 conversion failed: {}", e)
             }),
             Value::Int(i) => Ok(i.to_string()),
@@ -435,7 +445,7 @@ impl TypeTransformer {
                     warn!("Non-finite float value in column '{}': {}", column_name, f);
                     Ok(f.to_string()) // Still convert, but log the issue
                 }
-            },
+            }
             Value::Double(d) => {
                 if d.is_finite() {
                     Ok(d.to_string())
@@ -443,7 +453,7 @@ impl TypeTransformer {
                     warn!("Non-finite double value in column '{}': {}", column_name, d);
                     Ok(d.to_string()) // Still convert, but log the issue
                 }
-            },
+            }
             Value::Date(year, month, day, hour, minute, second, microsecond) => Ok(format!(
                 "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:06}",
                 year, month, day, hour, minute, second, microsecond
@@ -458,7 +468,7 @@ impl TypeTransformer {
                     seconds,
                     microseconds
                 ))
-            },
+            }
         }
     }
 
@@ -478,21 +488,21 @@ impl TypeTransformer {
                 } else {
                     serde_json::Value::String(u.to_string())
                 }
-            },
+            }
             Value::Float(f) => {
                 if let Some(num) = serde_json::Number::from_f64(f as f64) {
                     serde_json::Value::Number(num)
                 } else {
                     serde_json::Value::String(f.to_string())
                 }
-            },
+            }
             Value::Double(d) => {
                 if let Some(num) = serde_json::Number::from_f64(d) {
                     serde_json::Value::Number(num)
                 } else {
                     serde_json::Value::String(d.to_string())
                 }
-            },
+            }
             _ => serde_json::Value::String(Self::value_to_string(value, "").unwrap_or_default()),
         }
     }
@@ -510,20 +520,27 @@ pub trait FormatWriter {
     fn finalize(self) -> Result<()>;
 }
 
-pub fn create_format_writer<W: Write>(format: OutputFormat, writer: W, pretty: bool) -> Box<dyn FormatWriter> {
+pub fn create_format_writer<W: Write>(
+    format: OutputFormat,
+    writer: W,
+    pretty: bool,
+) -> Box<dyn FormatWriter> {
     match format {
         OutputFormat::Csv => {
             info!("Creating CSV writer with RFC 4180 compliance"); // Requirement 3.1
             Box::new(CsvWriter::new(writer))
-        },
+        }
         OutputFormat::Json => {
-            info!("Creating JSON writer with {} formatting", if pretty { "pretty" } else { "compact" }); // Requirement 3.5
+            info!(
+                "Creating JSON writer with {} formatting",
+                if pretty { "pretty" } else { "compact" }
+            ); // Requirement 3.5
             Box::new(JsonWriter::new(writer, pretty))
-        },
+        }
         OutputFormat::Tsv => {
             info!("Creating TSV writer with tab delimiters"); // Requirement 3.3
             Box::new(TsvWriter::new(writer))
-        },
+        }
     }
 }
 
@@ -761,7 +778,7 @@ impl fmt::Display for RedactedUrl {
                 let host = url.host_str().unwrap_or("***");
                 let port = url.port().map(|p| format!(":{}", p)).unwrap_or_default();
                 write!(f, "{}://***@{}{}", url.scheme(), host, port)
-            },
+            }
             Err(_) => write!(f, "***INVALID_URL***"),
         }
     }
@@ -776,7 +793,7 @@ pub struct LoggingConfig {
 impl LoggingConfig {
     /// Initializes structured logging with tracing crate (Requirement 7.1)
     pub fn init_tracing(&self) -> Result<()> {
-        use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+        use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
         if self.quiet {
             // Only show errors when quiet mode is enabled (Requirement 7.4)
@@ -850,7 +867,7 @@ pub fn execute_query(executor: &mut QueryExecutor, query: &str) -> Result<RowStr
 ### Completion Generation
 
 ```rust
-use clap_complete::{generate, Shell};
+use clap_complete::{Shell, generate};
 use std::io;
 
 /// Generates shell completion scripts (Requirement 8.1-8.4)

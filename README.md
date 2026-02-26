@@ -2,21 +2,20 @@
 
 Gold Digger is a Rust-based MySQL/MariaDB query tool that exports results to structured data files (CSV, JSON, TSV). Designed for headless operation and automation workflows, it provides CLI-first configuration with environment variable fallbacks.
 
-[![CI](https://github.com/EvilBit-Labs/gold_digger/actions/workflows/ci.yml/badge.svg)](https://github.com/EvilBit-Labs/gold_digger/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/EvilBit-Labs/gold_digger/actions/workflows/codeql.yml/badge.svg)](https://github.com/EvilBit-Labs/gold_digger/actions/workflows/codeql.yml)
-[![Security](https://github.com/EvilBit-Labs/gold_digger/actions/workflows/security.yml/badge.svg)](https://github.com/EvilBit-Labs/gold_digger/actions/workflows/security.yml)
-[![codecov](https://codecov.io/github/EvilBit-Labs/gold_digger/graph/badge.svg)](https://codecov.io/github/EvilBit-Labs/gold_digger)
-[![GitHub](https://img.shields.io/github/license/EvilBit-Labs/gold_digger)](https://github.com/EvilBit-Labs/gold_digger/blob/main/LICENSE)
-[![GitHub issues](https://img.shields.io/github/issues/EvilBit-Labs/gold_digger)](https://github.com/EvilBit-Labs/gold_digger/issues)
-[![GitHub Repo stars](https://img.shields.io/github/stars/EvilBit-Labs/gold_digger?style=social)](https://github.com/EvilBit-Labs/gold_digger/stargazers)
-[![Maintenance](https://img.shields.io/maintenance/yes/EvilBit-Labs/gold_digger)](https://github.com/EvilBit-Labs/gold_digger/graphs/commit-activity)
+![GitHub License](https://img.shields.io/github/license/EvilBit-Labs/gold_digger?style=for-the-badge)
+
+![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/EvilBit-Labs/gold_digger/ci.yml?style=for-the-badge) ![docs.rs](https://img.shields.io/docsrs/gold_digger?style=for-the-badge) ![Deps.rs Repository Dependencies](https://img.shields.io/deps-rs/repo/github/EvilBit-Labs/gold_digger?style=for-the-badge)
+
+![Codecov](https://img.shields.io/codecov/c/github/EvilBit-Labs/gold_digger?style=for-the-badge) [![GitHub issues](https://img.shields.io/github/issues/EvilBit-Labs/gold_digger?style=for-the-badge)](https://github.com/EvilBit-Labs/gold_digger/issues) ![GitHub last commit](https://img.shields.io/github/last-commit/EvilBit-Labs/gold_digger?style=for-the-badge)
+
+![Crates.io Downloads (latest version)](https://img.shields.io/crates/dv/gold_digger?style=for-the-badge) ![GitHub Sponsors](https://img.shields.io/github/sponsors/EvilBit-Labs?style=for-the-badge)
 
 ## Features
 
 - **CLI-first design** with environment variable fallbacks and comprehensive command-line interface
 - **Multiple output formats**: CSV (RFC 4180), JSON with pretty-printing, TSV
 - **Safe type handling**: Graceful NULL and type conversion without panics, with intelligent JSON type inference
-- **Secure TLS support**: Built-in rustls implementation with detailed error handling
+- **Secure TLS support**: Built-in rustls implementation with detailed error handling and comprehensive TLS testing framework
 - **Comprehensive error handling**: Structured exit codes, intelligent error categorization, and actionable error messages
 - **Shell completion**: Support for Bash, Zsh, Fish, and PowerShell with easy generation
 - **Configuration debugging**: JSON config dump with automatic credential redaction
@@ -231,7 +230,7 @@ The exit code mapping includes intelligent error detection based on error messag
 
 ## Testing
 
-Gold Digger includes comprehensive test suites to ensure reliability and correctness:
+Gold Digger includes comprehensive test suites to ensure reliability and correctness across multiple database systems and configurations:
 
 ### Unit Tests
 
@@ -250,34 +249,117 @@ just test-no-docker
 
 ### Integration Tests
 
-For comprehensive testing with real database connections, enable the integration test feature:
+Gold Digger features a comprehensive integration testing framework that validates functionality against real MySQL and MariaDB databases using testcontainers for automated container management:
 
 ```bash
 # Run integration tests (requires Docker)
-cargo test --features integration_tests -- --ignored
+cargo test --features integration_tests
 
 # Run all tests including integration tests
-cargo test --features integration_tests -- --include-ignored
+cargo test --features integration_tests
+
+# Run specific integration test categories
+cargo test --features integration_tests --test tls_variants_test
+cargo test --features integration_tests --test integration_tests
+cargo test --features integration_tests --test tls_integration
 
 # Using justfile commands
 just test-integration  # Run only integration tests
 just test-all         # Run all tests including integration tests
 ```
 
+#### Integration Test Architecture
+
+The integration testing framework provides:
+
+- **Multi-Database Support**: Both MySQL (8.0+) and MariaDB (10.11+) testing
+- **TLS/Non-TLS Testing**: Secure and standard connection validation with ephemeral certificates
+- **Container Management**: Automated MySQL/MariaDB container lifecycle with health checks
+- **Test Data Management**: Comprehensive schema and seed data covering all data types
+- **Format Validation**: CSV (RFC4180), JSON, and TSV format compliance testing
+- **Error Scenario Testing**: Connection failures, SQL errors, and file I/O validation
+- **Performance Testing**: Large dataset handling and memory usage validation
+- **Security Testing**: Credential protection and TLS certificate validation
+
+#### Test Module Structure
+
+```text
+tests/
+├── integration/
+│   ├── mod.rs              # Common test utilities and setup functions
+│   ├── common.rs           # Shared CLI execution and output parsing utilities
+│   └── containers.rs       # MySQL/MariaDB container management with health checks
+├── fixtures/
+│   ├── schema.sql          # Comprehensive test database schema
+│   ├── seed_data.sql       # Test data covering all data types and edge cases
+│   └── tls/                # TLS certificates for secure connection testing
+├── test_support/           # Shared testing utilities
+│   ├── cli.rs              # CLI execution helpers
+│   ├── containers.rs       # Container management utilities
+│   ├── fixtures.rs         # Test data and schema utilities
+│   └── parsing.rs          # Output parsing and validation
+├── tls_variants_test.rs    # TLS and non-TLS database variant testing
+├── tls_integration.rs      # TLS connection and certificate validation
+├── integration_tests.rs    # Main integration test entry point
+└── database_seeding_test.rs # Database schema and data seeding tests
+
+```
+
+#### TLS and Non-TLS Testing
+
+The framework supports comprehensive TLS testing with both secure and standard connection modes:
+
+```rust
+// TLS-enabled database testing
+let tls_db = TestDatabaseTls::mysql();
+let container = DatabaseContainer::new_tls(tls_db)?;
+
+// Non-TLS database testing
+let plain_db = TestDatabasePlain::mysql();
+let container = DatabaseContainer::new_plain(plain_db)?;
+
+// Connection validation
+let tls_validation = container.validate_tls_connection()?;
+let plain_validation = container.validate_plain_connection()?;
+```
+
+#### Test Database Systems
+
+Integration tests use testcontainers to provide isolated database environments:
+
+- **MySQL**: Versions 8.0, 8.1 with both TLS and non-TLS configurations
+- **MariaDB**: Version 10.11+ with SSL certificate management
+- **TLS Configuration**: Ephemeral certificate generation with secure defaults
+- **Test Data**: Comprehensive schema covering all MySQL data types
+- **Fixtures**: Pre-seeded test data including edge cases and Unicode content
+
 ### Test Requirements
 
 **Integration Tests:**
 
 - Docker installed and running
-- MariaDB testcontainers module (automatically pulled)
+- MySQL and MariaDB testcontainers modules (automatically pulled)
 - `integration_tests` feature enabled
-- Tests are marked with `#[ignore]` by default
+- Tests are marked with `#[ignore]` by default for CI efficiency
+- Sufficient disk space (~500MB for Docker images)
 
 **Unit Tests:**
 
 - No external dependencies required
 - Run in CI environments
 - Cover configuration, error handling, and format validation
+
+### Test Categories
+
+1. **Unit Tests**: Fast tests without external dependencies
+2. **TLS Variant Tests**: TLS and non-TLS database configuration testing
+3. **TLS Integration Tests**: Certificate validation and secure connections
+4. **Database Integration Tests**: Real database query execution and data validation
+5. **Container Management Tests**: Database container lifecycle and health checks
+6. **Data Seeding Tests**: Schema creation and test data population
+7. **CLI Integration Tests**: Command-line interface and configuration testing
+8. **Performance Tests**: Large dataset handling and memory usage validation
+9. **Cross-Platform Tests**: Consistent behavior across Linux, macOS, and Windows
 
 ### Test Coverage
 
@@ -287,7 +369,32 @@ cargo llvm-cov --html
 
 # Generate coverage for CI
 cargo llvm-cov --lcov --output-path lcov.info
+
+# Coverage with integration tests
+cargo llvm-cov --html -- --include-ignored
 ```
+
+### Running Tests in CI
+
+The integration testing framework is designed for CI environments with:
+
+- **GitHub Actions**: Docker service enabled with appropriate timeouts
+- **Resource Management**: Tests designed for shared CI resources with configurable timeouts
+- **Container Cleanup**: Automatic cleanup prevents resource leaks
+- **Retry Logic**: Adaptive backoff for container startup in CI environments
+- **Cross-Platform Support**: Linux and macOS runners with Docker availability detection
+
+### Development Status
+
+The integration testing framework is actively under development. Current implementation includes:
+
+- ✅ **Core Infrastructure**: MySQL/MariaDB container management with testcontainers
+- ✅ **TLS Support**: TLS and non-TLS database variants with certificate management
+- ✅ **Container Management**: Health checks, resource cleanup, and CI compatibility
+- ✅ **Test Data**: Comprehensive schema and seed data for all MySQL data types
+- 🚧 **Advanced Testing**: Data type validation, output format testing, and performance tests are planned
+
+See the [Integration Testing](docs/src/development/integration-testing.md) and [TLS Variants](docs/src/development/tls-variants.md) documentation for detailed information.
 
 ## Security & Quality Assurance
 

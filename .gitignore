@@ -116,3 +116,6 @@ docs/book/
 .env.*.local
 .envrc
 .direnv/
+
+megalinter-reports/
+.claude/settings.local.json

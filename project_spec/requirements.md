@@ -1,10 +1,6 @@
 # Requirements Document: Gold Digger
 
-**Version**: 1.0
-**Status**: Draft
-**Author(s)**: EvilBit-Labs
-**Date Created**: 2025-01-15
-**Last Modified**: 2025-01-15
+**Version**: 1.0 **Status**: Draft **Author(s)**: EvilBit-Labs **Date Created**: 2025-01-15 **Last Modified**: 2025-01-15
 
 ---
 
@@ -18,8 +14,7 @@
 
 ### Project Overview
 
-- **Project Description and Purpose**
-  Gold Digger is a Rust-based command-line tool that executes MySQL and MariaDB database queries and exports results to structured data files. The tool is designed for headless operation, making it ideal for automated database reporting, monitoring, and data extraction workflows.
+- **Project Description and Purpose** Gold Digger is a Rust-based command-line tool that executes MySQL and MariaDB database queries and exports results to structured data files. The tool is designed for headless operation, making it ideal for automated database reporting, monitoring, and data extraction workflows.
 
 - **Project Goals and Objectives**
 
@@ -42,8 +37,7 @@
   - **Container Engineers**: Docker-based database query automation with environment variable configuration
   - **Pipeline Architects**: Integration into complex data processing and automation systems
 
-- **Project Boundaries and Limitations**
-  Gold Digger will *not* provide:
+- **Project Boundaries and Limitations** Gold Digger will *not* provide:
 
   - Interactive database client functionality
   - Query composition or SQL generation features
@@ -96,11 +90,9 @@
 
 ### Context and Background
 
-- **Business Context and Justification**
-  Database query automation is a critical need across development, data engineering, and various automation workflows. Existing solutions often require heavy runtime dependencies, complex configuration, or lack offline-first design principles essential for lightweight, self-contained deployments. This tool is designed to be a reliable, composable component that can be easily integrated into larger data processing pipelines, ETL workflows, and automation systems.
+- **Business Context and Justification** Database query automation is a critical need across development, data engineering, and various automation workflows. Existing solutions often require heavy runtime dependencies, complex configuration, or lack offline-first design principles essential for lightweight, self-contained deployments. This tool is designed to be a reliable, composable component that can be easily integrated into larger data processing pipelines, ETL workflows, and automation systems.
 
-- **Previous Work and Dependencies**
-  Current implementation (v0.2.5) provides basic functionality with:
+- **Previous Work and Dependencies** Current implementation (v0.2.5) provides basic functionality with:
 
   - Environment variable configuration (DATABASE_URL, DATABASE_QUERY, OUTPUT_FILE)
   - Modular output format writers (CSV, JSON, TSV)

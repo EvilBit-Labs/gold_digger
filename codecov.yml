@@ -1,15 +1,16 @@
 coverage:
-  status:
-    project:
-      default:
-        target: 80%
-        threshold: 2%
-    patch:
-      default:
-        target: 70%
-        threshold: 5%
-  ignore:
-    - "tests/**/*"
-    - "benches/**/*"
-    - "examples/**/*"
-    - "target/**/*"
+    status:
+        project:
+            default:
+                target: 85%
+                threshold: 2%
+        patch:
+            default:
+                target: 90%
+                threshold: 5%
+    ignore:
+        - "tests/**/*"
+        - "benches/**/*"
+        - "examples/**/*"
+        - "target/**/*"
+        - "daemoneye/**/*" # Exclude distribution package from coverage

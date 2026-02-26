@@ -16,6 +16,10 @@ use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
 
+// Import the new certificate generation functionality
+mod fixtures;
+use fixtures::tls::EphemeralCertificate;
+
 /// Helper function to create a temporary certificate file for testing
 fn create_temp_cert_file(content: &str) -> Result<(TempDir, PathBuf)> {
     let temp_dir = tempfile::tempdir()?;
@@ -24,24 +28,15 @@ fn create_temp_cert_file(content: &str) -> Result<(TempDir, PathBuf)> {
     Ok((temp_dir, cert_path))
 }
 
-/// Sample valid PEM certificate for testing
-const VALID_CERT_PEM: &str = r#"-----BEGIN CERTIFICATE-----
-MIIDXTCCAkWgAwIBAgIJAKoK/heBjcOuMA0GCSqGSIb3DQEBBQUAMEUxCzAJBgNV
-BAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBX
-aWRnaXRzIFB0eSBMdGQwHhcNMTcwODI4MTExNzE2WhcNMTgwODI4MTExNzE2WjBF
-MQswCQYDVQQGEwJBVTETMBEGA1UECAwKU29tZS1TdGF0ZTEhMB8GA1UECgwYSW50
-ZXJuZXQgV2lkZ2l0cyBQdHkgTHRkMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIB
-CgKCAQEAuuExKvY1xzHFw4A9J3QnsdTtjScjjQ3WM94I2FtpMRCZDBrT7PN2RQae
-1UBMHall7afNzoglf7Gpir6+sQBaoXI6F0S2ZuuAiYU9zqhxHKjVfz6rZqQkLrZQ
-kOcHXiIhIdOviydpX3MelAwNjGSteHyGA1TqRBxh9obFoAoRQmlHnVkycnARP8qd
-tNatja7VgHd7NuiE5vTaFzCREHk2lQaHdgAIuRs6Z4zw1h5BzHyUK4DqsJqGrRLm
-YehM4wlBOmrsBc7afNdlko/YVFkLJ7AsGQJ1951i6cWQmaq5WZEyLPp1FNRRRyep
-7TqBnLf2xURg5BDVvbhP0A42VpQIDAQABo1AwTjAdBgNVHQ4EFgQUhHf2808b6+RE
-oCgEMWMWgRkH+6wwHwYDVR0jBBgwFoAUhHf2808b6+REoCgEMWMWgRkH+6wwDAYD
-VR0TBAUwAwEB/zANBgkqhkiG9w0BAQUFAAOCAQEAGRuOfQqk5T5OhzgiuLxhQYsy
-XqSR4fNMW7M0PJjdXNzGxhMvKs9vEehxiaUHLjUx7bZT2+WBxNki4NfeCEHeQpZs
------END CERTIFICATE-----
-"#;
+/// Generate a valid PEM certificate for testing using rcgen
+/// This replaces the hardcoded certificate with dynamic generation
+fn generate_test_certificate() -> anyhow::Result<String> {
+    let (cert_pem, _key_pem) = EphemeralCertificate::generate_self_signed(vec![
+        "localhost".to_string(),
+        "test.local".to_string(),
+    ])?;
+    Ok(cert_pem)
+}
 
 mod cli_flag_parsing_tests {
     use super::*;
@@ -62,7 +57,10 @@ mod cli_flag_parsing_tests {
 
         let tls_config = TlsConfig::from_tls_options(&cli.tls_options)?;
 
-        assert!(matches!(tls_config.validation_mode(), TlsValidationMode::Platform));
+        assert!(matches!(
+            tls_config.validation_mode(),
+            TlsValidationMode::Platform
+        ));
 
         Ok(())
     }
@@ -71,7 +69,8 @@ mod cli_flag_parsing_tests {
     /// Requirement: 6.2 - Custom CA file configuration
     #[test]
     fn test_cli_tls_ca_file_flag() -> Result<()> {
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
         let cli = Cli::try_parse_from([
             "gold_digger",
@@ -113,7 +112,10 @@ mod cli_flag_parsing_tests {
 
         let tls_config = TlsConfig::from_tls_options(&cli.tls_options)?;
 
-        assert!(matches!(tls_config.validation_mode(), TlsValidationMode::SkipHostnameVerification));
+        assert!(matches!(
+            tls_config.validation_mode(),
+            TlsValidationMode::SkipHostnameVerification
+        ));
 
         Ok(())
     }
@@ -135,7 +137,10 @@ mod cli_flag_parsing_tests {
 
         let tls_config = TlsConfig::from_tls_options(&cli.tls_options)?;
 
-        assert!(matches!(tls_config.validation_mode(), TlsValidationMode::AcceptInvalid));
+        assert!(matches!(
+            tls_config.validation_mode(),
+            TlsValidationMode::AcceptInvalid
+        ));
 
         Ok(())
     }
@@ -144,7 +149,8 @@ mod cli_flag_parsing_tests {
     /// Requirement: 6.2, 6.3 - Mutually exclusive TLS flags
     #[test]
     fn test_mutual_exclusion_ca_file_and_skip_hostname() -> Result<()> {
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
         let result = Cli::try_parse_from([
             "gold_digger",
@@ -162,7 +168,10 @@ mod cli_flag_parsing_tests {
         assert!(result.is_err());
         if let Err(error) = result {
             let error_msg = error.to_string();
-            assert!(error_msg.contains("cannot be used with") || error_msg.contains("mutually exclusive"));
+            assert!(
+                error_msg.contains("cannot be used with")
+                    || error_msg.contains("mutually exclusive")
+            );
         }
 
         Ok(())
@@ -172,7 +181,8 @@ mod cli_flag_parsing_tests {
     /// Requirement: 6.2, 6.4 - Mutually exclusive TLS flags
     #[test]
     fn test_mutual_exclusion_ca_file_and_allow_invalid() -> Result<()> {
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
         let result = Cli::try_parse_from([
             "gold_digger",
@@ -190,7 +200,10 @@ mod cli_flag_parsing_tests {
         assert!(result.is_err());
         if let Err(error) = result {
             let error_msg = error.to_string();
-            assert!(error_msg.contains("cannot be used with") || error_msg.contains("mutually exclusive"));
+            assert!(
+                error_msg.contains("cannot be used with")
+                    || error_msg.contains("mutually exclusive")
+            );
         }
 
         Ok(())
@@ -215,7 +228,10 @@ mod cli_flag_parsing_tests {
         assert!(result.is_err());
         if let Err(error) = result {
             let error_msg = error.to_string();
-            assert!(error_msg.contains("cannot be used with") || error_msg.contains("mutually exclusive"));
+            assert!(
+                error_msg.contains("cannot be used with")
+                    || error_msg.contains("mutually exclusive")
+            );
         }
 
         Ok(())
@@ -238,7 +254,10 @@ mod tls_config_creation_tests {
 
         let config = TlsConfig::from_tls_options(&tls_options)?;
 
-        assert!(matches!(config.validation_mode(), TlsValidationMode::Platform));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::Platform
+        ));
 
         Ok(())
     }
@@ -247,7 +266,8 @@ mod tls_config_creation_tests {
     /// Requirement: 6.2 - Custom CA file configuration
     #[test]
     fn test_tls_config_from_cli_custom_ca_mode() -> Result<()> {
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
         let tls_options = TlsOptions {
             tls_ca_file: Some(cert_path.clone()),
@@ -278,7 +298,10 @@ mod tls_config_creation_tests {
 
         let config = TlsConfig::from_tls_options(&tls_options)?;
 
-        assert!(matches!(config.validation_mode(), TlsValidationMode::SkipHostnameVerification));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::SkipHostnameVerification
+        ));
 
         Ok(())
     }
@@ -295,7 +318,10 @@ mod tls_config_creation_tests {
 
         let config = TlsConfig::from_tls_options(&tls_options)?;
 
-        assert!(matches!(config.validation_mode(), TlsValidationMode::AcceptInvalid));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::AcceptInvalid
+        ));
 
         Ok(())
     }
@@ -304,22 +330,32 @@ mod tls_config_creation_tests {
     /// Requirement: 6.1, 6.2, 6.3, 6.4 - Mutually exclusive validation
     #[test]
     fn test_tls_config_mutual_exclusion_validation() -> Result<()> {
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
         // Test ca_file + skip_hostname
         let result = TlsConfig::from_cli_args(Some(&cert_path), true, false);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TlsError::MutuallyExclusiveFlags { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            TlsError::MutuallyExclusiveFlags { .. }
+        ));
 
         // Test ca_file + accept_invalid
         let result = TlsConfig::from_cli_args(Some(&cert_path), false, true);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TlsError::MutuallyExclusiveFlags { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            TlsError::MutuallyExclusiveFlags { .. }
+        ));
 
         // Test skip_hostname + accept_invalid
         let result = TlsConfig::from_cli_args(None, true, true);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TlsError::MutuallyExclusiveFlags { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            TlsError::MutuallyExclusiveFlags { .. }
+        ));
 
         Ok(())
     }
@@ -332,7 +368,8 @@ mod certificate_validation_tests {
     /// Requirement: 3.4 - Certificate file validation
     #[test]
     fn test_certificate_validation_valid_cert() -> Result<()> {
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
         let config = TlsConfig::with_custom_ca(&cert_path);
 
@@ -354,7 +391,10 @@ mod certificate_validation_tests {
         let result = TlsConfig::from_cli_args(Some(&nonexistent_path), false, false);
 
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TlsError::CaFileNotFound { .. }));
+        assert!(matches!(
+            result.unwrap_err(),
+            TlsError::CaFileNotFound { .. }
+        ));
 
         Ok(())
     }
@@ -410,7 +450,8 @@ mod ssl_opts_generation_tests {
     /// Requirement: 6.2 - Custom CA certificate configuration
     #[test]
     fn test_ssl_opts_custom_ca_mode() -> Result<()> {
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
         let config = TlsConfig::with_custom_ca(&cert_path);
 
@@ -424,7 +465,7 @@ mod ssl_opts_generation_tests {
             Err(_) => {
                 // Certificate parsing failure is acceptable for this test
                 // We're testing configuration creation, not certificate validation
-            },
+            }
         }
 
         Ok(())
@@ -476,14 +517,21 @@ mod tls_config_builder_tests {
     fn test_tls_config_builders() -> Result<()> {
         // Test default config
         let config = TlsConfig::default();
-        assert!(matches!(config.validation_mode(), TlsValidationMode::Platform));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::Platform
+        ));
 
         // Test new config
         let config = TlsConfig::new();
-        assert!(matches!(config.validation_mode(), TlsValidationMode::Platform));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::Platform
+        ));
 
         // Test custom CA builder
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
         let config = TlsConfig::with_custom_ca(&cert_path);
         if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
             assert_eq!(ca_file_path, &cert_path);
@@ -493,11 +541,17 @@ mod tls_config_builder_tests {
 
         // Test skip hostname builder
         let config = TlsConfig::with_skip_hostname_verification();
-        assert!(matches!(config.validation_mode(), TlsValidationMode::SkipHostnameVerification));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::SkipHostnameVerification
+        ));
 
         // Test accept invalid builder
         let config = TlsConfig::with_accept_invalid();
-        assert!(matches!(config.validation_mode(), TlsValidationMode::AcceptInvalid));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::AcceptInvalid
+        ));
 
         Ok(())
     }
@@ -532,7 +586,8 @@ mod security_warnings_tests {
         config.display_security_warnings();
 
         // Custom CA mode - no warnings (tested by not panicking)
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM).unwrap();
+        let cert_pem = generate_test_certificate().unwrap();
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem).unwrap();
         let config = TlsConfig::with_custom_ca(&cert_path);
         config.display_security_warnings();
 

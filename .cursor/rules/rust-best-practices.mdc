@@ -3,6 +3,7 @@ description:
 globs:
 alwaysApply: true
 ---
+
 # Rust Best Practices for gold_digger
 
 ## Project Structure
@@ -48,6 +49,7 @@ This zero-copy API accepts:
 - **Clippy warnings**: Zero tolerance (`-D warnings`)
 - **Error handling**: Use `anyhow` for applications, `thiserror` for libraries
 - **Documentation**: Doc comments (`///`) required for all public functions
+- **Code length**: Rust files should be no longer than 1000 lines of code, and no more than 500 lines of code, if possible.
 
 ### Essential Commands
 
@@ -71,7 +73,7 @@ just security     # cargo audit (advisory)
 
 Required for all public functions using `///`:
 
-```rust
+````rust
 /// Converts MySQL rows to string vectors for output formatting.
 ///
 /// # Arguments
@@ -89,7 +91,7 @@ Required for all public functions using `///`:
 pub fn rows_to_strings(rows: Vec<mysql::Row>) -> anyhow::Result<Vec<Vec<String>>> {
     // Implementation
 }
-```
+````
 
 ## Code Style
 
@@ -108,6 +110,7 @@ pub fn rows_to_strings(rows: Vec<mysql::Row>) -> anyhow::Result<Vec<Vec<String>>
 
 - Pin dependency versions in [`Cargo.toml`](mdc:Cargo.toml) and use minimal required features for each crate
 - Use optional dependencies and features for extensibility (e.g., additional MySQL types, output formats)
+- Use context7 website or MCP tool to get current documentation for APIs and crates
 
 ## Testing Guidelines
 

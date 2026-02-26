@@ -19,36 +19,13 @@ repos:
         args: [--fix=auto]
       - id: check-vcs-permalinks
 
-  # 🦀 Rust clippy linting
-  - repo: local
+  - repo: https://github.com/FeryET/pre-commit-rust
+    rev: v1.2.1
     hooks:
-      - id: rust-clippy
-        name: rust-clippy
-        entry: cargo clippy -- -D warnings
-        language: system
-        pass_filenames: false
-        always_run: true
-        types: [rust]
-
-  # 🦀 Rust formatting
-  - repo: local
-    hooks:
-      - id: rust-fmt
-        name: rust-fmt
-        entry: cargo fmt -- --check
-        language: system
-        pass_filenames: false
-        always_run: true
-        types: [rust]
-
-  # 📄 YAML formatting
-  - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v4.0.0-alpha.8
-    hooks:
-      - id: prettier
-        types: [yaml]
-        args: [--prose-wrap=never]
-        exclude: ^.github/workflows/release.yml$
+      - id: fmt
+      - id: clippy
+      - id: cargo-check
+      - id: build
 
   # 🧪 GitHub Actions validation
   - repo: https://github.com/rhysd/actionlint
@@ -67,17 +44,18 @@ repos:
 
   # 📝 Commit message linting (commit-msg only, not blocking push)
   - repo: https://github.com/commitizen-tools/commitizen
-    rev: v4.8.3
+    rev: v4.9.1
     hooks:
       - id: commitizen
         stages: [commit-msg]
 
-  - repo: https://github.com/bnjbvr/cargo-machete
-    rev: v0.9.1
-    hooks:
-      - id: cargo-machete
+  # Temporarily disabled due to issues with cargo-machete while we are stubbing out the project
+  # - repo: https://github.com/bnjbvr/cargo-machete
+  #   rev: v0.9.1
+  #   hooks:
+  #       - id: cargo-machete
 
-    # 📝 Markdown formatting and linting (temporarily disabled in CI due to path issues)
+  # 📝 Markdown formatting and linting (temporarily disabled in CI due to path issues)
   - repo: https://github.com/hukkin/mdformat
     rev: 0.7.22
     hooks:
@@ -92,15 +70,10 @@ repos:
           - mdformat-tables
           - mdformat-web
           - mdformat-wikilink
-          - mdformat-ruff
           - mdformat-gfm-alerts
           - mdformat-rustfmt
           - mdformat-toc
-  # - repo: https://github.com/DavidAnson/markdownlint-cli2
-  #   rev: v0.18.1
-  #   hooks:
-  #     - id: markdownlint-cli2
-  #       args: ["-c", ".markdownlint-cli2.jsonc"]
+        files: \.(md|mdx)$
 
   # 🔒 Security audit for Rust dependencies (moved to CI)
   - repo: local
@@ -111,3 +84,16 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+  - repo: https://github.com/DevinR528/cargo-sort
+    rev: v2.0.2
+    hooks:
+      - id: cargo-sort
+  # 📄 Format JSON, YAML, and JSONC files with Prettier
+  - repo: local
+    hooks:
+      - id: format-files
+        name: format-files
+        entry: just format-files
+        language: system
+        files: \.(json|jsonc|yaml|yml)$
+        pass_filenames: true

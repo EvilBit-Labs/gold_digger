@@ -17,19 +17,27 @@ use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
 
+// Import the new certificate generation functionality
+mod fixtures;
+use fixtures::tls::EphemeralCertificate;
+
 // Test helper function to consolidate to_ssl_opts() calls
 // This makes future API migrations easier by centralizing the call pattern
 fn assert_ssl_opts_available(config: &TlsConfig, context: &str) -> Result<()> {
     match config.to_ssl_opts() {
         Ok(ssl_opts) => {
-            assert!(ssl_opts.is_some(), "SSL options should be available for: {}", context);
+            assert!(
+                ssl_opts.is_some(),
+                "SSL options should be available for: {}",
+                context
+            );
             Ok(())
-        },
+        }
         Err(_) => {
             // Certificate parsing failure is acceptable for tests
             // We're testing configuration, not certificate validation
             Ok(())
-        },
+        }
     }
 }
 
@@ -48,24 +56,15 @@ fn create_temp_output_path() -> Result<(TempDir, String)> {
     Ok((temp_dir, output_path.to_string_lossy().to_string()))
 }
 
-/// Sample valid PEM certificate for testing
-const VALID_CERT_PEM: &str = r#"-----BEGIN CERTIFICATE-----
-MIIDXTCCAkWgAwIBAgIJAKoK/heBjcOuMA0GCSqGSIb3DQEBBQUAMEUxCzAJBgNV
-BAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBX
-aWRnaXRzIFB0eSBMdGQwHhcNMTcwODI4MTExNzE2WhcNMTgwODI4MTExNzE2WjBF
-MQswCQYDVQQGEwJBVTETMBEGA1UECAwKU29tZS1TdGF0ZTEhMB8GA1UECgwYSW50
-ZXJuZXQgV2lkZ2l0cyBQdHkgTHRkMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIB
-CgKCAQEAuuExKvY1xzHFw4A9J3QnsdTtjScjjQ3WM94I2FtpMRCZDBrT7PN2RQae
-1UBMHall7afNzoglf7Gpir6+sQBaoXI6F0S2ZuuAiYU9zqhxHKjVfz6rZqQkLrZQ
-kOcHXiIhIdOviydpX3MelAwNjGSteHyGA1TqRBxh9obFoAoRQmlHnVkycnARP8qd
-tNatja7VgHd7NuiE5vTaFzCREHk2lQaHdgAIuRs6Z4zw1h5BzHyUK4DqsJqGrRLm
-YehM4wlBOmrsBc7afNdlko/YVFkLJ7AsGQJ1951i6cWQmaq5WZEyLPp1FNRRRyep
-7TqBnLf2xURg5BDVvbhP0A42VpQIDAQABo1AwTjAdBgNVHQ4EFgQUhHf2808b6+RE
-oCgEMWMWgRkH+6wwHwYDVR0jBBgwFoAUhHf2808b6+REoCgEMWMWgRkH+6wwDAYD
-VR0TBAUwAwEB/zANBgkqhkiG9w0BAQUFAAOCAQEAGRuOfQqk5T5OhzgiuLxhQYsy
-XqSR4fNMW7M0PJjdXNzGxhMvKs9vEehxiaUHLjUx7bZT2+WBxNki4NfeCEHeQpZs
------END CERTIFICATE-----
-"#;
+/// Generate a valid PEM certificate for testing using rcgen
+/// This replaces the hardcoded certificate with dynamic generation
+fn generate_test_certificate() -> Result<String> {
+    let (cert_pem, _key_pem) = EphemeralCertificate::generate_self_signed(vec![
+        "localhost".to_string(),
+        "test.local".to_string(),
+    ])?;
+    Ok(cert_pem)
+}
 
 mod database_url_compatibility_tests {
     use super::*;
@@ -101,7 +100,11 @@ mod database_url_compatibility_tests {
             assert_ssl_opts_available(&config, &format!("URL: {}", url))?;
 
             // Test that the URL format is preserved and can be used
-            assert!(url.starts_with("mysql://"), "URL should start with mysql://: {}", url);
+            assert!(
+                url.starts_with("mysql://"),
+                "URL should start with mysql://: {}",
+                url
+            );
             assert!(url.contains("@"), "URL should contain @ separator: {}", url);
             assert!(url.contains(":"), "URL should contain : separator: {}", url);
         }
@@ -134,8 +137,16 @@ mod database_url_compatibility_tests {
             assert_ssl_opts_available(&config, &format!("SSL URL: {}", url))?;
 
             // Verify URL format is preserved
-            assert!(url.starts_with("mysql://"), "SSL URL should start with mysql://: {}", url);
-            assert!(url.contains("ssl"), "SSL URL should contain ssl parameter: {}", url);
+            assert!(
+                url.starts_with("mysql://"),
+                "SSL URL should start with mysql://: {}",
+                url
+            );
+            assert!(
+                url.contains("ssl"),
+                "SSL URL should contain ssl parameter: {}",
+                url
+            );
         }
 
         Ok(())
@@ -146,7 +157,8 @@ mod database_url_compatibility_tests {
     #[test]
     fn test_cli_tls_flags_precedence_over_url_ssl_params() -> Result<()> {
         // Create a temporary certificate file for testing
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
         // Test cases: (url_with_ssl_params, cli_tls_options, expected_validation_mode)
         let test_cases = vec![
@@ -236,10 +248,15 @@ mod database_url_compatibility_tests {
                 );
             }
 
-            if url.contains("ssl-ca=") && !matches!(&expected_mode, TlsValidationMode::CustomCa { .. }) {
+            if url.contains("ssl-ca=")
+                && !matches!(&expected_mode, TlsValidationMode::CustomCa { .. })
+            {
                 // If URL has ssl-ca but CLI doesn't specify --tls-ca-file, URL should be ignored
                 assert!(
-                    !matches!(tls_config.validation_mode(), TlsValidationMode::CustomCa { .. }),
+                    !matches!(
+                        tls_config.validation_mode(),
+                        TlsValidationMode::CustomCa { .. }
+                    ),
                     "URL ssl-ca parameter should not override CLI TLS flags when --tls-ca-file is not specified"
                 );
             }
@@ -266,8 +283,16 @@ mod database_url_compatibility_tests {
             assert_ssl_opts_available(&config, &format!("non-TLS URL: {}", url))?;
 
             // Verify URL format
-            assert!(url.starts_with("mysql://"), "Non-TLS URL should start with mysql://: {}", url);
-            assert!(!url.contains("ssl"), "Non-TLS URL should not contain ssl parameter: {}", url);
+            assert!(
+                url.starts_with("mysql://"),
+                "Non-TLS URL should start with mysql://: {}",
+                url
+            );
+            assert!(
+                !url.contains("ssl"),
+                "Non-TLS URL should not contain ssl parameter: {}",
+                url
+            );
         }
 
         Ok(())
@@ -297,7 +322,11 @@ mod database_url_compatibility_tests {
             assert_ssl_opts_available(&config, &format!("edge case URL: {}", url))?;
 
             // Verify URL format
-            assert!(url.starts_with("mysql://"), "Edge case URL should start with mysql://: {}", url);
+            assert!(
+                url.starts_with("mysql://"),
+                "Edge case URL should start with mysql://: {}",
+                url
+            );
         }
 
         Ok(())
@@ -313,13 +342,19 @@ mod tls_connection_compatibility_tests {
     fn test_tls_connection_behavior_unchanged() -> Result<()> {
         // Test platform certificate validation (default behavior)
         let config = TlsConfig::new();
-        assert!(matches!(config.validation_mode(), TlsValidationMode::Platform));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::Platform
+        ));
 
         assert_ssl_opts_available(&config, "Platform TLS")?;
 
         // Test that the configuration produces the same behavior as before
         let config_clone = config.clone();
-        assert_eq!(config, config_clone, "TLS configuration should be consistent");
+        assert_eq!(
+            config, config_clone,
+            "TLS configuration should be consistent"
+        );
 
         Ok(())
     }
@@ -328,7 +363,8 @@ mod tls_connection_compatibility_tests {
     /// Requirement: 7.1 - Custom CA functionality preserved
     #[test]
     fn test_custom_ca_functionality_unchanged() -> Result<()> {
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
         // Test custom CA configuration
         let config = TlsConfig::with_custom_ca(&cert_path);
@@ -351,7 +387,10 @@ mod tls_connection_compatibility_tests {
     fn test_hostname_verification_skip_unchanged() -> Result<()> {
         let config = TlsConfig::with_skip_hostname_verification();
 
-        assert!(matches!(config.validation_mode(), TlsValidationMode::SkipHostnameVerification));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::SkipHostnameVerification
+        ));
 
         assert_ssl_opts_available(&config, "Skip hostname verification")?;
 
@@ -364,7 +403,10 @@ mod tls_connection_compatibility_tests {
     fn test_invalid_certificate_acceptance_unchanged() -> Result<()> {
         let config = TlsConfig::with_accept_invalid();
 
-        assert!(matches!(config.validation_mode(), TlsValidationMode::AcceptInvalid));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::AcceptInvalid
+        ));
 
         assert_ssl_opts_available(&config, "Accept invalid certificate")?;
 
@@ -378,10 +420,14 @@ mod tls_connection_compatibility_tests {
         // Test default configuration
         let default_config = TlsConfig::default();
         let new_config = TlsConfig::new();
-        assert_eq!(default_config, new_config, "Default and new configurations should be identical");
+        assert_eq!(
+            default_config, new_config,
+            "Default and new configurations should be identical"
+        );
 
         // Test builder methods
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
         let custom_ca_config = TlsConfig::with_custom_ca(&cert_path);
         let skip_hostname_config = TlsConfig::with_skip_hostname_verification();
@@ -410,10 +456,14 @@ mod tls_connection_compatibility_tests {
         };
 
         let config = TlsConfig::from_tls_options(&default_tls_options)?;
-        assert!(matches!(config.validation_mode(), TlsValidationMode::Platform));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::Platform
+        ));
 
         // Test custom CA CLI option
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
         let ca_tls_options = TlsOptions {
             tls_ca_file: Some(cert_path.clone()),
             insecure_skip_hostname_verify: false,
@@ -435,7 +485,10 @@ mod tls_connection_compatibility_tests {
         };
 
         let config = TlsConfig::from_tls_options(&skip_hostname_options)?;
-        assert!(matches!(config.validation_mode(), TlsValidationMode::SkipHostnameVerification));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::SkipHostnameVerification
+        ));
 
         // Test accept invalid CLI option
         let accept_invalid_options = TlsOptions {
@@ -445,7 +498,10 @@ mod tls_connection_compatibility_tests {
         };
 
         let config = TlsConfig::from_tls_options(&accept_invalid_options)?;
-        assert!(matches!(config.validation_mode(), TlsValidationMode::AcceptInvalid));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::AcceptInvalid
+        ));
 
         Ok(())
     }
@@ -475,7 +531,8 @@ mod cli_flag_behavior_tests {
         assert!(!cli.tls_options.allow_invalid_certificate);
 
         // Test CLI parsing with TLS CA file flag
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
         let cli = Cli::try_parse_from([
             "gold_digger",
             "--db-url",
@@ -531,7 +588,8 @@ mod cli_flag_behavior_tests {
     /// Requirement: 7.4 - Mutual exclusion behavior preserved
     #[test]
     fn test_tls_flag_mutual_exclusion_unchanged() -> Result<()> {
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
         // Test mutual exclusion: CA file + skip hostname
         let result = Cli::try_parse_from([
@@ -547,7 +605,10 @@ mod cli_flag_behavior_tests {
             "--insecure-skip-hostname-verify",
         ]);
 
-        assert!(result.is_err(), "CA file + skip hostname should be mutually exclusive");
+        assert!(
+            result.is_err(),
+            "CA file + skip hostname should be mutually exclusive"
+        );
 
         // Test mutual exclusion: CA file + accept invalid
         let result = Cli::try_parse_from([
@@ -563,7 +624,10 @@ mod cli_flag_behavior_tests {
             "--allow-invalid-certificate",
         ]);
 
-        assert!(result.is_err(), "CA file + accept invalid should be mutually exclusive");
+        assert!(
+            result.is_err(),
+            "CA file + accept invalid should be mutually exclusive"
+        );
 
         // Test mutual exclusion: skip hostname + accept invalid
         let result = Cli::try_parse_from([
@@ -578,7 +642,10 @@ mod cli_flag_behavior_tests {
             "--allow-invalid-certificate",
         ]);
 
-        assert!(result.is_err(), "Skip hostname + accept invalid should be mutually exclusive");
+        assert!(
+            result.is_err(),
+            "Skip hostname + accept invalid should be mutually exclusive"
+        );
 
         Ok(())
     }
@@ -588,13 +655,17 @@ mod cli_flag_behavior_tests {
     #[test]
     fn test_tls_flags_always_available() {
         // Test that help includes TLS flags
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd.arg("--help").output().unwrap();
 
         let stdout = String::from_utf8_lossy(&output.stdout);
 
         // Verify TLS flags are present in help with proper CLI flag forms
-        assert!(stdout.contains("--tls-ca-file"), "Help should include --tls-ca-file flag");
+        assert!(
+            stdout.contains("--tls-ca-file"),
+            "Help should include --tls-ca-file flag"
+        );
         assert!(
             stdout.contains("--insecure-skip-hostname-verify"),
             "Help should include --insecure-skip-hostname-verify flag"
@@ -605,9 +676,18 @@ mod cli_flag_behavior_tests {
         );
 
         // Verify flag descriptions are present
-        assert!(stdout.contains("CA certificate"), "Help should describe CA certificate functionality");
-        assert!(stdout.contains("hostname verification"), "Help should describe hostname verification");
-        assert!(stdout.contains("certificate validation"), "Help should describe certificate validation");
+        assert!(
+            stdout.contains("CA certificate"),
+            "Help should describe CA certificate functionality"
+        );
+        assert!(
+            stdout.contains("hostname verification"),
+            "Help should describe hostname verification"
+        );
+        assert!(
+            stdout.contains("certificate validation"),
+            "Help should describe certificate validation"
+        );
     }
 
     /// Test CLI flag error messages unchanged
@@ -617,6 +697,7 @@ mod cli_flag_behavior_tests {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
         // Test nonexistent CA file error
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd
             .args([
@@ -636,15 +717,25 @@ mod cli_flag_behavior_tests {
 
         // Verify error message contains stable tokens instead of exact phrase
         // Check for CA file path and at least one stable keyword
-        assert!(stderr.contains("/nonexistent/cert.pem"), "Error should include file path");
         assert!(
-            stderr.contains("CA") && (stderr.contains("certificate") || stderr.contains("not found")),
+            stderr.contains("/nonexistent/cert.pem"),
+            "Error should include file path"
+        );
+        assert!(
+            stderr.contains("CA")
+                && (stderr.contains("certificate") || stderr.contains("not found")),
             "Error should contain stable tokens: CA and either 'certificate' or 'not found'"
         );
 
         // Verify credentials are not leaked
-        assert!(!stderr.contains("test:test"), "Credentials should not be leaked");
-        assert!(!stderr.contains("mysql://test:test@localhost:3306/test"), "Full URL should not be leaked");
+        assert!(
+            !stderr.contains("test:test"),
+            "Credentials should not be leaked"
+        );
+        assert!(
+            !stderr.contains("mysql://test:test@localhost:3306/test"),
+            "Full URL should not be leaked"
+        );
     }
 }
 
@@ -661,20 +752,30 @@ mod security_warnings_tests {
         // The display_security_warnings method prints to stderr
         // We test that it doesn't panic and the configuration is correct
         config.display_security_warnings();
-        assert!(matches!(config.validation_mode(), TlsValidationMode::SkipHostnameVerification));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::SkipHostnameVerification
+        ));
 
         // Test accept invalid certificate warning
         let config = TlsConfig::with_accept_invalid();
         config.display_security_warnings();
-        assert!(matches!(config.validation_mode(), TlsValidationMode::AcceptInvalid));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::AcceptInvalid
+        ));
 
         // Test platform mode (no warning)
         let config = TlsConfig::new();
         config.display_security_warnings();
-        assert!(matches!(config.validation_mode(), TlsValidationMode::Platform));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::Platform
+        ));
 
         // Test custom CA mode (no warning)
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM).unwrap();
+        let cert_pem = generate_test_certificate().unwrap();
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem).unwrap();
         let config = TlsConfig::with_custom_ca(&cert_path);
         config.display_security_warnings();
         if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
@@ -691,6 +792,7 @@ mod security_warnings_tests {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
         // Test CLI command with skip hostname verification
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd
             .args([
@@ -711,11 +813,17 @@ mod security_warnings_tests {
         // We're testing that the warning mechanism is in place
 
         // Verify credentials are not leaked in any output
-        assert!(!stderr.contains("test:test"), "Credentials should not be leaked in stderr");
+        assert!(
+            !stderr.contains("test:test"),
+            "Credentials should not be leaked in stderr"
+        );
 
         // The actual warning display happens during connection setup
         // This test verifies the CLI accepts the flag correctly
-        assert!(output.status.code().is_some(), "Command should exit with a status code");
+        assert!(
+            output.status.code().is_some(),
+            "Command should exit with a status code"
+        );
     }
 
     /// Test security warning content for accept invalid certificate
@@ -725,6 +833,7 @@ mod security_warnings_tests {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
         // Test CLI command with accept invalid certificate
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd
             .args([
@@ -742,11 +851,17 @@ mod security_warnings_tests {
         let stderr = String::from_utf8_lossy(&output.stderr);
 
         // Verify credentials are not leaked in any output
-        assert!(!stderr.contains("test:test"), "Credentials should not be leaked in stderr");
+        assert!(
+            !stderr.contains("test:test"),
+            "Credentials should not be leaked in stderr"
+        );
 
         // The actual warning display happens during connection setup
         // This test verifies the CLI accepts the flag correctly
-        assert!(output.status.code().is_some(), "Command should exit with a status code");
+        assert!(
+            output.status.code().is_some(),
+            "Command should exit with a status code"
+        );
     }
 
     /// Test that no warnings are displayed for secure modes
@@ -756,10 +871,14 @@ mod security_warnings_tests {
         // Test platform mode (secure, no warnings)
         let config = TlsConfig::new();
         config.display_security_warnings(); // Should not display warnings
-        assert!(matches!(config.validation_mode(), TlsValidationMode::Platform));
+        assert!(matches!(
+            config.validation_mode(),
+            TlsValidationMode::Platform
+        ));
 
         // Test custom CA mode (secure, no warnings)
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM).unwrap();
+        let cert_pem = generate_test_certificate().unwrap();
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem).unwrap();
         let config = TlsConfig::with_custom_ca(&cert_path);
         config.display_security_warnings(); // Should not display warnings
         if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
@@ -777,13 +896,23 @@ mod security_warnings_tests {
         let skip_hostname_config = TlsConfig::with_skip_hostname_verification();
         let accept_invalid_config = TlsConfig::with_accept_invalid();
         let platform_config = TlsConfig::new();
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
         let custom_ca_config = TlsConfig::with_custom_ca(&cert_path);
 
         // Verify configuration modes are correct
-        assert!(matches!(skip_hostname_config.validation_mode(), TlsValidationMode::SkipHostnameVerification));
-        assert!(matches!(accept_invalid_config.validation_mode(), TlsValidationMode::AcceptInvalid));
-        assert!(matches!(platform_config.validation_mode(), TlsValidationMode::Platform));
+        assert!(matches!(
+            skip_hostname_config.validation_mode(),
+            TlsValidationMode::SkipHostnameVerification
+        ));
+        assert!(matches!(
+            accept_invalid_config.validation_mode(),
+            TlsValidationMode::AcceptInvalid
+        ));
+        assert!(matches!(
+            platform_config.validation_mode(),
+            TlsValidationMode::Platform
+        ));
         if let TlsValidationMode::CustomCa { ca_file_path } = custom_ca_config.validation_mode() {
             assert_eq!(ca_file_path, &cert_path);
         } else {
@@ -818,11 +947,18 @@ mod tls_always_available_tests {
         let accept_invalid_config = TlsConfig::with_accept_invalid();
 
         assert_ssl_opts_available(&platform_config, "Platform config always available")?;
-        assert_ssl_opts_available(&skip_hostname_config, "Skip hostname config always available")?;
-        assert_ssl_opts_available(&accept_invalid_config, "Accept invalid config always available")?;
+        assert_ssl_opts_available(
+            &skip_hostname_config,
+            "Skip hostname config always available",
+        )?;
+        assert_ssl_opts_available(
+            &accept_invalid_config,
+            "Accept invalid config always available",
+        )?;
 
         // Test custom CA configuration
-        let (_temp_dir, cert_path) = create_temp_cert_file(VALID_CERT_PEM)?;
+        let cert_pem = generate_test_certificate()?;
+        let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
         let custom_ca_config = TlsConfig::with_custom_ca(&cert_path);
 
         // Custom CA may fail certificate parsing, but configuration should be created
@@ -912,6 +1048,7 @@ mod integration_compatibility_tests {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
         // Test basic command without TLS flags (should work as before)
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd
             .args([
@@ -926,34 +1063,56 @@ mod integration_compatibility_tests {
             .unwrap();
 
         // Command should exit with some status (connection will likely fail, but CLI parsing should work)
-        assert!(output.status.code().is_some(), "Command should exit with a status code");
+        assert!(
+            output.status.code().is_some(),
+            "Command should exit with a status code"
+        );
 
         let stderr = String::from_utf8_lossy(&output.stderr);
         // Verify credentials are not leaked
-        assert!(!stderr.contains("test:test"), "Credentials should not be leaked");
+        assert!(
+            !stderr.contains("test:test"),
+            "Credentials should not be leaked"
+        );
     }
 
     /// Test CLI help output includes TLS options
     /// Requirement: 7.4 - Help documentation preserved
     #[test]
     fn test_cli_help_includes_tls_options() {
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd.arg("--help").output().unwrap();
 
         let stdout = String::from_utf8_lossy(&output.stdout);
 
         // Verify all TLS flags are documented with proper CLI flag forms
-        assert!(stdout.contains("--tls-ca-file"), "Help should document --tls-ca-file");
+        assert!(
+            stdout.contains("--tls-ca-file"),
+            "Help should document --tls-ca-file"
+        );
         assert!(
             stdout.contains("--insecure-skip-hostname-verify"),
             "Help should document --insecure-skip-hostname-verify"
         );
-        assert!(stdout.contains("--allow-invalid-certificate"), "Help should document --allow-invalid-certificate");
+        assert!(
+            stdout.contains("--allow-invalid-certificate"),
+            "Help should document --allow-invalid-certificate"
+        );
 
         // Verify flag descriptions are helpful
-        assert!(stdout.contains("CA certificate"), "Help should describe CA certificate functionality");
-        assert!(stdout.contains("hostname"), "Help should mention hostname verification");
-        assert!(stdout.contains("certificate"), "Help should mention certificate validation");
+        assert!(
+            stdout.contains("CA certificate"),
+            "Help should describe CA certificate functionality"
+        );
+        assert!(
+            stdout.contains("hostname"),
+            "Help should mention hostname verification"
+        );
+        assert!(
+            stdout.contains("certificate"),
+            "Help should mention certificate validation"
+        );
         assert!(
             stdout.contains("DANGEROUS") || stdout.contains("dangerous"),
             "Help should warn about dangerous options"
@@ -964,6 +1123,7 @@ mod integration_compatibility_tests {
     /// Requirement: 7.4 - Help documentation preserved with stable contract
     #[test]
     fn test_cli_help_snapshot() {
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd.arg("--help").output().unwrap();
 
@@ -981,6 +1141,7 @@ mod integration_compatibility_tests {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
         // Test configuration dump with TLS flags
+        #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
         let output = cmd
             .args([
@@ -997,15 +1158,30 @@ mod integration_compatibility_tests {
             .unwrap();
 
         // Command should exit (may fail due to missing database, but config dump should work)
-        assert!(output.status.code().is_some(), "Command should exit with a status code");
+        assert!(
+            output.status.code().is_some(),
+            "Command should exit with a status code"
+        );
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
 
         // Verify credentials are not leaked in any output
-        assert!(!stdout.contains("test:test"), "Credentials should not be leaked in stdout");
-        assert!(!stderr.contains("test:test"), "Credentials should not be leaked in stderr");
-        assert!(!stdout.contains("mysql://test:test@localhost:3306/test"), "Full URL should not be leaked in stdout");
-        assert!(!stderr.contains("mysql://test:test@localhost:3306/test"), "Full URL should not be leaked in stderr");
+        assert!(
+            !stdout.contains("test:test"),
+            "Credentials should not be leaked in stdout"
+        );
+        assert!(
+            !stderr.contains("test:test"),
+            "Credentials should not be leaked in stderr"
+        );
+        assert!(
+            !stdout.contains("mysql://test:test@localhost:3306/test"),
+            "Full URL should not be leaked in stdout"
+        );
+        assert!(
+            !stderr.contains("mysql://test:test@localhost:3306/test"),
+            "Full URL should not be leaked in stderr"
+        );
     }
 }

@@ -108,11 +108,9 @@ openssl x509 -in gold_digger-x86_64-unknown-linux-gnu.tar.gz.crt -text -noout | 
 openssl x509 -in gold_digger-x86_64-unknown-linux-gnu.tar.gz.crt -text -noout | grep -A10 "X509v3 extensions" | grep -A5 "1.3.6.1.4.1.57264.1.1" | grep "https://token.actions.githubusercontent.com"
 ```
 
-The certificate identity should match the pattern:
-`https://github.com/EvilBit-Labs/gold_digger/.github/workflows/release.yml@refs/tags/v1.0.0`
+The certificate identity should match the pattern: `https://github.com/EvilBit-Labs/gold_digger/.github/workflows/release.yml@refs/tags/v1.0.0`
 
-The OIDC issuer should be:
-`https://token.actions.githubusercontent.com`
+The OIDC issuer should be: `https://token.actions.githubusercontent.com`
 
 **Security Note**: The verification commands in this documentation use exact regex patterns anchored to these specific values to prevent signature forgery attacks. Never use wildcard patterns like `.*` in production verification.
 
@@ -300,9 +298,7 @@ For CI/CD pipelines, consider automating verification:
 
 ### Common Issues
 
-**Checksum mismatch**: Re-download the file, check for network issues
-**Signature verification fails**: Ensure you have the correct certificate and signature files
-**SBOM parsing errors**: Verify the SBOM file wasn't corrupted during download
+**Checksum mismatch**: Re-download the file, check for network issues **Signature verification fails**: Ensure you have the correct certificate and signature files **SBOM parsing errors**: Verify the SBOM file wasn't corrupted during download
 
 ### Getting Help
 
