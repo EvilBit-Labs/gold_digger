@@ -119,3 +119,4 @@ docs/book/
 
 megalinter-reports/
 .claude/settings.local.json
+.claude.local.md
