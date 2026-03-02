@@ -666,6 +666,16 @@ act-clean:
 # Release & Validation
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Generate CHANGELOG.md using git-cliff
+[group('release')]
+changelog TAG:
+    @{{ mise_exec }} git-cliff --tag {{TAG}} --output CHANGELOG.md
+
+# Generate release-notes.md (no header, for GitHub release body)
+[group('release')]
+release-notes TAG:
+    @{{ mise_exec }} git-cliff --tag {{TAG}} --strip header --output release-notes.md
+
 # Release preparation checklist
 [group('release')]
 release-check: ci-check audit build-all act-ci-dry dist-plan

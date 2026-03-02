@@ -1,0 +1,78 @@
+# git-cliff configuration for Gold Digger
+# https://git-cliff.org/docs/configuration
+
+[changelog]
+header = """
+# Changelog
+
+All notable changes to this project will be documented in this file.\n
+"""
+body = """
+{%- macro remote_url() -%}
+  https://github.com/EvilBit-Labs/gold_digger
+{%- endmacro -%}
+
+{% if version -%}
+    ## [{{ version }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else -%}
+    ## [Unreleased]
+{% endif -%}
+
+{% for group, commits in commits | group_by(attribute="group") %}
+    ### {{ group | striptags | trim }}
+    {% for commit in commits %}
+        - {% if commit.scope %}**{{ commit.scope }}**: {% endif %}{{ commit.message | upper_first }}\
+            {% if commit.breaking %} (**BREAKING**){% endif %}\
+            {% for footer in commit.footers %}\
+                {% if footer.token == "Refs" %} ({{ footer.value }}){% endif %}\
+            {% endfor -%}
+    {% endfor %}
+{% endfor %}
+"""
+footer = """
+{%- macro remote_url() -%}
+  https://github.com/EvilBit-Labs/gold_digger
+{%- endmacro -%}
+
+{% for release in releases -%}
+    {% if release.version -%}
+        {% if release.previous.version -%}
+            [{{ release.version }}]: \
+                {{ self::remote_url() }}/compare/{{ release.previous.version }}...{{ release.version }}
+        {% endif -%}
+    {% else -%}
+        [Unreleased]: {{ self::remote_url() }}/compare/{{ release.previous.version }}...HEAD
+    {% endif -%}
+{% endfor %}
+"""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+split_commits = false
+commit_preprocessors = [
+    # Strip trailing periods from commit messages
+    { pattern = '\.+$', replace = '' },
+    # Linkify issue references
+    { pattern = '\(#([0-9]+)\)', replace = '([#${1}](https://github.com/EvilBit-Labs/gold_digger/issues/${1}))' },
+]
+commit_parsers = [
+    { message = "^feat", group = "Features" },
+    { message = "^fix", group = "Bug Fixes" },
+    { message = "^perf", group = "Performance Improvements" },
+    { message = "^refactor", group = "Code Refactoring" },
+    { message = "^docs", group = "Documentation Update" },
+    { message = "^test", group = "Test Improvements" },
+    { message = "^chore\\(deps", skip = true },
+    { message = "^chore", group = "Maintenance" },
+    { message = "^ci", group = "Continuous Integration" },
+    { message = "^style", group = "Style" },
+]
+protect_breaking_commits = false
+filter_commits = true
+tag_pattern = "v[0-9].*"
+skip_tags = ""
+ignore_tags = ""
+topo_order = false
+sort_commits = "oldest"
