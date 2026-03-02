@@ -38,7 +38,7 @@ See [GitHub Milestones](https://github.com/EvilBit-Labs/gold_digger/milestones) 
 
 ## v1.0.0 - Production Ready
 
-- [ ] Stable CLI interface with semver guarantees
+- [ ] Stable CLI with semver guarantees
 - [ ] Complete documentation and migration guides
 - [ ] Performance parity validation
 - [ ] crates.io publication with stable API
