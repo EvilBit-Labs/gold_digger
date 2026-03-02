@@ -51,7 +51,6 @@ cargo test
 Gold Digger uses comprehensive pre-commit hooks that automatically run on each commit:
 
 - **Rust**: Code formatting, linting, and security auditing
-- **YAML/JSON**: Formatting with Prettier
 - **Markdown**: Formatting with mdformat (GitHub Flavored Markdown)
 - **Shell Scripts**: Validation with ShellCheck
 - **GitHub Actions**: Workflow validation with actionlint

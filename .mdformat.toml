@@ -8,6 +8,8 @@ exclude = [
     "**/CHANGELOG.md",
     "target/**",
     "megalinter-reports/**",
+    "**/*.result",
+    "**/*.testfile",
 ]
 validate = true
 number = true
@@ -15,7 +17,7 @@ wrap = "no"
 end_of_line = "lf"
 extensions = [
     "gfm",
-    "frontmatter",
+    "front_matters",
     "footnote",
     "simple_breaks",
     "tables",
