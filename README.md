@@ -6,7 +6,7 @@ Gold Digger is a Rust-based MySQL/MariaDB query tool that exports results to str
 
 ![GitHub Actions Workflow Status][ci-badge] ![docs.rs][docs-badge] ![Deps.rs Repository Dependencies][deps-badge]
 
-![Codecov][codecov-badge] [![GitHub issues][issues-badge]][issues-link] ![GitHub last commit][last-commit-badge]
+![Codecov][codecov-badge] [![GitHub issues][issues-badge]][issues-link] ![GitHub last commit][last-commit-badge] [![OpenSSF Scorecard][scorecard-badge]][scorecard-link] [![OpenSSF Best Practices][bestpractices-badge]][bestpractices-link]
 
 [![Crates.io][crates-badge]][crates-link] ![GitHub Release Date][release-date-badge] ![Crates.io Downloads (latest version)][downloads-badge] ![Crates.io MSRV][msrv-badge]
 
@@ -436,6 +436,8 @@ Thank you for your interest in Gold Digger, and we look forward to hearing from 
 
 <!-- Link references -->
 
+[bestpractices-badge]: https://www.bestpractices.dev/projects/12071/badge
+[bestpractices-link]: https://www.bestpractices.dev/projects/12071
 [ci-badge]: https://img.shields.io/github/actions/workflow/status/EvilBit-Labs/gold_digger/ci.yml?style=flat-square
 [codecov-badge]: https://img.shields.io/codecov/c/github/EvilBit-Labs/gold_digger?style=flat-square&logoColor=white&logo=codecov
 [crates-badge]: https://img.shields.io/crates/v/gold_digger?style=flat-square&logo=rust
@@ -451,4 +453,6 @@ Thank you for your interest in Gold Digger, and we look forward to hearing from 
 [license-badge]: https://img.shields.io/github/license/EvilBit-Labs/gold_digger?style=flat-square&logo=github
 [msrv-badge]: https://img.shields.io/crates/msrv/gold_digger?style=flat-square&logo=rust
 [release-date-badge]: https://img.shields.io/github/release-date/EvilBit-Labs/gold_digger?display_date=published_at&style=flat-square&logo=github&link=https%3A%2F%2Fgithub.com%2FEvilBit-Labs%2Fgold_digger%2Freleases
+[scorecard-badge]: https://img.shields.io/ossf-scorecard/github.com/EvilBit-Labs/gold_digger?style=flat-square&label=openssf%20scorecard
+[scorecard-link]: https://scorecard.dev/viewer/?uri=github.com/EvilBit-Labs/gold_digger
 [sponsors-badge]: https://img.shields.io/github/sponsors/EvilBit-Labs?style=flat-square&logo=github
