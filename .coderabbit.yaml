@@ -1,46 +1,59 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
-# CodeRabbit AI Code Review Configuration for Gold Digger
-# https://docs.coderabbit.ai/guides/review-instructions
-
-# Language and project context
 language: en-US
-tone_instructions: "Be thorough and focus on security, maintainability, and Rust best practices. Never log credentials. Flag unsafe database value conversions. Verify proper error handling and exit codes."
+tone_instructions: "MySQL/MariaDB CLI query tool in Rust. Focus on security (credential redaction, TLS), safe database value conversions (no panics on NULL), proper error handling with anyhow, and structured exit codes."
+early_access: true
 enable_free_tier: true
 
-early_access: true
-
 reviews:
-  # Enable comprehensive review features
   profile: assertive
   request_changes_workflow: true
   high_level_summary: true
-  high_level_summary_instructions: "Create concise release notes as a bullet-point list, followed by a Markdown table showing lines added and removed by each contributing author."
   high_level_summary_placeholder: "@coderabbitai summary"
+  high_level_summary_in_walkthrough: true
+  auto_title_placeholder: "@coderabbitai"
+  auto_title_instructions: "Generate PR/MR titles following Conventional Commits format: type(scope): description. Use types: feat, fix, docs, style, refactor, perf, test, build, ci, chore. Use scopes: cli, db, tls, csv, json, tsv, config, ci, deps. Keep descriptions concise and action-oriented."
   review_status: true
   commit_status: true
-  suggested_labels: true
-
-  # Walkthrough enhancements
-  collapse_walkthrough: false
+  fail_commit_status: false
+  collapse_walkthrough: true
   changed_files_summary: true
   sequence_diagrams: true
   estimate_code_review_effort: true
   assess_linked_issues: true
   related_issues: true
   related_prs: true
-
-  # Auto-title generation
-  auto_title_placeholder: "@coderabbitai"
-  auto_title_instructions: "Generate concise titles following conventional commits format (feat:, fix:, docs:, etc.) with appropriate scope."
-
-  # Auto-labeling configuration
+  suggested_labels: true
+  auto_apply_labels: true
+  suggested_reviewers: true
+  auto_assign_reviewers: false
+  path_filters:
+    - "src/**"
+    - "tests/**"
+    - "docs/src/**"
+    - ".github/**"
+    - "!.github/workflows/release.yml"
+    - ".cursor/**/*.mdc"
+    - "*.md"
+    - "*.toml"
+    - "*.yaml"
+    - "*.yml"
+    - "*.json"
+    - "*.sh"
+    - "justfile"
+    - "!target/**"
+    - "!docs/book/**"
+    - "!node_modules/**"
+    - "!*.woff2"
+    - "!*.png"
+    - "!*.svg"
+    - "!*.ico"
   labeling_instructions:
     - label: rust
       instructions: Apply when the PR/MR contains changes to Rust source code files (src/**/*.rs, tests/**/*.rs, benches/**/*.rs).
     - label: dependencies
       instructions: Apply when the PR/MR updates Cargo.toml, Cargo.lock, or package.json dependency files.
     - label: github_actions
-      instructions: Apply when the PR/MR contains changes to GitHub Actions workflow files (.github/workflows/**/*.yml, .github/workflows/**/*.yaml).
+      instructions: Apply when the PR/MR contains changes to GitHub Actions workflow files (.github/workflows/**/*.yml).
     - label: documentation
       instructions: Apply when the PR/MR contains changes to documentation files (docs/**/*.md, README.md, CHANGELOG.md, *.md).
     - label: category/security
@@ -59,23 +72,40 @@ reviews:
       instructions: Apply when the PR/MR adds new features, improves functionality, or extends existing capabilities.
     - label: type/chore
       instructions: Apply when the PR/MR performs maintenance tasks, updates configuration files, or makes infrastructure changes without changing core functionality.
-    - label: area/ci-cd
-      instructions: Apply when the PR/MR modifies CI/CD workflows, GitHub Actions, or automation scripts.
-    - label: area/docs
-      instructions: Apply when the PR/MR modifies documentation in docs/ directory or documentation-related configuration.
-
-  # Pre-merge checks
+  abort_on_close: true
+  disable_cache: false
+  auto_review:
+    enabled: true
+    auto_incremental_review: true
+    ignore_title_keywords: ["WIP", "draft", "do not merge"]
+    drafts: false
+    base_branches: ["main"]
+    ignore_usernames: []
+  finishing_touches:
+    docstrings:
+      enabled: true
+    unit_tests:
+      enabled: true
   pre_merge_checks:
     docstrings:
       mode: warning
       threshold: 80
     title:
       mode: warning
-      requirements: "Title should be concise and descriptive of the overall purpose of the code, and follow conventional commits."
+      requirements: "Must follow Conventional Commits specification: type(scope): description. Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore. Scopes: cli, db, tls, csv, json, tsv, config, ci, deps."
+    description:
+      mode: warning
     issue_assessment:
       mode: warning
-
-  # Path-based review rules
+    custom_checks:
+      - name: "credential-safety-check"
+        instructions: "Verify DATABASE_URL and credentials are never logged, printed, or included in error messages. All credential handling must use redaction. Flag any direct use of connection strings in output."
+      - name: "null-safety-check"
+        instructions: "Verify no use of from_value::<String>() without NULL checking, which causes panics. All MySQL value conversions must handle mysql::Value::NULL explicitly using mysql_value_to_string() or mysql_value_to_json()."
+      - name: "exit-code-check"
+        instructions: "Verify proper structured exit codes: 0=success, 1=no rows, 2=config error, 3=connection failure, 4=query failure, 5=file I/O error. Flag any use of exit(-1) or generic exit codes."
+      - name: "error-handling-check"
+        instructions: "Verify proper error handling with anyhow::Result types and no panics in application code. All public APIs should return Result<T>. No unwrap() or expect() in production code paths."
   path_instructions:
     - path: "src/**"
       instructions: |
@@ -88,17 +118,10 @@ reviews:
         - Ensure all credential handling includes proper redaction
         - Verify TLS/SSL configuration uses mysql::SslOpts programmatically
         - Flag any use of from_value::<String>() without NULL checking (causes panics)
-        - Recommend SQL CAST(column AS CHAR) for type safety
         - Ensure mysql::Value::NULL is handled explicitly in all conversions
-        - Type safety with MySQL value conversions
         - Verify 100-character line limit compliance
-        - Check for proper anyhow::Result usage in fallible functions
-        - Ensure feature gates are used correctly for conditional compilation
         - Validate proper exit code usage (not -1 or generic codes)
         - Verify CLI flags take precedence over environment variables
-        - Check output format detection by file extension
-        - Ensure justfile integration for CI parity
-        - Validate cross-platform compatibility
 
     - path: "**/*.rs"
       instructions: |
@@ -134,16 +157,110 @@ reviews:
         - Cross-platform compatibility
         - Security test scenarios
 
-    - path: "docs/book/**"
+    - path: "docs/**"
       instructions: |
         Review documentation for:
         - Clarity and completeness
         - Cross-platform compatibility
         - Ease of use and usability
-        - Tone, flow, and style guide adherence
         - Security best practices
 
-# Code generation settings
+    - path: "justfile"
+      instructions: |
+        Review build automation for:
+        - Cross-platform compatibility
+        - Developer experience
+        - CI parity with just ci-check
+  tools:
+    ast-grep:
+      rule_dirs: []
+      util_dirs: []
+      essential_rules: true
+      packages: []
+    shellcheck:
+      enabled: true
+    ruff:
+      enabled: false
+    markdownlint:
+      enabled: true
+    github-checks:
+      enabled: true
+      timeout_ms: 120000
+    languagetool:
+      enabled: true
+      enabled_rules: []
+      disabled_rules: []
+      enabled_categories: []
+      disabled_categories: []
+      enabled_only: false
+      level: default
+    biome:
+      enabled: false
+    hadolint:
+      enabled: false
+    swiftlint:
+      enabled: false
+    phpstan:
+      enabled: false
+    golangci-lint:
+      enabled: false
+    yamllint:
+      enabled: true
+    gitleaks:
+      enabled: true
+    checkov:
+      enabled: false
+    detekt:
+      enabled: false
+    eslint:
+      enabled: false
+    flake8:
+      enabled: false
+    rubocop:
+      enabled: false
+    buf:
+      enabled: false
+    regal:
+      enabled: false
+    actionlint:
+      enabled: true
+    pmd:
+      enabled: false
+    cppcheck:
+      enabled: false
+    semgrep:
+      enabled: true
+    circleci:
+      enabled: false
+    clippy:
+      enabled: true
+    sqlfluff:
+      enabled: true
+    pylint:
+      enabled: false
+    oxc:
+      enabled: false
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  opt_out: false
+  web_search:
+    enabled: true
+  code_guidelines:
+    enabled: true
+    filePatterns: []
+  learnings:
+    scope: auto
+  issues:
+    scope: local
+  pull_requests:
+    scope: local
+  mcp:
+    usage: enabled
+    disabled_servers: []
+
 code_generation:
   docstrings:
     language: en-US
@@ -156,10 +273,8 @@ code_generation:
           - Arguments section with parameter descriptions
           - Returns section describing the return value
           - Example section with code examples when helpful
-          - Safety section for unsafe functions
           - Error conditions and when errors are returned
           Follow Rust documentation conventions and use proper markdown formatting.
-
   unit_tests:
     path_instructions:
       - path: "tests/**/*.rs"
@@ -173,7 +288,6 @@ code_generation:
           - Cross-platform compatibility tests where applicable
           Use testcontainers for integration tests with real MySQL/MariaDB instances.
 
-# Issue enrichment settings
 issue_enrichment:
   auto_enrich:
     enabled: true

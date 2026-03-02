@@ -278,6 +278,5 @@ Required secrets for the release workflow:
 For issues with the release process:
 
 1. Check the [cargo-dist documentation](https://opensource.axo.dev/cargo-dist/)
-2. Review the [DISTRIBUTION.md](../DISTRIBUTION.md) guide
-3. Create an issue in the repository
-4. Check the [troubleshooting guide](../troubleshooting/build-failures.md)
+2. Create an issue in the repository
+3. Check the [troubleshooting guide](../troubleshooting/build-failures.md)
