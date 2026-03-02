@@ -227,36 +227,22 @@ just deny
 
 Gold Digger uses a dual cargo-deny configuration to balance local development flexibility with CI security enforcement:
 
-#### Local Development (Tolerant)
+#### Configuration
 
-- **File**: `deny.toml` (default)
-- **Yanked crates**: `warn` (shows warnings but doesn't fail)
-- **Purpose**: Allows local development to continue even with yanked dependencies
-
-#### CI Environment (Strict)
-
-- **File**: `deny.ci.toml`
-- **Yanked crates**: `error` (fails pipeline on yanked crates)
-- **Purpose**: Enforces strict security policies in CI
+- **File**: `deny.toml` (single config for both local and CI)
+- **Yanked crates**: `deny` (fails on yanked crates)
+- **Unmaintained crates**: `workspace` (flags direct deps only; transitive deps outside our control are not flagged)
+- **Purpose**: Identical enforcement locally and in CI -- local checks catch the same issues CI would
 
 #### Usage
 
 ```bash
-# Local development (tolerant)
+# Run cargo deny check
 just deny
 
-# CI enforcement (strict)
-just deny-ci
-
-# CI workflow automatically uses strict configuration
+# CI workflow uses the same configuration
 # See .github/workflows/security.yml
 ```
-
-#### Configuration Files
-
-- `deny.toml` - Local development configuration with tolerant settings
-- `deny.ci.toml` - CI-specific configuration with strict enforcement
-- Both files maintain the same license and security policies, differing only in yanked crate handling
 
 ### 3. Testing
 

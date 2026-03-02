@@ -1,0 +1,2 @@
+# Intentionally invalid SQL used for error handling tests
+tests/fixtures/test_queries/invalid.sql

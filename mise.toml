@@ -1,11 +1,11 @@
 [tools]
 cargo-binstall              = "latest"
-cargo-insta                 = "1.46.1"
-"cargo:cargo-audit"         = "0.22.0"
+cargo-insta                 = "1.46.3"
+"cargo:cargo-audit"         = "0.22.1"
 "cargo:cargo-deny"          = "0.19.0"
-"cargo:cargo-dist"          = "0.30.3"
-"cargo:cargo-llvm-cov"      = "0.6.24"
-"cargo:cargo-nextest"       = "0.9.123-b.4"
+"cargo:cargo-dist"          = "0.31.0"
+"cargo:cargo-llvm-cov"      = "0.8.4"
+"cargo:cargo-nextest"       = "0.9.129"
 "cargo:mdbook"              = "0.5.2"
 "cargo:mdbook-linkcheck"    = "0.7.7"
 "cargo:mdbook-tabs"         = "0.3.4"
@@ -15,22 +15,42 @@ cargo-insta                 = "1.46.1"
 "cargo:mdbook-open-on-gh"   = "3.0.0"
 "cargo:mdbook-i18n-helpers" = "0.4.0"
 just                        = "latest"
-python                      = "3.13.11"
-rust                        = { version = "1.91.0", components = "llvm-tools,cargo,rustfmt,clippy", profile = "default" }
+python                      = "latest"
+rust                        = { version = "stable", components = "llvm-tools,cargo,rustfmt,clippy", profile = "default" }
 "cargo:cargo-outdated"      = "0.17.0"
-"cargo:cargo-release"       = "0.25.22"
+"cargo:cargo-release"       = "1.1.1"
 "cargo:cargo-auditable"     = "0.7.2"
 "cargo:cargo-cyclonedx"     = "0.5.7"
-"pipx:mdformat"             = { version = "0.7.21", uvx_args = "--with mdformat-gfm --with mdformat-frontmatter --with mdformat-footnote --with mdformat-simple-breaks --with mdformat-gfm-alerts --with mdformat-toc --with mdformat-wikilink --with mdformat-tables" }
-prettier                    = "3.8.1"
-actionlint                  = "1.7.10"
-lychee                      = "0.22.0"
-markdownlint-cli2           = "0.20.0"
+"pipx:mdformat"             = { version = "0.7.22", uvx_args = "--with mdformat-gfm --with mdformat-front-matters --with mdformat-footnote --with mdformat-simple-breaks --with mdformat-gfm-alerts --with mdformat-toc --with mdformat-wikilink --with mdformat-tables" }
+prettier                    = "latest"
+actionlint                  = "latest"
+lychee                      = "0.23.0"
+markdownlint-cli2           = "0.21.0"
 "cargo:cargo-watch"         = "8.5.3"
-grype                       = "0.105.0"
-syft                        = "1.40.1"
-act                         = "0.2.84"
-"pipx:sqlfluff"             = "4.0.0"
-docker-compose              = "5.0.1"
-docker-cli                  = "29.1.5"
-pre-commit                  = "4.5.1"
+grype                       = "latest"
+syft                        = "latest"
+act                         = { version = "0.2.84", os = [ "linux", "macos" ] }
+"pipx:sqlfluff"             = "4.0.4"
+docker-compose              = "latest"
+docker-cli                  = "latest"
+"pipx:pre-commit"           = "latest"
+oxlint                      = "latest"
+ruff                        = "latest"
+shellcheck                  = "latest"
+bun                         = "latest"
+
+# Many of these settings are defaults, but we are explicit in case they change in the future and to make it clear to users what is enabled.
+[settings]
+activate_aggressive                 = true
+idiomatic_version_file_enable_tools = [ "python", "rust", "bun" ]
+env_cache                           = true
+exec_auto_install                   = true
+github_attestations                 = true
+lockfile                            = true
+slsa                                = true
+
+[settings.npm]
+package_manager = "bun"
+
+[settings.pipx]
+uvx = true

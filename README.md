@@ -2,13 +2,13 @@
 
 Gold Digger is a Rust-based MySQL/MariaDB query tool that exports results to structured data files (CSV, JSON, TSV). Designed for headless operation and automation workflows, it provides CLI-first configuration with environment variable fallbacks.
 
-![GitHub License](https://img.shields.io/github/license/EvilBit-Labs/gold_digger?style=for-the-badge)
+![GitHub License][license-badge] ![GitHub Sponsors][sponsors-badge]
 
-![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/EvilBit-Labs/gold_digger/ci.yml?style=for-the-badge) ![docs.rs](https://img.shields.io/docsrs/gold_digger?style=for-the-badge) ![Deps.rs Repository Dependencies](https://img.shields.io/deps-rs/repo/github/EvilBit-Labs/gold_digger?style=for-the-badge)
+![GitHub Actions Workflow Status][ci-badge] ![docs.rs][docs-badge] ![Deps.rs Repository Dependencies][deps-badge]
 
-![Codecov](https://img.shields.io/codecov/c/github/EvilBit-Labs/gold_digger?style=for-the-badge) [![GitHub issues](https://img.shields.io/github/issues/EvilBit-Labs/gold_digger?style=for-the-badge)](https://github.com/EvilBit-Labs/gold_digger/issues) ![GitHub last commit](https://img.shields.io/github/last-commit/EvilBit-Labs/gold_digger?style=for-the-badge)
+![Codecov][codecov-badge] [![GitHub issues][issues-badge]][issues-link] ![GitHub last commit][last-commit-badge]
 
-![Crates.io Downloads (latest version)](https://img.shields.io/crates/dv/gold_digger?style=for-the-badge) ![GitHub Sponsors](https://img.shields.io/github/sponsors/EvilBit-Labs?style=for-the-badge)
+[![Crates.io][crates-badge]][crates-link] ![GitHub Release Date][release-date-badge] ![Crates.io Downloads (latest version)][downloads-badge] ![Crates.io MSRV][msrv-badge]
 
 ## Features
 
@@ -430,4 +430,25 @@ Thank you for your interest in Gold Digger, and we look forward to hearing from 
 
 ## License
 
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Funclesp1d3r%2Fgold_digger.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Funclesp1d3r%2Fgold_digger?ref=badge_large)
+[![FOSSA Status][fossa-badge]][fossa-link]
+
+<!-- Badge references -->
+
+<!-- Link references -->
+
+[ci-badge]: https://img.shields.io/github/actions/workflow/status/EvilBit-Labs/gold_digger/ci.yml?style=flat-square
+[codecov-badge]: https://img.shields.io/codecov/c/github/EvilBit-Labs/gold_digger?style=flat-square&logoColor=white&logo=codecov
+[crates-badge]: https://img.shields.io/crates/v/gold_digger?style=flat-square&logo=rust
+[crates-link]: https://crates.io/crates/gold_digger
+[deps-badge]: https://img.shields.io/deps-rs/repo/github/EvilBit-Labs/gold_digger?style=flat-square
+[docs-badge]: https://img.shields.io/docsrs/gold_digger?style=flat-square
+[downloads-badge]: https://img.shields.io/crates/dv/gold_digger?style=flat-square&logo=rust
+[fossa-badge]: https://app.fossa.com/api/projects/git%2Bgithub.com%2Funclesp1d3r%2Fgold_digger.svg?type=large
+[fossa-link]: https://app.fossa.com/projects/git%2Bgithub.com%2Funclesp1d3r%2Fgold_digger?ref=badge_large
+[issues-badge]: https://img.shields.io/github/issues/EvilBit-Labs/gold_digger?style=flat-square&logo=github
+[issues-link]: https://github.com/EvilBit-Labs/gold_digger/issues
+[last-commit-badge]: https://img.shields.io/github/last-commit/EvilBit-Labs/gold_digger?style=flat-square&logo=github
+[license-badge]: https://img.shields.io/github/license/EvilBit-Labs/gold_digger?style=flat-square&logo=github
+[msrv-badge]: https://img.shields.io/crates/msrv/gold_digger?style=flat-square&logo=rust
+[release-date-badge]: https://img.shields.io/github/release-date/EvilBit-Labs/gold_digger?display_date=published_at&style=flat-square&logo=github&link=https%3A%2F%2Fgithub.com%2FEvilBit-Labs%2Fgold_digger%2Freleases
+[sponsors-badge]: https://img.shields.io/github/sponsors/EvilBit-Labs?style=flat-square&logo=github
