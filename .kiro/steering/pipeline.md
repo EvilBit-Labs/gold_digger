@@ -48,7 +48,7 @@ cargo install cargo-deny --locked
   - Enforces allowed license list (MIT, Apache-2.0, BSD variants, etc.)
   - Warns about duplicate crate versions
   - Denies problematic licenses and sources
-  - CI uses strict enforcement via `deny.ci.toml`
+  - Single `deny.toml` config used by both local development and CI
 - **cargo-dist**: Cross-platform release artifacts
   - Generates SHA256 checksums and Cosign signatures
   - Uses github attestation for SBOM generation (CycloneDX format)
