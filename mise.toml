@@ -15,7 +15,7 @@ cargo-insta                 = "1.46.3"
 "cargo:mdbook-open-on-gh"   = "3.0.0"
 "cargo:mdbook-i18n-helpers" = "0.4.0"
 just                        = "latest"
-python                      = "3.14.3"
+python                      = "latest"
 rust                        = { version = "stable", components = "llvm-tools,cargo,rustfmt,clippy", profile = "default" }
 "cargo:cargo-outdated"      = "0.17.0"
 "cargo:cargo-release"       = "1.1.1"
@@ -36,6 +36,7 @@ docker-cli                  = "latest"
 "pipx:pre-commit"           = "latest"
 oxlint                      = "latest"
 ruff                        = "latest"
+bun                         = "latest"
 
 # Many of these settings are defaults, but we are explicit in case they change in the future and to make it clear to users what is enabled.
 [settings]
