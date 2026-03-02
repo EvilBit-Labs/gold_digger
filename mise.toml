@@ -36,6 +36,7 @@ docker-cli                  = "latest"
 "pipx:pre-commit"           = "latest"
 oxlint                      = "latest"
 ruff                        = "latest"
+shellcheck                  = "latest"
 bun                         = "latest"
 
 # Many of these settings are defaults, but we are explicit in case they change in the future and to make it clear to users what is enabled.
