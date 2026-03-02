@@ -12,9 +12,12 @@ repos:
           - id: check-illegal-windows-names
           - id: check-json
           - id: check-toml
+            types: [toml]
           - id: check-yaml
             args: [--allow-multiple-documents]
+            types: [yaml]
           - id: check-xml
+            types: [xml]
           - id: mixed-line-ending
             args: [--fix=auto]
           - id: check-vcs-permalinks
@@ -23,9 +26,12 @@ repos:
       rev: v1.2.1
       hooks:
           - id: fmt
+            types: [rust]
           - id: clippy
             args: ["--", "-D", "warnings"]
+            types: [rust, cargo]
           - id: cargo-check
+            types: [rust, cargo, cargo-lock]
 
     # 🧪 GitHub Actions validation
     - repo: https://github.com/rhysd/actionlint
@@ -35,11 +41,14 @@ repos:
             files: ".github/workflows/"
             exclude: ^.github/workflows/release.yml$ # cargo-dist generated
 
-    # 🐚 Shell script validation
-    - repo: https://github.com/koalaman/shellcheck-precommit
-      rev: v0.11.0
+    # 🐚 Shell script validation (local via mise, avoids Docker dependency)
+    - repo: local
       hooks:
           - id: shellcheck
+            name: ShellCheck
+            entry: mise x -- shellcheck
+            language: system
+            types: [shell]
             exclude: ^.github/workflows/release.yml$ # cargo-dist generated
 
     # 📝 Commit message linting (commit-msg only, not blocking push)
@@ -49,11 +58,11 @@ repos:
           - id: commitizen
             stages: [commit-msg]
 
-    # Temporarily disabled due to issues with cargo-machete while we are stubbing out the project
-    # - repo: https://github.com/bnjbvr/cargo-machete
-    #   rev: v0.9.1
-    #   hooks:
-    #       - id: cargo-machete
+    - repo: https://github.com/bnjbvr/cargo-machete
+      rev: v0.9.1
+      hooks:
+          - id: cargo-machete
+            types: [cargo-lock]
 
     # 📝 Markdown formatting and linting (temporarily disabled in CI due to path issues)
     - repo: https://github.com/hukkin/mdformat
@@ -73,18 +82,20 @@ repos:
                 - mdformat-gfm-alerts
                 - mdformat-rustfmt
                 - mdformat-toc
-            files: \.(md|mdx)$
+            types: [markdown]
 
-    # 🔒 Security audit for Rust dependencies
+    # 🔒 Security audit for Rust dependencies (requires mise - run `just setup` first)
     - repo: local
       hooks:
           - id: cargo-audit
             name: cargo-audit
-            entry: cargo audit
+            entry: mise x -- cargo audit
             language: system
             pass_filenames: false
-            files: (Cargo\.toml|Cargo\.lock)$
+            types: [cargo, cargo-lock]
+
     - repo: https://github.com/DevinR528/cargo-sort
       rev: v2.0.2
       hooks:
           - id: cargo-sort
+            types: [cargo]
