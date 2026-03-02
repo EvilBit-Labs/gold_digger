@@ -42,7 +42,7 @@ unix-archive = ".tar.xz"
 # The archive format to use for windows builds (defaults .zip)
 windows-archive = ".zip"
 # Whether +crt-static should be used on msvc
-msvc-crt-static    = true
+msvc-crt-static = true
 # Whether to embed dependency information using cargo-auditable
 cargo-auditable = true
 # Whether to use cargo-cyclonedx to generate an SBOM
@@ -53,3 +53,4 @@ cargo-cyclonedx = true
 "actions/checkout"                = "v6.0.2"
 "actions/download-artifact"       = "v8"
 "actions/attest-build-provenance" = "v4"
+"actions/upload-artifact"         = "v7.0.0"
