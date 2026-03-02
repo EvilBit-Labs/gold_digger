@@ -1,5 +1,6 @@
-# cargo-deny configuration for DaemonEye
+# cargo-deny configuration for Gold Digger
 # See: https://embarkstudios.github.io/cargo-deny/
+# Single config used by both local development and CI
 
 [graph]
 targets = [
@@ -14,24 +15,25 @@ exclude-dev = true
 
 [licenses]
 unused-allowed-license = "allow"
+include-dev = true
+confidence-threshold = 0.8
 # Allow common open source licenses used in the Rust ecosystem
 allow = [
+    "0BSD",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
-    "CC0-1.0",
-    "MIT",
+    "BSD-2-Clause",
     "BSD-3-Clause",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0",
     "ISC",
+    "MIT",
+    "OpenSSL",
     "Unicode-3.0",
+    "Unicode-DFS-2016",
     "Unlicense",
     "Zlib",
-    "OpenSSL",
-    "CDLA-Permissive-2.0",
 ]
-include-dev = true
-
-# Confidence threshold for license detection
-confidence-threshold = 0.8
 
 [bans]
 multiple-versions = "deny"
@@ -54,6 +56,8 @@ skip-tree = []
 
 [advisories]
 yanked = "deny"
+# "workspace" flags unmaintained direct deps we control; transitive deps
+# (e.g. rustls-pemfile via mysql) are outside our control and not flagged.
 unmaintained = "workspace"
 ignore = []
 

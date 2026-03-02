@@ -357,14 +357,9 @@ deny-check:
 
 alias deny := deny-check
 
-# Check for license/security issues (CI strict enforcement)
-[group('security')]
-deny-ci:
-    @{{ mise_exec }} cargo deny check --config deny.ci.toml
-
 # Comprehensive security scanning (combines audit, deny, and grype)
 [group('security')]
-security: audit deny-ci
+security: audit deny-check
     @{{ mise_exec }} grype . --fail-on high || echo "High or critical vulnerabilities found"
 
 # ─────────────────────────────────────────────────────────────────────────────
