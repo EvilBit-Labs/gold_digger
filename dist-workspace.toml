@@ -43,7 +43,6 @@ unix-archive = ".tar.xz"
 windows-archive = ".zip"
 # Whether +crt-static should be used on msvc
 msvc-crt-static    = true
-github-attestation = true
 # Whether to embed dependency information using cargo-auditable
 cargo-auditable = true
 # Whether to use cargo-cyclonedx to generate an SBOM

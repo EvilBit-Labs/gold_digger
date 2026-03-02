@@ -12,6 +12,9 @@ early_access: true
 reviews:
   # Enable comprehensive review features
   profile: assertive
+  # Exclude cargo-dist generated files from review
+  path_filters:
+    - "!.github/workflows/release.yml"
   request_changes_workflow: true
   high_level_summary: true
   high_level_summary_instructions: "Create concise release notes as a bullet-point list, followed by a Markdown table showing lines added and removed by each contributing author."

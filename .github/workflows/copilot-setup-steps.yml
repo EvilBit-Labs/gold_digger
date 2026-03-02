@@ -26,7 +26,8 @@ jobs:
 
             - name: Setup summary
               run: |
-                  echo "✅ Development environment setup complete!"
+                  set -e
+                  echo "Development environment setup complete!"
                   echo ""
                   echo "Available tools:"
                   echo "  - Rust toolchain: $(rustc --version)"
