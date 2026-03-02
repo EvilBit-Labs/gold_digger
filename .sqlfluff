@@ -32,6 +32,3 @@ capitalisation_policy = upper
 ignore_comment_lines = true
 ignore_comment_clauses = true
 
-# Note: The tests/fixtures/test_queries/invalid.sql file
-# intentionally contains invalid SQL syntax for testing error handling.
-# The AM04 and parsing errors from this file are expected and correct.
