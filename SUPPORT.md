@@ -1,6 +1,6 @@
 # Getting Help
 
-Gold Digger is a single-maintainer open source project. Here is how to get help.
+Gold Digger is a single-maintainer open-source project. Here is how to get help.
 
 ## Asking Questions
 
