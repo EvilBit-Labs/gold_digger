@@ -32,7 +32,7 @@ pub mod utils;
 pub use type_transformer::TypeTransformer;
 
 #[cfg(feature = "json")]
-pub use json::write_typed;
+pub use json::{write_json_maps, write_typed};
 
 /// Trait for writing data in different formats
 pub trait FormatWriter {
@@ -111,7 +111,13 @@ pub fn rows_to_strings(rows: Vec<Row>) -> anyhow::Result<Vec<Vec<String>>> {
                         )));
                     }
                 },
-                None => data_row.push(String::new()),
+                None => {
+                    anyhow::bail!(
+                        "Unexpected missing value at row {} column index {}",
+                        row_index + 1,
+                        i
+                    );
+                }
             }
         }
         result_rows.push(data_row);
@@ -165,136 +171,11 @@ mod tests {
 
     #[test]
     fn test_get_required_env_present() {
-        // Use temp_env for safer environment variable testing
         temp_env::with_var("TEST_ENV_VAR", Some("test_value"), || {
             let result = get_required_env("TEST_ENV_VAR");
             assert!(result.is_ok());
             assert_eq!(result.unwrap(), "test_value");
         });
-    }
-
-    #[test]
-    fn test_mysql_value_to_string_null() {
-        let result =
-            TypeTransformer::value_to_string(&mysql::Value::NULL).expect("NULL should succeed");
-        assert_eq!(result, "");
-    }
-
-    #[test]
-    fn test_mysql_value_to_string_integers() {
-        assert_eq!(
-            TypeTransformer::value_to_string(&mysql::Value::Int(42)).expect("Int should succeed"),
-            "42"
-        );
-        assert_eq!(
-            TypeTransformer::value_to_string(&mysql::Value::Int(-42))
-                .expect("negative Int should succeed"),
-            "-42"
-        );
-        assert_eq!(
-            TypeTransformer::value_to_string(&mysql::Value::UInt(123))
-                .expect("UInt should succeed"),
-            "123"
-        );
-    }
-
-    #[test]
-    fn test_mysql_value_to_string_floats() {
-        assert_eq!(
-            TypeTransformer::value_to_string(&mysql::Value::Float(3.5))
-                .expect("Float should succeed"),
-            "3.5"
-        );
-        assert_eq!(
-            TypeTransformer::value_to_string(&mysql::Value::Double(2.5))
-                .expect("Double should succeed"),
-            "2.5"
-        );
-    }
-
-    #[test]
-    fn test_mysql_value_to_string_bytes() {
-        let bytes = b"hello world".to_vec();
-        let result = TypeTransformer::value_to_string(&mysql::Value::Bytes(bytes))
-            .expect("valid UTF-8 should succeed");
-        assert_eq!(result, "hello world");
-
-        // Test invalid UTF-8 bytes - should use hex encoding
-        let invalid_bytes = vec![0xFF, 0xFE, 0xFD];
-        let result = TypeTransformer::value_to_string(&mysql::Value::Bytes(invalid_bytes))
-            .expect("hex fallback should succeed");
-        assert_eq!(result, "0xfffefd");
-
-        // Test large binary data - should truncate with indication
-        let large_bytes = vec![0xAB; 2000];
-        let result = TypeTransformer::value_to_string(&mysql::Value::Bytes(large_bytes))
-            .expect("large binary should succeed");
-        assert!(result.starts_with("0x"));
-        assert!(result.contains("... (2000 bytes)"));
-    }
-
-    #[test]
-    fn test_mysql_value_to_string_special_floats() {
-        // Test NaN
-        assert_eq!(
-            TypeTransformer::value_to_string(&mysql::Value::Float(f32::NAN))
-                .expect("Float NaN should succeed"),
-            "NaN"
-        );
-        assert_eq!(
-            TypeTransformer::value_to_string(&mysql::Value::Double(f64::NAN))
-                .expect("Double NaN should succeed"),
-            "NaN"
-        );
-
-        // Test Infinity
-        assert_eq!(
-            TypeTransformer::value_to_string(&mysql::Value::Float(f32::INFINITY))
-                .expect("Float Infinity should succeed"),
-            "Infinity"
-        );
-        assert_eq!(
-            TypeTransformer::value_to_string(&mysql::Value::Double(f64::INFINITY))
-                .expect("Double Infinity should succeed"),
-            "Infinity"
-        );
-
-        // Test Negative Infinity
-        assert_eq!(
-            TypeTransformer::value_to_string(&mysql::Value::Float(f32::NEG_INFINITY))
-                .expect("Float -Infinity should succeed"),
-            "-Infinity"
-        );
-        assert_eq!(
-            TypeTransformer::value_to_string(&mysql::Value::Double(f64::NEG_INFINITY))
-                .expect("Double -Infinity should succeed"),
-            "-Infinity"
-        );
-    }
-
-    #[test]
-    fn test_mysql_value_to_string_date() {
-        let result =
-            TypeTransformer::value_to_string(&mysql::Value::Date(2023, 12, 25, 0, 0, 0, 0))
-                .expect("date-only should succeed");
-        assert_eq!(result, "2023-12-25");
-
-        let result =
-            TypeTransformer::value_to_string(&mysql::Value::Date(2023, 12, 25, 14, 30, 45, 123456))
-                .expect("datetime should succeed");
-        assert_eq!(result, "2023-12-25 14:30:45.123456");
-    }
-
-    #[test]
-    fn test_mysql_value_to_string_time() {
-        let result =
-            TypeTransformer::value_to_string(&mysql::Value::Time(false, 0, 14, 30, 45, 123456))
-                .expect("time should succeed");
-        assert_eq!(result, "14:30:45.123456");
-
-        let result = TypeTransformer::value_to_string(&mysql::Value::Time(true, 1, 2, 30, 45, 0))
-            .expect("negative time with days should succeed");
-        assert_eq!(result, "-26:30:45.000000");
     }
 
     #[test]
@@ -305,64 +186,20 @@ mod tests {
 
     #[test]
     fn test_rows_to_strings_type_conversion_error() {
-        // This test demonstrates that type conversion errors are propagated correctly
-        // We can't easily create a Row with invalid data, but we can test the error path
-        // by creating mock values and ensuring the error handling path works
-
-        // For now, this serves as documentation that the error handling is in place
-        // In a real scenario, invalid date/time values from the database would trigger
-        // this path
+        // Verify that type conversion errors map to exit code 4
         let error = anyhow::anyhow!("Type conversion error: Invalid month value 13 in date");
-
-        // Verify that such an error would get mapped to exit code 4
         use crate::exit::map_error_to_exit_code;
         assert_eq!(map_error_to_exit_code(&error), 4);
-
-        // Verify the error message contains the expected text
         assert!(error.to_string().contains("Type conversion error"));
     }
 
     #[test]
-    fn test_mysql_value_to_string_invalid_date() {
-        // Test invalid month
-        let result =
-            TypeTransformer::value_to_string(&mysql::Value::Date(2023, 13, 25, 0, 0, 0, 0));
-        assert!(result.is_err());
-        let error_str = result.expect_err("month=13 should fail").to_string();
-        assert!(error_str.contains("Type conversion error"));
-        assert!(error_str.contains("Invalid month"));
-
-        // Test invalid day
-        let result =
-            TypeTransformer::value_to_string(&mysql::Value::Date(2023, 12, 32, 0, 0, 0, 0));
-        assert!(result.is_err());
-        let error_str = result.expect_err("day=32 should fail").to_string();
-        assert!(error_str.contains("Type conversion error"));
-        assert!(error_str.contains("Invalid day"));
-
-        // Test invalid hour
-        let result =
-            TypeTransformer::value_to_string(&mysql::Value::Date(2023, 12, 25, 25, 0, 0, 0));
-        assert!(result.is_err());
-        let error_str = result.expect_err("hour=25 should fail").to_string();
-        assert!(error_str.contains("Type conversion error"));
-        assert!(error_str.contains("Invalid hour"));
-    }
-
-    #[test]
-    fn test_mysql_value_to_string_invalid_time() {
-        // Test invalid hour
-        let result = TypeTransformer::value_to_string(&mysql::Value::Time(false, 0, 25, 30, 45, 0));
-        assert!(result.is_err());
-        let error_str = result.expect_err("hour=25 should fail").to_string();
-        assert!(error_str.contains("Type conversion error"));
-        assert!(error_str.contains("Invalid hour"));
-
-        // Test invalid minute
-        let result = TypeTransformer::value_to_string(&mysql::Value::Time(false, 0, 14, 61, 45, 0));
-        assert!(result.is_err());
-        let error_str = result.expect_err("minute=61 should fail").to_string();
-        assert!(error_str.contains("Type conversion error"));
-        assert!(error_str.contains("Invalid minute"));
+    fn test_get_extension_from_filename() {
+        assert_eq!(get_extension_from_filename("test.json"), Some("json"));
+        assert_eq!(get_extension_from_filename("test.csv"), Some("csv"));
+        assert_eq!(get_extension_from_filename("test.tsv"), Some("tsv"));
+        assert_eq!(get_extension_from_filename("test"), None);
+        assert_eq!(get_extension_from_filename(""), None);
+        assert_eq!(get_extension_from_filename(".hidden"), None);
     }
 }

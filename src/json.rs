@@ -3,9 +3,10 @@ use std::{
     io::{BufWriter, Write},
 };
 
+use anyhow::{Context, Result};
+
 use crate::FormatWriter;
 use crate::TypeTransformer;
-use anyhow::Result;
 
 /// JSON writer that implements the FormatWriter trait
 pub struct JsonWriter<W: Write> {
@@ -144,6 +145,52 @@ where
     Ok(())
 }
 
+/// Writes pre-converted JSON maps to output.
+///
+/// This function accepts maps that have already been converted from MySQL rows
+/// via [`TypeTransformer::row_to_json`]. This separation allows callers to
+/// validate all conversions before creating/truncating the output file.
+///
+/// # Arguments
+///
+/// * `maps` - Pre-converted JSON object maps.
+/// * `output` - A writer to output the JSON data.
+/// * `pretty` - Whether to format the JSON with pretty printing.
+///
+/// # Returns
+///
+/// A Result indicating success or failure.
+pub fn write_json_maps<W: Write>(
+    maps: Vec<BTreeMap<String, serde_json::Value>>,
+    output: W,
+    pretty: bool,
+) -> anyhow::Result<()> {
+    let mut writer = BufWriter::with_capacity(64 * 1024, output);
+
+    if maps.is_empty() {
+        write!(writer, "{{\"data\":[]}}")?;
+        writer.flush()?;
+        return Ok(());
+    }
+
+    write!(writer, "{{\"data\":[")?;
+
+    for (i, map) in maps.iter().enumerate() {
+        if i > 0 {
+            write!(writer, ",")?;
+        }
+        if pretty {
+            serde_json::to_writer_pretty(&mut writer, map)?;
+        } else {
+            serde_json::to_writer(&mut writer, map)?;
+        }
+    }
+
+    write!(writer, "]}}")?;
+    writer.flush()?;
+    Ok(())
+}
+
 /// Writes MySQL rows directly to JSON output using native type conversion.
 ///
 /// Unlike [`write`] and [`write_with_pretty`] which operate on pre-stringified rows,
@@ -175,7 +222,8 @@ pub fn write_typed<W: Write>(rows: Vec<mysql::Row>, output: W, pretty: bool) -> 
         if i > 0 {
             write!(writer, ",")?;
         }
-        let map = TypeTransformer::row_to_json(row)?;
+        let map = TypeTransformer::row_to_json(row)
+            .with_context(|| format!("Failed to convert row {}", i + 1))?;
         if pretty {
             serde_json::to_writer_pretty(&mut writer, &map)?;
         } else {
@@ -328,5 +376,77 @@ mod tests {
         // Test invalid float falls back to string
         assert!(data["invalid_float"].is_string());
         assert_eq!(data["invalid_float"].as_str().unwrap(), "1.23e999");
+    }
+
+    // ---------------------------------------------------------------
+    // write_json_maps tests
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_write_json_maps_empty() {
+        let mut cursor = Cursor::new(Vec::new());
+        write_json_maps(vec![], &mut cursor, false).unwrap();
+        let output = String::from_utf8(cursor.into_inner()).unwrap();
+        assert_eq!(output, r#"{"data":[]}"#);
+    }
+
+    #[test]
+    fn test_write_json_maps_single_row() {
+        let mut map = BTreeMap::new();
+        map.insert("id".to_string(), serde_json::json!(1));
+        map.insert("name".to_string(), serde_json::json!("Alice"));
+
+        let mut cursor = Cursor::new(Vec::new());
+        write_json_maps(vec![map], &mut cursor, false).unwrap();
+        let output = String::from_utf8(cursor.into_inner()).unwrap();
+        let json: serde_json::Value = serde_json::from_str(&output).unwrap();
+        assert_eq!(json["data"][0]["id"], 1);
+        assert_eq!(json["data"][0]["name"], "Alice");
+    }
+
+    #[test]
+    fn test_write_json_maps_multiple_rows() {
+        let mut map1 = BTreeMap::new();
+        map1.insert("id".to_string(), serde_json::json!(1));
+        let mut map2 = BTreeMap::new();
+        map2.insert("id".to_string(), serde_json::json!(2));
+
+        let mut cursor = Cursor::new(Vec::new());
+        write_json_maps(vec![map1, map2], &mut cursor, false).unwrap();
+        let output = String::from_utf8(cursor.into_inner()).unwrap();
+        let json: serde_json::Value = serde_json::from_str(&output).unwrap();
+        assert_eq!(json["data"].as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_write_json_maps_pretty() {
+        let mut map = BTreeMap::new();
+        map.insert("id".to_string(), serde_json::json!(1));
+
+        let mut cursor = Cursor::new(Vec::new());
+        write_json_maps(vec![map], &mut cursor, true).unwrap();
+        let output = String::from_utf8(cursor.into_inner()).unwrap();
+        // Pretty output contains newlines and indentation
+        assert!(output.contains('\n'));
+    }
+
+    #[test]
+    fn test_write_json_maps_preserves_types() {
+        let mut map = BTreeMap::new();
+        map.insert("int_val".to_string(), serde_json::json!(42));
+        map.insert("null_val".to_string(), serde_json::Value::Null);
+        map.insert("str_val".to_string(), serde_json::json!("hello"));
+        map.insert("float_val".to_string(), serde_json::json!(3.25));
+
+        let mut cursor = Cursor::new(Vec::new());
+        write_json_maps(vec![map], &mut cursor, false).unwrap();
+        let output = String::from_utf8(cursor.into_inner()).unwrap();
+        let json: serde_json::Value = serde_json::from_str(&output).unwrap();
+        let data = &json["data"][0];
+
+        assert_eq!(data["int_val"], 42);
+        assert!(data["null_val"].is_null());
+        assert_eq!(data["str_val"], "hello");
+        assert_eq!(data["float_val"], 3.25);
     }
 }

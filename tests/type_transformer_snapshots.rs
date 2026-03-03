@@ -190,7 +190,7 @@ fn snapshot_value_to_string_time_with_days() {
 
 #[test]
 fn snapshot_value_to_json_null() {
-    let result = TypeTransformer::value_to_json(&Value::NULL);
+    let result = TypeTransformer::value_to_json(&Value::NULL).expect("NULL should succeed");
     let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
     insta::with_settings!({
         snapshot_path => "tests/snapshots",
@@ -202,7 +202,7 @@ fn snapshot_value_to_json_null() {
 
 #[test]
 fn snapshot_value_to_json_int() {
-    let result = TypeTransformer::value_to_json(&Value::Int(42));
+    let result = TypeTransformer::value_to_json(&Value::Int(42)).expect("Int should succeed");
     let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
     insta::with_settings!({
         snapshot_path => "tests/snapshots",
@@ -214,7 +214,8 @@ fn snapshot_value_to_json_int() {
 
 #[test]
 fn snapshot_value_to_json_uint_max() {
-    let result = TypeTransformer::value_to_json(&Value::UInt(u64::MAX));
+    let result =
+        TypeTransformer::value_to_json(&Value::UInt(u64::MAX)).expect("UInt should succeed");
     let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
     insta::with_settings!({
         snapshot_path => "tests/snapshots",
@@ -226,7 +227,8 @@ fn snapshot_value_to_json_uint_max() {
 
 #[test]
 fn snapshot_value_to_json_float_nan() {
-    let result = TypeTransformer::value_to_json(&Value::Float(f32::NAN));
+    let result =
+        TypeTransformer::value_to_json(&Value::Float(f32::NAN)).expect("Float NaN should succeed");
     let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
     insta::with_settings!({
         snapshot_path => "tests/snapshots",
@@ -238,7 +240,8 @@ fn snapshot_value_to_json_float_nan() {
 
 #[test]
 fn snapshot_value_to_json_float_infinity() {
-    let result = TypeTransformer::value_to_json(&Value::Float(f32::INFINITY));
+    let result = TypeTransformer::value_to_json(&Value::Float(f32::INFINITY))
+        .expect("Float Infinity should succeed");
     let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
     insta::with_settings!({
         snapshot_path => "tests/snapshots",
@@ -250,7 +253,8 @@ fn snapshot_value_to_json_float_infinity() {
 
 #[test]
 fn snapshot_value_to_json_double() {
-    let result = TypeTransformer::value_to_json(&Value::Double(2.5));
+    let result =
+        TypeTransformer::value_to_json(&Value::Double(2.5)).expect("Double should succeed");
     let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
     insta::with_settings!({
         snapshot_path => "tests/snapshots",
@@ -262,7 +266,8 @@ fn snapshot_value_to_json_double() {
 
 #[test]
 fn snapshot_value_to_json_bytes_valid_utf8() {
-    let result = TypeTransformer::value_to_json(&Value::Bytes(b"hello".to_vec()));
+    let result = TypeTransformer::value_to_json(&Value::Bytes(b"hello".to_vec()))
+        .expect("Bytes should succeed");
     let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
     insta::with_settings!({
         snapshot_path => "tests/snapshots",
@@ -274,7 +279,8 @@ fn snapshot_value_to_json_bytes_valid_utf8() {
 
 #[test]
 fn snapshot_value_to_json_large_binary() {
-    let result = TypeTransformer::value_to_json(&Value::Bytes(vec![0xAB; 2000]));
+    let result = TypeTransformer::value_to_json(&Value::Bytes(vec![0xAB; 2000]))
+        .expect("large binary should succeed");
     let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
     insta::with_settings!({
         snapshot_path => "tests/snapshots",
@@ -286,7 +292,8 @@ fn snapshot_value_to_json_large_binary() {
 
 #[test]
 fn snapshot_value_to_json_date() {
-    let result = TypeTransformer::value_to_json(&Value::Date(2023, 12, 25, 0, 0, 0, 0));
+    let result = TypeTransformer::value_to_json(&Value::Date(2023, 12, 25, 0, 0, 0, 0))
+        .expect("date should succeed");
     let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
     insta::with_settings!({
         snapshot_path => "tests/snapshots",
@@ -298,7 +305,8 @@ fn snapshot_value_to_json_date() {
 
 #[test]
 fn snapshot_value_to_json_datetime_with_microseconds() {
-    let result = TypeTransformer::value_to_json(&Value::Date(2023, 12, 25, 14, 30, 45, 123456));
+    let result = TypeTransformer::value_to_json(&Value::Date(2023, 12, 25, 14, 30, 45, 123456))
+        .expect("datetime should succeed");
     let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
     insta::with_settings!({
         snapshot_path => "tests/snapshots",
@@ -309,20 +317,23 @@ fn snapshot_value_to_json_datetime_with_microseconds() {
 }
 
 #[test]
-fn snapshot_value_to_json_invalid_date_fallback() {
+fn snapshot_value_to_json_invalid_date_returns_error() {
     let result = TypeTransformer::value_to_json(&Value::Date(2023, 13, 25, 0, 0, 0, 0));
-    let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
+    let error_msg = result
+        .expect_err("invalid date should return Err")
+        .to_string();
     insta::with_settings!({
         snapshot_path => "tests/snapshots",
         prepend_module_to_snapshot => false,
     }, {
-        assert_snapshot!("value_to_json_invalid_date_fallback", serialized);
+        assert_snapshot!("value_to_json_invalid_date_error", error_msg);
     });
 }
 
 #[test]
 fn snapshot_value_to_json_time() {
-    let result = TypeTransformer::value_to_json(&Value::Time(false, 0, 14, 30, 45, 0));
+    let result = TypeTransformer::value_to_json(&Value::Time(false, 0, 14, 30, 45, 0))
+        .expect("time should succeed");
     let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
     insta::with_settings!({
         snapshot_path => "tests/snapshots",

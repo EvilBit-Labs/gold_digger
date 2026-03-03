@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::{env, fs::File, path::PathBuf};
 
 use anyhow::{Context, Result};
@@ -6,6 +7,7 @@ use clap_complete::{Shell as CompletionShell, generate};
 use mysql::Pool;
 use mysql::prelude::Queryable;
 
+use gold_digger::TypeTransformer;
 use gold_digger::cli::{Cli, Commands, OutputFormat, Shell};
 use gold_digger::exit::{exit_no_rows, exit_success, exit_with_error};
 use gold_digger::rows_to_strings;
@@ -266,8 +268,19 @@ fn write_output(rows: Vec<mysql::Row>, output_file: &std::path::Path, cli: &Cli)
         }
         #[cfg(feature = "json")]
         OutputFormat::Json => {
+            // Convert rows to JSON maps before creating the file to avoid
+            // leaving an empty/truncated file on conversion failure.
+            let json_maps: Vec<BTreeMap<String, serde_json::Value>> = rows
+                .into_iter()
+                .enumerate()
+                .map(|(i, row)| {
+                    TypeTransformer::row_to_json(row)
+                        .with_context(|| format!("Failed to convert row {}", i + 1))
+                })
+                .collect::<Result<Vec<_>>>()?;
+
             let output = File::create(output_file).context("Failed to create output file")?;
-            gold_digger::json::write_typed(rows, output, cli.pretty)?;
+            gold_digger::json::write_json_maps(json_maps, output, cli.pretty)?;
         }
         OutputFormat::Tsv => {
             let string_rows = rows_to_strings(rows)?;

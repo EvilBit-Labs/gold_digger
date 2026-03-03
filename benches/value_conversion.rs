@@ -273,7 +273,7 @@ fn benchmark_value_to_json(c: &mut Criterion) {
         |b, values| {
             b.iter(|| {
                 for value in values {
-                    black_box(TypeTransformer::value_to_json(black_box(value)));
+                    let _ = black_box(TypeTransformer::value_to_json(black_box(value)));
                 }
             })
         },
@@ -286,7 +286,7 @@ fn benchmark_value_to_json(c: &mut Criterion) {
         |b, values| {
             b.iter(|| {
                 for value in values {
-                    black_box(TypeTransformer::value_to_json(black_box(value)));
+                    let _ = black_box(TypeTransformer::value_to_json(black_box(value)));
                 }
             })
         },
@@ -299,7 +299,7 @@ fn benchmark_value_to_json(c: &mut Criterion) {
         |b, values| {
             b.iter(|| {
                 for value in values {
-                    black_box(TypeTransformer::value_to_json(black_box(value)));
+                    let _ = black_box(TypeTransformer::value_to_json(black_box(value)));
                 }
             })
         },
@@ -312,7 +312,7 @@ fn benchmark_value_to_json(c: &mut Criterion) {
         |b, values| {
             b.iter(|| {
                 for value in values {
-                    black_box(TypeTransformer::value_to_json(black_box(value)));
+                    let _ = black_box(TypeTransformer::value_to_json(black_box(value)));
                 }
             })
         },
@@ -325,7 +325,7 @@ fn benchmark_value_to_json(c: &mut Criterion) {
         |b, values| {
             b.iter(|| {
                 for value in values {
-                    black_box(TypeTransformer::value_to_json(black_box(value)));
+                    let _ = black_box(TypeTransformer::value_to_json(black_box(value)));
                 }
             })
         },
@@ -338,7 +338,7 @@ fn benchmark_value_to_json(c: &mut Criterion) {
         |b, values| {
             b.iter(|| {
                 for value in values {
-                    black_box(TypeTransformer::value_to_json(black_box(value)));
+                    let _ = black_box(TypeTransformer::value_to_json(black_box(value)));
                 }
             })
         },
@@ -351,7 +351,7 @@ fn benchmark_value_to_json(c: &mut Criterion) {
         |b, values| {
             b.iter(|| {
                 for value in values {
-                    black_box(TypeTransformer::value_to_json(black_box(value)));
+                    let _ = black_box(TypeTransformer::value_to_json(black_box(value)));
                 }
             })
         },
@@ -364,7 +364,7 @@ fn benchmark_value_to_json(c: &mut Criterion) {
         |b, values| {
             b.iter(|| {
                 for value in values {
-                    black_box(TypeTransformer::value_to_json(black_box(value)));
+                    let _ = black_box(TypeTransformer::value_to_json(black_box(value)));
                 }
             })
         },
@@ -377,7 +377,7 @@ fn benchmark_value_to_json(c: &mut Criterion) {
         |b, values| {
             b.iter(|| {
                 for value in values {
-                    black_box(TypeTransformer::value_to_json(black_box(value)));
+                    let _ = black_box(TypeTransformer::value_to_json(black_box(value)));
                 }
             })
         },
@@ -390,7 +390,7 @@ fn benchmark_value_to_json(c: &mut Criterion) {
         |b, values| {
             b.iter(|| {
                 for value in values {
-                    black_box(TypeTransformer::value_to_json(black_box(value)));
+                    let _ = black_box(TypeTransformer::value_to_json(black_box(value)));
                 }
             })
         },
@@ -403,7 +403,7 @@ fn benchmark_value_to_json(c: &mut Criterion) {
         |b, values| {
             b.iter(|| {
                 for value in values {
-                    black_box(TypeTransformer::value_to_json(black_box(value)));
+                    let _ = black_box(TypeTransformer::value_to_json(black_box(value)));
                 }
             })
         },
@@ -416,7 +416,7 @@ fn benchmark_value_to_json(c: &mut Criterion) {
         |b, values| {
             b.iter(|| {
                 for value in values {
-                    black_box(TypeTransformer::value_to_json(black_box(value)));
+                    let _ = black_box(TypeTransformer::value_to_json(black_box(value)));
                 }
             })
         },
