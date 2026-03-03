@@ -463,35 +463,35 @@ sbom-syft:
 [group('dist')]
 dist-init:
     @echo "Initializing cargo-dist configuration..."
-    @{{ mise_exec }} cargo dist init --yes
+    @{{ mise_exec }} dist init --yes
     @echo "cargo-dist initialized successfully"
 
 # Plan cargo-dist release (dry-run)
 [group('dist')]
 dist-plan:
-    @{{ mise_exec }} cargo dist plan
+    @{{ mise_exec }} dist plan
 
 # Build cargo-dist artifacts locally
 [group('dist')]
 dist-build:
-    @{{ mise_exec }} cargo dist build
+    @{{ mise_exec }} dist build
     @find target/distrib -type f -name "*" 2>/dev/null | head -10 || echo "  (no artifacts found)"
 
 # Generate cargo-dist installers
 [group('dist')]
 dist-generate:
-    @{{ mise_exec }} cargo dist generate
+    @{{ mise_exec }} dist generate
 
 # Validate cargo-dist configuration
 [group('dist')]
 dist-check:
-    @{{ mise_exec }} cargo dist plan >/dev/null && echo "cargo-dist configuration check passed"
+    @{{ mise_exec }} dist plan >/dev/null && echo "cargo-dist configuration check passed"
 
 # Validate cargo-dist configuration (verbose)
 [group('dist')]
 validate-cargo-dist:
     @test -f dist-workspace.toml && echo "dist-workspace.toml exists" || echo "Missing: dist-workspace.toml"
-    @{{ mise_exec }} cargo dist plan >/dev/null && echo "cargo-dist configuration is valid"
+    @{{ mise_exec }} dist plan >/dev/null && echo "cargo-dist configuration is valid"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CI
@@ -630,7 +630,7 @@ act-release-dry TAG: _require-act
 [group('act')]
 act-cargo-dist-dry: _require-act
     @echo "Running cargo-dist workflow dry-run..."
-    @{{ mise_exec }} cargo dist plan
+    @{{ mise_exec }} dist plan
 
 # Test cargo-dist with sample conventional commits
 [group('act')]
@@ -643,7 +643,7 @@ act-cargo-dist-test:
 # Test cargo-dist integration with release workflow
 [group('act')]
 act-cargo-dist-integration TAG: _require-act
-    @{{ mise_exec }} cargo dist plan
+    @{{ mise_exec }} dist plan
     @{{ mise_exec }} {{ act_cmd }} workflow_dispatch --input tag={{TAG}} -W .github/workflows/release.yml --dryrun
 
 # List all available GitHub Actions workflows
