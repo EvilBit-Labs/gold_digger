@@ -52,7 +52,7 @@ jobs:
 
             - name: Upload Grype SARIF
               if: always() && (github.event_name != 'workflow_run' || github.event.workflow_run.head_repository.full_name == github.repository)
-              uses: github/codeql-action/upload-sarif@89a39a4e59826350b863aa6b6252a07ad50cf83e # v4.32.4
+              uses: github/codeql-action/upload-sarif@c793b717bc78562f491db7b0e93a3a178b099162 # v4.32.5
               with:
                   sarif_file: grype-results.sarif
                   category: grype-scan
