@@ -32,10 +32,20 @@ Gold Digger is a command-line tool designed for extracting data from MySQL and M
 
 ## Getting Help
 
-If you encounter issues or have questions:
+For support, questions, and understanding response times, see the [SUPPORT.md](https://github.com/EvilBit-Labs/gold_digger/blob/main/SUPPORT.md) file in the repository. Key resources include:
 
-1. Check the [Troubleshooting Guide](troubleshooting/README.md)
-2. Review the [Configuration Documentation](usage/configuration.md)
-3. Visit the [GitHub Repository](https://github.com/EvilBit-Labs/gold_digger)
+1. [Troubleshooting Guide](troubleshooting/README.md) for common issues and solutions
+2. [Configuration Documentation](usage/configuration.md) for setup and options
+3. [GitHub Issues](https://github.com/EvilBit-Labs/gold_digger/issues) for bug reports and feature requests
+4. [SECURITY.md](https://github.com/EvilBit-Labs/gold_digger/blob/main/SECURITY.md) for security vulnerability reporting
+
+## Project Resources
+
+Gold Digger is an open source project with transparent governance and planning:
+
+- **[SUPPORT.md](https://github.com/EvilBit-Labs/gold_digger/blob/main/SUPPORT.md)**: Get help and understand support policies and response times
+- **[GOVERNANCE.md](https://github.com/EvilBit-Labs/gold_digger/blob/main/GOVERNANCE.md)**: Learn about project structure, roles, and decision-making processes
+- **[ROADMAP.md](https://github.com/EvilBit-Labs/gold_digger/blob/main/ROADMAP.md)**: View planned features and release milestones
+- **[CONTRIBUTING.md](https://github.com/EvilBit-Labs/gold_digger/blob/main/CONTRIBUTING.md)**: Guidelines for contributing code and documentation
 
 Let's get started with Gold Digger!
