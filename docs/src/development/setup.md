@@ -132,11 +132,12 @@ pre-commit run --all-files
 
 ### Optional Tools
 
-| Tool             | Purpose                         | Installation                                        |
-| ---------------- | ------------------------------- | --------------------------------------------------- |
-| `cargo-watch`    | Auto-rebuild on file changes    | `cargo install cargo-watch`                         |
-| `cargo-outdated` | Check for outdated dependencies | `cargo install cargo-outdated`                      |
-| `act`            | Run GitHub Actions locally      | [Installation guide](https://github.com/nektos/act) |
+| Tool             | Purpose                                           | Installation                                        |
+| ---------------- | ------------------------------------------------- | --------------------------------------------------- |
+| `cargo-watch`    | Auto-rebuild on file changes                      | `cargo install cargo-watch`                         |
+| `cargo-outdated` | Check for outdated dependencies                   | `cargo install cargo-outdated`                      |
+| `act`            | Run GitHub Actions locally                        | [Installation guide](https://github.com/nektos/act) |
+| `git-cliff`      | Changelog generator (Conventional Commits parser) | Managed via mise (`mise.toml`)                      |
 
 ## Project Structure
 
@@ -163,6 +164,7 @@ src/
 ├── rustfmt.toml            # Code formatting configuration
 ├── deny.toml               # Security and license policy
 ├── rust-toolchain.toml     # Rust version specification
+├── cliff.toml              # Changelog generation configuration
 ├── .pre-commit-config.yaml # Pre-commit hooks
 └── .editorconfig           # Editor configuration
 ```
@@ -634,6 +636,7 @@ instruments -t "Time Profiler" target/release/gold_digger
 - **Documentation**: This guide and API docs
 - **Issues**: [GitHub Issues](https://github.com/EvilBit-Labs/gold_digger/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/EvilBit-Labs/gold_digger/discussions)
+- **Support Policy**: See [SUPPORT.md](https://github.com/EvilBit-Labs/gold_digger/blob/main/SUPPORT.md) for expected response times and how to get help
 
 ### Common Commands Reference
 
@@ -652,6 +655,12 @@ just sbom
 
 # Coverage analysis
 just cover
+
+# Generate changelog for a version
+just changelog vX.Y.Z
+
+# Extract release notes for a version
+just release-notes vX.Y.Z
 
 # Release preparation
 just release-check
