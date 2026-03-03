@@ -8,10 +8,6 @@ header = """
 All notable changes to this project will be documented in this file.\n
 """
 body = """
-{%- macro remote_url() -%}
-  https://github.com/EvilBit-Labs/gold_digger
-{%- endmacro -%}
-
 {% if version -%}
     ## [{{ version }}] - {{ timestamp | date(format="%Y-%m-%d") }}
 {% else -%}
