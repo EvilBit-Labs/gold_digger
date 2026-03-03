@@ -57,8 +57,8 @@ git checkout -b release/v1.0.0
 # Update version in Cargo.toml
 # Edit Cargo.toml and update version = "1.0.0"
 
-# Generate changelog using git-cliff
-git-cliff --tag v1.0.0 --output CHANGELOG.md
+# Generate changelog using git-cliff (via justfile recipe)
+just changelog v1.0.0
 
 # Commit changes
 git add Cargo.toml CHANGELOG.md

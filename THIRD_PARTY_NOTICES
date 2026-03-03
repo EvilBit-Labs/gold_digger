@@ -1,0 +1,112 @@
+THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
+
+This project incorporates material from the projects listed below.
+The original copyright notices and license terms are listed for each package.
+
+This file was generated from `cargo deny list`. For the most up-to-date
+information, run `cargo deny list` in the project root.
+
+============================================================
+
+Licenses used by dependencies
+------------------------------------------------------------
+
+Apache-2.0
+  anstream, anstyle, anstyle-parse, anstyle-query, anstyle-wincon,
+  anyhow, arrayvec, autocfg, aws-lc-rs, aws-lc-sys, base64,
+  bigdecimal, bitflags, block-buffer, btoi, bufstream, cc, cfg-if,
+  clap, clap_builder, clap_complete, clap_derive, clap_lex, cmake,
+  colorchoice, core-foundation, core-foundation-sys, cpufeatures,
+  crc32fast, crossbeam-queue, crossbeam-utils, crypto-common,
+  deranged, derive_utils, digest, displaydoc, dunce, equivalent,
+  flate2, fnv, form_urlencoded, getrandom, hashbrown, heck,
+  ident_case, idna, idna_adapter, indexmap, io-enum,
+  is_terminal_polyfill, itoa, jobserver, libc, libz-sys, log, mysql,
+  mysql-common-derive, mysql_common, named_pipe, num-bigint, num-conv,
+  num-integer, num-traits, once_cell, once_cell_polyfill,
+  openssl-probe, percent-encoding, pkg-config, powerfmt,
+  proc-macro-crate, proc-macro-error-attr2, proc-macro-error2,
+  proc-macro2, quote, regex, regex-automata, regex-syntax, ring,
+  rustls, rustls-native-certs, rustls-pemfile, rustls-pki-types, ryu,
+  security-framework, security-framework-sys, serde, serde_core,
+  serde_derive, serde_json, sha1, sha2, shlex, smallvec, socket2,
+  stable_deref_trait, syn, thiserror, thiserror-impl, time, time-core,
+  time-macros, toml_datetime, toml_edit, toml_parser, typenum,
+  unicode-ident, url, utf8_iter, utf8parse, uuid, version_check,
+  windows-link, windows-sys, windows-targets, zeroize
+
+MIT
+  aho-corasick, anstream, anstyle, anstyle-parse, anstyle-query,
+  anstyle-wincon, anyhow, arrayvec, autocfg, base64, bigdecimal,
+  bitflags, block-buffer, btoi, bufstream, byteorder, bytes, cc,
+  cfg-if, clap, clap_builder, clap_complete, clap_derive, clap_lex,
+  cmake, colorchoice, core-foundation, core-foundation-sys,
+  cpufeatures, crc32fast, crossbeam-queue, crossbeam-utils,
+  crypto-common, csv, csv-core, darling, darling_core, darling_macro,
+  deranged, derive_utils, digest, displaydoc, equivalent, flate2, fnv,
+  form_urlencoded, frunk, frunk_core, frunk_derives,
+  frunk_proc_macro_helpers, frunk_proc_macros, fs_extra,
+  generic-array, getrandom, gold_digger, hashbrown, heck, ident_case,
+  idna, idna_adapter, indexmap, io-enum, is_terminal_polyfill, itoa,
+  jobserver, libc, libm, libz-sys, log, lru, memchr, mysql,
+  mysql-common-derive, mysql_common, named_pipe, num-bigint, num-conv,
+  num-integer, num-traits, once_cell, once_cell_polyfill,
+  openssl-probe, pem, percent-encoding, pkg-config, powerfmt,
+  proc-macro-crate, proc-macro-error-attr2, proc-macro-error2,
+  proc-macro2, quote, regex, regex-automata, regex-syntax,
+  rust_decimal, rustls, rustls-native-certs, rustls-pemfile,
+  rustls-pki-types, saturating, schannel, security-framework,
+  security-framework-sys, serde, serde_core, serde_derive, serde_json,
+  sha1, sha2, shlex, smallvec, socket2, stable_deref_trait, strsim,
+  syn, synstructure, termcolor, thiserror, thiserror-impl, time,
+  time-core, time-macros, toml_datetime, toml_edit, toml_parser,
+  twox-hash, typenum, unicode-ident, url, utf8_iter, utf8parse, uuid,
+  version_check, windows-link, windows-sys, windows-targets, winnow,
+  zeroize, zmij
+
+BSD-3-Clause
+  subtle
+
+ISC
+  aws-lc-rs, aws-lc-sys, ring, rustls, rustls-native-certs,
+  rustls-pemfile, rustls-webpki, untrusted, webpki
+
+CDLA-Permissive-2.0
+  webpki-roots
+
+Unicode-3.0
+  icu_collections, icu_locale_core, icu_normalizer,
+  icu_normalizer_data, icu_properties, icu_properties_data,
+  icu_provider, litemap, potential_utf, tinystr, unicode-ident,
+  writeable, yoke, yoke-derive, zerofrom, zerofrom-derive, zerotrie,
+  zerovec, zerovec-derive
+
+Unlicense
+  aho-corasick, byteorder, csv, csv-core, memchr, termcolor,
+  winapi-util
+
+BSL-1.0
+  ryu
+
+CC0-1.0
+  dunce
+
+MIT-0
+  dunce
+
+OpenSSL
+  aws-lc-sys
+
+============================================================
+
+Note: Many packages are dual-licensed under Apache-2.0 AND MIT.
+Gold Digger itself is licensed under the MIT License (see LICENSE).
+
+For full license texts, see:
+
+- Apache-2.0: <https://www.apache.org/licenses/LICENSE-2.0>
+- MIT: <https://opensource.org/licenses/MIT>
+- BSD-3-Clause: <https://opensource.org/licenses/BSD-3-Clause>
+- ISC: <https://opensource.org/licenses/ISC>
+- Unlicense: <https://unlicense.org/>
+- Unicode-3.0: <https://www.unicode.org/license.txt>

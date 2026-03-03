@@ -31,6 +31,7 @@ Closes #[issue number]
 - [ ] I have added/updated tests for new functionality
 - [ ] I have updated documentation if needed
 - [ ] I have not introduced any new warnings
+- [ ] All commits are signed off (`git commit -s`) per the DCO
 
 ## Environment Variables
 

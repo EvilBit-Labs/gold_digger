@@ -1,0 +1,71 @@
+# Auto detect text files and perform LF normalization
+* text=auto eol=lf
+
+# Rust files
+*.rs text diff=rust
+Cargo.toml text
+Cargo.lock text -diff
+
+# Documentation
+*.md text diff=markdown
+*.txt text
+LICENSE text
+
+# Config files
+*.json text
+*.toml text
+*.yml text
+*.yaml text
+*.ini text
+*.cfg text
+*.conf text
+
+# SQL files
+*.sql text
+
+# Shell scripts
+*.sh text eol=lf diff=bash
+
+# Docker files
+Dockerfile text
+*.dockerfile text
+docker-compose*.yml text
+.dockerignore text
+
+# Binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg text
+
+# Font files
+*.ttf binary
+*.eot binary
+*.woff binary
+*.woff2 binary
+
+# Archive files
+*.zip binary
+*.7z binary
+*.gz binary
+*.tar binary
+*.tgz binary
+*.rar binary
+
+# Executables
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
+
+# Snapshot test files (avoid noisy diffs)
+*.snap binary
+
+# Environment files
+.env text eol=lf
+
+# Export ignore (excluded from archives)
+.github/ export-ignore
+.claude/ export-ignore

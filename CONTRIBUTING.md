@@ -27,6 +27,7 @@ All types of contributions are encouraged and valued. See the [Table of Contents
 - [Styleguides](#styleguides)
 - [Commit Messages](#commit-messages)
 - [IDE and Editor Configuration](#ide-and-editor-configuration)
+- [Developer Certificate of Origin (DCO)](#developer-certificate-of-origin-dco)
 - [Join The Project Team](#join-the-project-team)
 
 ## Code of Conduct
@@ -76,9 +77,7 @@ A good bug report shouldn't leave others needing to chase you up for more inform
 
 #### How Do I Submit a Good Bug Report?
 
-> You must never report security related issues, vulnerabilities or bugs including sensitive information to the issue tracker, or elsewhere in public. Instead, sensitive bugs must be sent by email to .
-
-<!-- You may add a PGP key to allow the messages to be sent encrypted as well. -->
+> You must never report security related issues, vulnerabilities or bugs including sensitive information to the issue tracker, or elsewhere in public. Instead, please follow the disclosure process described in our [Security Policy](SECURITY.md). The preferred method is to use the [GitHub Security tab](https://github.com/EvilBit-Labs/gold_digger/security) to report a vulnerability privately. For urgent or highly sensitive issues, email <support@evilbitlabs.io>.
 
 We use GitHub issues to track bugs and errors. If you run into an issue with the project:
 
@@ -437,6 +436,42 @@ The project works well with:
 - Vim/Neovim (with EditorConfig plugin)
 - Emacs (with EditorConfig mode)
 - Any editor that supports EditorConfig
+
+## Developer Certificate of Origin (DCO)
+
+This project uses the [Developer Certificate of Origin](https://developercertificate.org/) (DCO) to ensure that contributors have the right to submit their contributions under the project's license.
+
+### What is the DCO?
+
+The DCO is a lightweight mechanism for contributors to certify that they wrote or otherwise have the right to submit code to an open source project. By signing off on your commits, you attest to the [DCO terms](https://developercertificate.org/).
+
+### How to Sign Off
+
+Add a `Signed-off-by` trailer to every commit by using the `-s` flag:
+
+```bash
+git commit -s -m "feat: add new output format"
+```
+
+This produces a commit message like:
+
+```text
+feat: add new output format
+
+Signed-off-by: Your Name <your.email@example.com>
+```
+
+The name and email must match your Git configuration (`git config user.name` and `git config user.email`).
+
+### Fixing Missing Sign-Offs
+
+If you forgot to sign off on previous commits, you can amend the most recent one:
+
+```bash
+git commit --amend -s --no-edit
+```
+
+For older commits, use an interactive rebase. The project has a DCO bot that allows remediation commits as an alternative.
 
 ## Join The Project Team
 
