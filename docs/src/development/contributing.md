@@ -1,6 +1,6 @@
 # Contributing
 
-Guidelines for contributing to Gold Digger.
+Guidelines for contributing to Gold Digger. For project governance, see [GOVERNANCE.md](GOVERNANCE.md). For getting help, see [SUPPORT.md](SUPPORT.md).
 
 ## Getting Started
 
@@ -26,7 +26,9 @@ Guidelines for contributing to Gold Digger.
    pre-commit run --all-files
    ```
 
-7. Submit a pull request
+7. Sign off all commits (see [Developer Certificate of Origin](#developer-certificate-of-origin))
+
+8. Submit a pull request
 
 ## Code Standards
 
@@ -55,6 +57,7 @@ Gold Digger uses comprehensive pre-commit hooks that automatically run on each c
 - **Shell Scripts**: Validation with ShellCheck
 - **GitHub Actions**: Workflow validation with actionlint
 - **Commit Messages**: Conventional commit format validation
+- **DCO**: Developer Certificate of Origin sign-off validation
 - **Documentation**: Link checking and build validation
 
 Install hooks: `pre-commit install` Run manually: `pre-commit run --all-files`
@@ -69,6 +72,8 @@ fix: handle NULL values correctly
 docs: update installation guide
 ```
 
+All commits must include a `Signed-off-by` trailer (see [Developer Certificate of Origin](#developer-certificate-of-origin)).
+
 ## Development Guidelines
 
 ### Error Handling
@@ -82,6 +87,7 @@ docs: update installation guide
 - Never log credentials or sensitive data
 - Use secure defaults for TLS/SSL
 - Validate all external input
+- Report security issues privately per [SECURITY.md](SECURITY.md)
 
 ### Testing
 
@@ -94,11 +100,14 @@ docs: update installation guide
 
 ## Pull Request Process
 
-1. **Description**: Clearly describe changes and motivation
-2. **Quality Checks**: Ensure all pre-commit hooks and CI checks pass
-3. **Testing**: Include test results and coverage information
-4. **Documentation**: Update docs for user-facing changes
-5. **Review**: Address feedback promptly and professionally
+1. **Description**: Clearly describe changes and motivation using the PR template
+2. **DCO Sign-off**: Ensure all commits are signed off with `git commit -s`
+3. **Quality Checks**: Ensure all pre-commit hooks and CI checks pass
+4. **Testing**: Include test results and coverage information
+5. **Documentation**: Update docs for user-facing changes
+6. **Review**: Address feedback promptly and professionally
+
+The CODEOWNERS file automatically assigns the maintainer to review PRs based on changed files.
 
 ### Before Submitting
 
@@ -129,3 +138,39 @@ Reviews focus on:
 - Performance implications
 - Security considerations
 - Code clarity and maintainability
+
+## Developer Certificate of Origin
+
+Gold Digger requires all contributors to sign off their commits using the [Developer Certificate of Origin](https://developercertificate.org/) (DCO). The DCO certifies that you have the right to submit your contribution under the project's license.
+
+### Signing Off Commits
+
+Add a `Signed-off-by` trailer to every commit using the `-s` flag:
+
+```bash
+git commit -s -m "feat: add new output format"
+```
+
+This produces a commit message like:
+
+```
+feat: add new output format
+
+Signed-off-by: Your Name <your.email@example.com>
+```
+
+The name and email must match your Git configuration (`git config user.name` and `git config user.email`).
+
+### Fixing Missing Sign-Offs
+
+If you forgot to sign off on the most recent commit:
+
+```bash
+git commit --amend -s --no-edit
+```
+
+For older commits, use an interactive rebase. The project allows remediation commits via the DCO bot configuration (`.github/dco.yml`), so you can also add a separate sign-off commit if needed.
+
+### Automated Validation
+
+The DCO check runs automatically on all pull requests. Pull requests cannot be merged until all commits are signed off.
