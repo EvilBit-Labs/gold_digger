@@ -1,0 +1,5 @@
+---
+source: tests/type_transformer_snapshots.rs
+expression: result
+---
+2023-12-25 14:30:45.123456

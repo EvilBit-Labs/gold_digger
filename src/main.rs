@@ -127,15 +127,8 @@ fn main() {
             if cli.verbose > 0 && !cli.quiet {
                 println!("No records found in database, but --allow-empty is set.");
             }
-            // Create empty output file
-            let output = match File::create(&output_file) {
-                Ok(output) => output,
-                Err(e) => {
-                    exit_with_error(anyhow::anyhow!("Failed to create output file: {}", e), None)
-                }
-            };
-            let empty_rows: Vec<Vec<String>> = vec![];
-            if let Err(e) = write_output(empty_rows, output, output_file.as_path(), &cli) {
+            let empty_rows: Vec<mysql::Row> = vec![];
+            if let Err(e) = write_output(empty_rows, output_file.as_path(), &cli) {
                 exit_with_error(e, Some("Output writing failed"));
             }
         } else {
@@ -144,21 +137,8 @@ fn main() {
             }
             exit_no_rows(Some("No records found in database"));
         }
-    } else {
-        let rows = match rows_to_strings(result) {
-            Ok(rows) => rows,
-            Err(e) => exit_with_error(
-                e.context("Failed to convert database rows to string format"),
-                Some("Row conversion failed"),
-            ),
-        };
-        let output = match File::create(&output_file) {
-            Ok(output) => output,
-            Err(e) => exit_with_error(anyhow::anyhow!("Failed to create output file: {}", e), None),
-        };
-        if let Err(e) = write_output(rows, output, output_file.as_path(), &cli) {
-            exit_with_error(e, Some("Output writing failed"));
-        }
+    } else if let Err(e) = write_output(result, output_file.as_path(), &cli) {
+        exit_with_error(e, Some("Output writing failed"));
     }
 
     exit_success(None);
@@ -264,13 +244,13 @@ fn resolve_output_file(cli: &Cli) -> Result<PathBuf> {
     }
 }
 
-/// Writes output in the specified format
-fn write_output(
-    rows: Vec<Vec<String>>,
-    output: File,
-    output_file: &std::path::Path,
-    cli: &Cli,
-) -> Result<()> {
+/// Writes output in the specified format.
+///
+/// For JSON output, uses `TypeTransformer` to preserve native MySQL types (integers
+/// as JSON numbers, NULLs as JSON null, etc.). For CSV and TSV, converts rows to
+/// strings first via `rows_to_strings`, ensuring conversion succeeds before
+/// creating/truncating the output file.
+fn write_output(rows: Vec<mysql::Row>, output_file: &std::path::Path, cli: &Cli) -> Result<()> {
     let format = if let Some(format) = &cli.format {
         format.clone()
     } else {
@@ -279,10 +259,21 @@ fn write_output(
 
     match format {
         #[cfg(feature = "csv")]
-        OutputFormat::Csv => gold_digger::csv::write(rows, output)?,
+        OutputFormat::Csv => {
+            let string_rows = rows_to_strings(rows)?;
+            let output = File::create(output_file).context("Failed to create output file")?;
+            gold_digger::csv::write(string_rows, output)?;
+        }
         #[cfg(feature = "json")]
-        OutputFormat::Json => gold_digger::json::write_with_pretty(rows, output, cli.pretty)?,
-        OutputFormat::Tsv => gold_digger::tab::write(rows, output)?,
+        OutputFormat::Json => {
+            let output = File::create(output_file).context("Failed to create output file")?;
+            gold_digger::json::write_typed(rows, output, cli.pretty)?;
+        }
+        OutputFormat::Tsv => {
+            let string_rows = rows_to_strings(rows)?;
+            let output = File::create(output_file).context("Failed to create output file")?;
+            gold_digger::tab::write(string_rows, output)?;
+        }
         #[cfg(not(feature = "csv"))]
         OutputFormat::Csv => anyhow::bail!("CSV support not compiled in"),
         #[cfg(not(feature = "json"))]

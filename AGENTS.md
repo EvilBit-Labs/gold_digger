@@ -20,6 +20,7 @@ Always consult these files in order when working with this codebase:
 - **NEVER** use direct MySQL row indexing: `row[index]` or `mysql::from_value::<String>()`
 - **ALWAYS** ask clarifying questions before making risky changes
 - **ALWAYS** run `just check` and validate changes before proposing them
+- **ALWAYS** verify CLI subcommands and flags (`--help`) before writing them into workflows or scripts
 
 ### Change Proposals
 
@@ -42,6 +43,7 @@ All dev tools are managed via `mise.toml`. Commands in justfile use `{{ mise_exe
 
 - `just setup` - Install all tools via mise
 - `mise use <tool>` - Add a new tool (e.g., `mise use cargo:cargo-watch`)
+- `cargo-dist` binary is named `dist` (not `cargo dist`) when installed via mise. Valid subcommands: `build`, `init`, `plan`, `generate`, `manifest`, `host` (no `check` subcommand -- use `dist plan` to validate config)
 - `mise install` - Reinstall all configured tools
 
 ### Pre-commit Hooks
@@ -149,31 +151,16 @@ cargo run --release
 ```rust
 // ❌ NEVER - causes panics on NULL/non-string types
 // from_value::<String>(row[column.name_str().as_ref()])
-// Use mysql_value_to_string() for CSV/TSV or mysql_value_to_json() for JSON instead
+// Use TypeTransformer::value_to_string() for CSV/TSV or TypeTransformer::value_to_json() for JSON
 
-// ✅ ALWAYS - safe NULL handling with dedicated helpers
-
-/// Converts MySQL value to String for CSV/TSV output
-fn mysql_value_to_string(mysql_value: &mysql::Value) -> String {
-    match mysql_value {
-        mysql::Value::NULL => "".to_string(),
-        val => from_value_opt::<String>(val.clone()).unwrap_or_else(|_| format!("{:?}", val)),
-    }
-}
-
-/// Converts MySQL value to serde_json::Value for JSON output
-fn mysql_value_to_json(mysql_value: &mysql::Value) -> serde_json::Value {
-    match mysql_value {
-        mysql::Value::NULL => serde_json::Value::Null,
-        val => from_value_opt::<String>(val.clone())
-            .map(serde_json::Value::String)
-            .unwrap_or_else(|_| serde_json::Value::String(format!("{:?}", val))),
-    }
-}
+// ✅ ALWAYS - use TypeTransformer (src/type_transformer.rs)
+use gold_digger::TypeTransformer;
 
 // Usage per output format:
-// - CSV/TSV: mysql_value_to_string(&mysql_value)
-// - JSON: mysql_value_to_json(&mysql_value)
+// - CSV/TSV: TypeTransformer::value_to_string(&value)?
+// - JSON:    TypeTransformer::value_to_json(&value)
+// - Full row to strings: TypeTransformer::row_to_strings(row)?
+// - Full row to JSON map: TypeTransformer::row_to_json(row)?
 ```
 
 ### Security (NEVER VIOLATE)
@@ -238,8 +225,15 @@ fn resolve_config_value(cli: &Cli) -> anyhow::Result<String> {
 
 **Core Library (`src/lib.rs`):**
 
-- `rows_to_strings()`: Converts `Vec<Row>` to `Vec<Vec<String>>` (PANICS on NULL/non-string)
+- `rows_to_strings()`: Converts `Vec<Row>` to `Vec<Vec<String>>` (delegates to `TypeTransformer`)
 - `get_extension_from_filename()`: Simple extension parsing
+
+**Type Conversion (`src/type_transformer.rs`):**
+
+- `TypeTransformer::value_to_string()`: Safe MySQL value to String (CSV/TSV)
+- `TypeTransformer::value_to_json()`: Safe MySQL value to serde_json::Value (JSON, ISO-8601 datetimes with `T` separator)
+- `TypeTransformer::row_to_strings()`: Full row to Vec<String>
+- `TypeTransformer::row_to_json()`: Full row to BTreeMap\<String, serde_json::Value>
 
 **Output Writers:**
 
@@ -338,6 +332,7 @@ pub fn rows_to_strings(rows: Vec<mysql::Row>) -> anyhow::Result<Vec<Vec<String>>
 
 #### Critical Security Rules
 
+- **SBOM generation**: Use `cargo cyclonedx --format json` (not Syft). Syft scans the filesystem and picks up stale `Cargo.lock` files in `megalinter-reports/` producing false positives. cargo-cyclonedx reads only the project's `Cargo.lock`.
 - **Never log credentials:** Implement redaction for `DATABASE_URL` and secrets
 - **No hardcoded secrets:** Use environment variables or GitHub OIDC
 - **Vulnerability policy:** Block releases with critical vulnerabilities
@@ -443,13 +438,14 @@ testcontainers = "0.15"                                      # For real MySQL/Ma
 
 ## Quick Reference
 
-| File                           | Purpose         | Key Issues                                |
-| ------------------------------ | --------------- | ----------------------------------------- |
-| `src/main.rs`                  | Entry point     | Exit codes, pattern bug, env var handling |
-| `src/lib.rs`                   | Core logic      | Type conversion panics, NULL handling     |
-| `src/json.rs`                  | JSON output     | Non-deterministic HashMap                 |
-| `Cargo.toml`                   | Dependencies    | Version mismatch with CHANGELOG           |
-| `project_spec/requirements.md` | Target features | Comprehensive feature roadmap             |
+| File                           | Purpose          | Key Issues                                 |
+| ------------------------------ | ---------------- | ------------------------------------------ |
+| `src/main.rs`                  | Entry point      | Exit codes, pattern bug, env var handling  |
+| `src/lib.rs`                   | Core logic       | Delegates to TypeTransformer               |
+| `src/type_transformer.rs`      | Value conversion | TypeTransformer: safe MySQL value handling |
+| `src/json.rs`                  | JSON output      | BTreeMap for deterministic ordering        |
+| `Cargo.toml`                   | Dependencies     | Version mismatch with CHANGELOG            |
+| `project_spec/requirements.md` | Target features  | Comprehensive feature roadmap              |
 
 ---
 

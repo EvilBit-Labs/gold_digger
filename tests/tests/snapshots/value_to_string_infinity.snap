@@ -1,0 +1,5 @@
+---
+source: tests/type_transformer_snapshots.rs
+expression: result
+---
+Infinity

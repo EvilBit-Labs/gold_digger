@@ -4,6 +4,7 @@ use std::{
 };
 
 use crate::FormatWriter;
+use crate::TypeTransformer;
 use anyhow::Result;
 
 /// JSON writer that implements the FormatWriter trait
@@ -140,6 +141,50 @@ where
     }
 
     writer.finalize()?;
+    Ok(())
+}
+
+/// Writes MySQL rows directly to JSON output using native type conversion.
+///
+/// Unlike [`write`] and [`write_with_pretty`] which operate on pre-stringified rows,
+/// this function accepts raw `mysql::Row` values and uses
+/// [`TypeTransformer::row_to_json`] to preserve native MySQL types (integers as JSON
+/// numbers, NULLs as JSON null, etc.).
+///
+/// # Arguments
+///
+/// * `rows` - A vector of MySQL rows from query execution.
+/// * `output` - A writer to output the JSON data.
+/// * `pretty` - Whether to format the JSON with pretty printing.
+///
+/// # Returns
+///
+/// A Result indicating success or failure.
+pub fn write_typed<W: Write>(rows: Vec<mysql::Row>, output: W, pretty: bool) -> anyhow::Result<()> {
+    let mut writer = BufWriter::with_capacity(64 * 1024, output);
+
+    if rows.is_empty() {
+        write!(writer, "{{\"data\":[]}}")?;
+        writer.flush()?;
+        return Ok(());
+    }
+
+    write!(writer, "{{\"data\":[")?;
+
+    for (i, row) in rows.into_iter().enumerate() {
+        if i > 0 {
+            write!(writer, ",")?;
+        }
+        let map = TypeTransformer::row_to_json(row)?;
+        if pretty {
+            serde_json::to_writer_pretty(&mut writer, &map)?;
+        } else {
+            serde_json::to_writer(&mut writer, &map)?;
+        }
+    }
+
+    write!(writer, "]}}")?;
+    writer.flush()?;
     Ok(())
 }
 
