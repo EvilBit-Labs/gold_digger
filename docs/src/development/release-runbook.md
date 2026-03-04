@@ -69,7 +69,8 @@ git commit -m "chore: prepare v1.0.0 release"
 
 ```bash
 # Test cargo-dist configuration
-cargo dist plan
+# Note: cargo-dist is installed as 'dist' binary via mise
+dist plan
 
 # Test release workflow locally (requires act)
 just act-release-dry v1.0.0-test
@@ -210,6 +211,19 @@ If some artifacts are missing:
 - [ ] Notify stakeholders of the release
 
 ## Configuration Reference
+
+### cargo-dist Binary
+
+The cargo-dist tool is installed via mise and runs as the `dist` binary (not `cargo dist`). Valid subcommands:
+
+- `dist init` - Initialize cargo-dist configuration
+- `dist plan` - Plan release artifacts (also validates configuration)
+- `dist build` - Build release artifacts locally
+- `dist generate` - Generate installer scripts
+- `dist manifest` - Generate manifest files
+- `dist host` - Host artifacts for distribution
+
+Note: There is no `dist check` subcommand. Use `dist plan` to validate configuration.
 
 ### dist-workspace.toml
 
