@@ -12,7 +12,7 @@ Gold Digger automatically converts all MySQL data types to string representation
 - **Integers** → String representation (`42` → `"42"`)
 - **Floats/Doubles** → String representation (`3.14` → `"3.14"`)
 - **Dates/Times** → ISO format strings (`2023-12-25 14:30:45.123456`)
-- **Binary data** → UTF-8 conversion (with lossy conversion for invalid UTF-8)
+- **Binary data** → UTF-8 string or hex encoding (`0x...`) for invalid UTF-8
 
 ### Special Value Handling
 
@@ -22,23 +22,25 @@ Gold Digger handles special floating-point values:
 - **Positive Infinity** → `"Infinity"`
 - **Negative Infinity** → `"-Infinity"`
 
-### JSON Output Type Inference
+### JSON Output Type Preservation
 
-When outputting to JSON format, Gold Digger attempts to preserve data types:
+When outputting to JSON format, Gold Digger preserves native MySQL types:
 
 ```json,ignore
 {
   "data": [
     {
-      "id": 123,           // Integer preserved
-      "price": 19.99,      // Float preserved
+      "id": 123,           // Integer preserved as JSON number
+      "price": 19.99,      // Float preserved as JSON number
       "name": "Product",   // String preserved
-      "active": true,      // Boolean preserved
+      "active": true,      // Boolean preserved (if represented as 1/0 in MySQL)
       "description": null  // NULL preserved as JSON null
     }
   ]
 }
 ```
+
+Dates and times are formatted as ISO-8601 strings in JSON output, with `T` separator for datetimes (`2023-12-25T14:30:45.123456`).
 
 ## Common Type Issues
 
@@ -71,12 +73,14 @@ SELECT id, value FROM mixed_data_table;
 
 **Problem**: Column contains binary data (BLOB, BINARY)
 
-**Solution**: Binary data is converted to UTF-8 with lossy conversion:
+**Solution**: Binary data is converted to UTF-8 if valid, otherwise hex-encoded:
 
 ```sql
 -- Binary columns are handled safely
 SELECT id, binary_data FROM files;
 ```
+
+Invalid UTF-8 bytes are encoded as `0x<hexstring>` (e.g., `0xfffefd`) to prevent data corruption. Large binary data (>1024 bytes) is truncated with indication: `0x<prefix>... (N bytes)`.
 
 ### Date and Time Formats
 
@@ -177,7 +181,7 @@ SELECT id, CAST(TRIM(price_string) AS DECIMAL(10,2)) as price FROM products;
 
 **Cause**: Binary column being converted to string
 
-**Solution**: Use SQL functions to handle binary data:
+**Solution**: Gold Digger automatically hex-encodes invalid UTF-8. For custom formats, use SQL functions:
 
 ```sql
 -- Convert binary to hex representation
@@ -203,11 +207,33 @@ SELECT id, DATE_FORMAT(created_at, '%d.%m.%Y') as created_date FROM events;
 
 ## Performance Considerations
 
-Gold Digger's type conversion is optimized for safety and performance:
+Gold Digger's type conversion uses the `TypeTransformer` API for safety and performance:
 
 - **Zero-copy string conversion** where possible
 - **Efficient NULL handling** without allocations
 - **Streaming-friendly design** for large result sets
-- **Memory-efficient** binary data handling
+- **Deterministic hex encoding** for binary data
 
-The safe type handling adds minimal overhead while preventing crashes and data corruption.
+The `TypeTransformer` implementation in `src/type_transformer.rs` provides the canonical safe MySQL value conversion, preventing crashes and data corruption with minimal overhead.
+
+## TypeTransformer API Reference
+
+Developers extending Gold Digger should use the `TypeTransformer` API:
+
+```rust
+use gold_digger::TypeTransformer;
+
+// Convert single value to string (CSV/TSV):
+let s: String = TypeTransformer::value_to_string(&value)?;
+
+// Convert single value to JSON:
+let json_value: serde_json::Value = TypeTransformer::value_to_json(&value);
+
+// Convert full row to Vec<String>:
+let strings: Vec<String> = TypeTransformer::row_to_strings(row)?;
+
+// Convert full row to JSON map (deterministic ordering):
+let map: BTreeMap<String, serde_json::Value> = TypeTransformer::row_to_json(row)?;
+```
+
+See `src/type_transformer.rs` for implementation details and safety guarantees.
