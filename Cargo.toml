@@ -198,7 +198,7 @@ tempfile = "3.26.0"
 testcontainers = { version = "0.27.1", features = ["blocking"] }
 testcontainers-modules = { version = "0.15.0", features = ["mariadb", "mysql", "blocking"] }
 time = { version = "0.3.47", features = ["macros"] }
-tokio = { version = "1.49.0", features = ["full"] }
+tokio = { version = "1.50.0", features = ["full"] }
 walkdir = "2.5.0"
 
 # Benchmarks for performance testing
