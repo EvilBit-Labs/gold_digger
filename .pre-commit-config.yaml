@@ -1,7 +1,7 @@
 # .pre-commit-config.yaml
 
 repos:
-    # 🧼 Standard code cleanup hooks (language agnostic)
+    # Standard code cleanup hooks (language agnostic)
     - repo: https://github.com/pre-commit/pre-commit-hooks
       rev: v6.0.0
       hooks:
@@ -11,11 +11,12 @@ repos:
           - id: check-merge-conflict
           - id: check-illegal-windows-names
           - id: check-json
+            types: [json]
           - id: check-toml
             types: [toml]
           - id: check-yaml
-            args: [--allow-multiple-documents]
             types: [yaml]
+            args: [--allow-multiple-documents]
           - id: check-xml
             types: [xml]
           - id: mixed-line-ending
@@ -33,13 +34,14 @@ repos:
           - id: cargo-check
             types: [rust, cargo, cargo-lock]
 
-    # 🧪 GitHub Actions validation
+    # GitHub Actions validation
     - repo: https://github.com/rhysd/actionlint
       rev: v1.7.11
       hooks:
           - id: actionlint
             files: ".github/workflows/"
-            exclude: ^.github/workflows/release.yml$ # cargo-dist generated
+            exclude: ^.github/workflows/release.yml$
+            types: [yaml]
 
     # 🐚 Shell script validation (local via mise, avoids Docker dependency)
     - repo: local
@@ -49,38 +51,26 @@ repos:
             entry: mise x -- shellcheck
             language: system
             types: [shell]
-            exclude: ^.github/workflows/release.yml$ # cargo-dist generated
-
-    # 📝 Commit message linting (commit-msg only, not blocking push)
-    - repo: https://github.com/commitizen-tools/commitizen
-      rev: v4.13.9
-      hooks:
-          - id: commitizen
-            stages: [commit-msg]
 
     - repo: https://github.com/bnjbvr/cargo-machete
       rev: v0.9.1
       hooks:
           - id: cargo-machete
-            types: [cargo]
 
-    # 📝 Markdown formatting and linting (temporarily disabled in CI due to path issues)
+    # Markdown formatting and linting (temporarily disabled due to rust code block formatting issues)
     - repo: https://github.com/hukkin/mdformat
-      rev: 0.7.22
+      rev: 1.0.0
       hooks:
           - id: mdformat
             additional_dependencies:
                 - mdformat-gfm
-                - mdformat-admon
                 - mdformat-config
                 - mdformat-footnote
                 - mdformat-front-matters
                 - mdformat-simple-breaks
-                - mdformat-tables
                 - mdformat-web
                 - mdformat-wikilink
                 - mdformat-gfm-alerts
-                - mdformat-rustfmt
                 - mdformat-toc
             types: [markdown]
 
@@ -95,7 +85,7 @@ repos:
             types: [cargo, cargo-lock]
 
     - repo: https://github.com/DevinR528/cargo-sort
-      rev: v2.0.2
+      rev: v2.1.0
       hooks:
           - id: cargo-sort
             types: [cargo]
