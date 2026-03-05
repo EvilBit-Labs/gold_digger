@@ -306,9 +306,8 @@ impl TypeTransformer {
                         .with_context(|| format!("Failed to convert column {} to string", i + 1))?;
                     values.push(s);
                 }
-                None => {
-                    anyhow::bail!("Unexpected missing value at column index {}", i);
-                }
+                // Within 0..row.len(), None indicates a SQL NULL
+                None => values.push(String::new()),
             }
         }
         Ok(values)

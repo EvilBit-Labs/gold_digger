@@ -90,13 +90,8 @@ pub fn rows_to_strings(rows: Vec<Row>) -> anyhow::Result<Vec<Vec<String>>> {
                         )));
                     }
                 },
-                None => {
-                    anyhow::bail!(
-                        "Unexpected missing value at row {} column index {}",
-                        row_index + 1,
-                        i
-                    );
-                }
+                // Within 0..row.len(), None indicates a SQL NULL
+                None => data_row.push(String::new()),
             }
         }
         result_rows.push(data_row);

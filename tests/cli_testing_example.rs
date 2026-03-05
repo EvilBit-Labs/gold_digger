@@ -144,7 +144,12 @@ fn test_environment_variables(
 #[rstest]
 fn test_snapshot_testing(cli_command: Command) -> Result<()> {
     let mut cmd = cli_command;
-    cmd.arg("--help");
+
+    // Clear env vars so clap does not embed their values in help output,
+    // which would make snapshots environment-dependent
+    cmd.env_remove("DATABASE_URL")
+        .env_remove("OUTPUT_FILE")
+        .arg("--help");
 
     let output = cmd.output()?;
     let stdout = String::from_utf8_lossy(&output.stdout);
