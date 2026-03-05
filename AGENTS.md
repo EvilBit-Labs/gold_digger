@@ -37,6 +37,13 @@ Always consult these files in order when working with this codebase:
 
 ## Build/Lint/Test Commands
 
+### Testing Gotchas
+
+- **assert_cmd**: `Command::cargo_bin()` is deprecated; use `cargo::cargo_bin_cmd!("gold_digger")` macro instead
+- **Clap env var leakage**: `#[arg(env = "...")]` reads real env vars at parse time; wrap `Cli::parse_from` inside `temp_env::with_var` blocks, not just the function under test
+- **Insta snapshots**: Update with `INSTA_UPDATE=always cargo test --test <test_name>`; `cargo insta review --accept` is not valid
+- **Env isolation in integration tests**: Always use `.env_remove("DATABASE_URL")` etc. on `Command` to prevent user shell env leakage
+
 ### Tool Management
 
 All dev tools are managed via `mise.toml`. Commands in justfile use `{{ mise_exec }}` prefix.

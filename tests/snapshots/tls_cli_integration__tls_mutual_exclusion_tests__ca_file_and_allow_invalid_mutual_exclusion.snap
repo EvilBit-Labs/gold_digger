@@ -4,6 +4,6 @@ expression: stderr
 ---
 error: the argument '--tls-ca-file <TLS_CA_FILE>' cannot be used with '--allow-invalid-certificate'
 
-Usage: gold_digger --tls-ca-file <TLS_CA_FILE> --db-url <DB_URL> --query <QUERY> --output <OUTPUT>
+Usage: gold_digger --tls-ca-file <TLS_CA_FILE> --db-url <URL> --query <SQL> --output <FILE>
 
 For more information, try '--help'.

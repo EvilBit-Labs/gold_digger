@@ -49,9 +49,9 @@ pub fn map_error_to_exit_code(error: &Error) -> i32 {
     }
 
     if error_string.contains("missing")
-        || error_string.contains("invalid")
+        || (error_string.contains("invalid")
             && !error_string.contains("invalid certificate format")
-            && !error_string.contains("type conversion")
+            && !error_string.contains("type conversion"))
         || error_string.contains("configuration")
         || error_string.contains("mutually exclusive")
         || error_string.contains("tls feature not enabled")
@@ -103,7 +103,7 @@ pub fn map_error_to_exit_code(error: &Error) -> i32 {
 /// * `message` - Optional success message to print before exiting
 pub fn exit_success(message: Option<&str>) -> ! {
     if let Some(msg) = message {
-        println!("{}", msg);
+        eprintln!("{}", msg);
     }
     process::exit(EXIT_SUCCESS);
 }

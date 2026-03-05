@@ -11,16 +11,16 @@ Commands:
   help        Print this message or the help of the given subcommand(s)
 
 Options:
-      --db-url <DB_URL>                Database connection URL [env: DATABASE_URL=]
-  -q, --query <QUERY>                  SQL query string
-      --query-file <QUERY_FILE>        File containing SQL query
-  -o, --output <OUTPUT>                Output file path [env: OUTPUT_FILE=]
-      --format <FORMAT>                Output format override [possible values: csv, json, tsv]
-  -v, --verbose...                     Enable verbose logging
+      --db-url <URL>                   Database connection URL (mysql://user:pass@host:port/db) [env: DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:54322/postgres]
+  -q, --query <SQL>                    SQL query string to execute
+      --query-file <FILE>              File containing SQL query to execute
+  -o, --output <FILE>                  Output file path (format inferred from extension: .csv, .json, .tsv) [env: OUTPUT_FILE=]
+  -f, --format <FORMAT>                Output format override (ignores file extension) [possible values: csv, json, tsv]
+  -v, --verbose...                     Enable verbose logging (-v for info, -vv for debug)
       --quiet                          Suppress all output except errors
-      --pretty                         Pretty-print JSON output
+  -p, --pretty                         Pretty-print output (only applies to JSON format)
       --allow-empty                    Exit successfully on empty result sets
-      --dump-config                    Print current configuration as JSON
+      --dump-config                    Print current configuration as JSON and exit
       --tls-ca-file <TLS_CA_FILE>      Path to CA certificate file for trust anchor pinning
       --insecure-skip-hostname-verify  Skip hostname verification (keeps chain and time validation)
       --allow-invalid-certificate      Disable certificate validation entirely (DANGEROUS)

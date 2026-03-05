@@ -166,11 +166,11 @@ id  name email created_at
 
 Different formats handle database NULL values differently:
 
-| Format | NULL Representation | Example                              |
-| ------ | ------------------- | ------------------------------------ |
-| CSV    | Empty string        | `1,John,,2024-01-15`                 |
+| Format | NULL Representation | Example                               |
+| ------ | ------------------- | ------------------------------------- |
+| CSV    | Empty string        | `1,John,,2024-01-15`                  |
 | JSON   | JSON `null`         | `{"id":1,"name":"John","email":null}` |
-| TSV    | Empty string        | `1 John  2024-01-15`                 |
+| TSV    | Empty string        | `1 John  2024-01-15`                  |
 
 ## Type Safety and Data Conversion
 
@@ -188,14 +188,14 @@ FROM products;
 
 ### Type Conversion Rules
 
-| MySQL Type         | CSV/TSV Output        | JSON Output                                  | NULL Handling         |
-| ------------------ | --------------------- | -------------------------------------------- | --------------------- |
-| `INT`, `BIGINT`    | String representation | Number                                       | Empty string / `null` |
-| `DECIMAL`, `FLOAT` | String representation | Number (or String for NaN/Infinity)          | Empty string / `null` |
-| `VARCHAR`, `TEXT`  | Direct string         | String                                       | Empty string / `null` |
-| `DATE`, `DATETIME` | ISO format string     | ISO-8601 string (with `T` separator)         | Empty string / `null` |
-| `BOOLEAN`          | "0" or "1"            | Number (0 or 1)                              | Empty string / `null` |
-| `NULL`             | Empty string          | `null`                                       | Always handled safely |
+| MySQL Type         | CSV/TSV Output        | JSON Output                          | NULL Handling         |
+| ------------------ | --------------------- | ------------------------------------ | --------------------- |
+| `INT`, `BIGINT`    | String representation | Number                               | Empty string / `null` |
+| `DECIMAL`, `FLOAT` | String representation | Number (or String for NaN/Infinity)  | Empty string / `null` |
+| `VARCHAR`, `TEXT`  | Direct string         | String                               | Empty string / `null` |
+| `DATE`, `DATETIME` | ISO format string     | ISO-8601 string (with `T` separator) | Empty string / `null` |
+| `BOOLEAN`          | "0" or "1"            | Number (0 or 1)                      | Empty string / `null` |
+| `NULL`             | Empty string          | `null`                               | Always handled safely |
 
 ### JSON Type Preservation
 

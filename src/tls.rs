@@ -461,16 +461,16 @@ pub fn create_tls_connection(
                 if verbose {
                     match config.validation_mode() {
                         TlsValidationMode::Platform => {
-                            eprintln!("🔒 TLS: Using platform certificate store");
+                            eprintln!("[TLS] Using platform certificate store");
                         }
                         TlsValidationMode::CustomCa { ca_file_path } => {
-                            eprintln!("🔒 TLS: Using custom CA file: {}", ca_file_path.display());
+                            eprintln!("[TLS] Using custom CA file: {}", ca_file_path.display());
                         }
                         TlsValidationMode::SkipHostnameVerification => {
-                            eprintln!("⚠️  TLS: Hostname verification disabled");
+                            eprintln!("[WARNING] TLS: Hostname verification disabled");
                         }
                         TlsValidationMode::AcceptInvalid => {
-                            eprintln!("🚨 TLS: Certificate validation disabled (DANGEROUS)");
+                            eprintln!("[DANGER] TLS: Certificate validation disabled");
                         }
                     }
                 }
@@ -493,7 +493,7 @@ pub fn create_tls_connection(
 
         if verbose {
             eprintln!(
-                "🔒 TLS: Using explicit configuration (platform certificates, hostname verification enabled)"
+                "[TLS] Using explicit configuration (platform certificates, hostname verification enabled)"
             );
         }
     }
@@ -695,12 +695,12 @@ impl TlsConfig {
         match &self.validation_mode {
             TlsValidationMode::SkipHostnameVerification => {
                 eprintln!(
-                    "⚠️  WARNING: Hostname verification disabled. Connection is vulnerable to man-in-the-middle attacks."
+                    "[WARNING] Hostname verification disabled. Connection is vulnerable to man-in-the-middle attacks."
                 );
                 eprintln!("   Only use this option if you understand the security implications.");
             }
             TlsValidationMode::AcceptInvalid => {
-                eprintln!("🚨 DANGER: Certificate validation completely disabled!");
+                eprintln!("[DANGER] Certificate validation completely disabled!");
                 eprintln!(
                     "   This connection provides NO security against man-in-the-middle attacks."
                 );

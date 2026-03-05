@@ -41,27 +41,6 @@ pub trait FormatWriter {
     fn finalize(self) -> Result<()>;
 }
 
-/// Trait for streaming data processing (future enhancement)
-///
-/// This trait will enable memory-efficient processing of large result sets
-/// by processing rows one at a time instead of loading everything into memory.
-pub trait StreamingProcessor {
-    type Item;
-    type Error;
-
-    /// Process a single item from the stream
-    fn process_item(&mut self, item: Self::Item) -> std::result::Result<(), Self::Error>;
-
-    /// Finalize the streaming operation
-    fn finalize(self) -> std::result::Result<(), Self::Error>;
-}
-
-// TODO: Implement RowStream with correct QueryResult type signature
-// pub struct RowStream<'a> {
-//     result: mysql::QueryResult<'a>,
-//     columns: Vec<Column>,
-// }
-
 /// Converts MySQL rows to a vector of string vectors, with the first row as headers.
 ///
 /// This function safely handles all MySQL data types including NULL values without panicking.

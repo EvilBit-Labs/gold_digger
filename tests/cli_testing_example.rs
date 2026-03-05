@@ -88,6 +88,11 @@ fn test_predicate_validation(cli_command: Command) -> Result<()> {
 fn test_error_scenario(cli_command: Command) -> Result<()> {
     let mut cmd = cli_command;
 
+    // Clear env vars to ensure we test the missing-config path
+    cmd.env_remove("DATABASE_URL")
+        .env_remove("DATABASE_QUERY")
+        .env_remove("OUTPUT_FILE");
+
     cmd.assert().failure().stderr(
         predicate::str::contains("Missing database URL").or(predicate::str::contains("required")),
     );

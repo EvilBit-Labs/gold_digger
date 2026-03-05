@@ -3,7 +3,7 @@ name = "gold_digger"
 version = "0.2.6"
 edition = "2024"
 authors = ["UncleSp1d3r <unclesp1d3r@evilbitlabs.io>"]
-description = "A simple MySQL/MariaDB query tool that accepts parameters as environmental variables."
+description = "A MySQL/MariaDB query tool with structured output (CSV, JSON, TSV) and rustls TLS"
 readme = "README.md"
 repository = "https://github.com/EvilBit-Labs/gold_digger"
 homepage = "https://evilbitlabs.io/gold_digger/"
@@ -217,6 +217,10 @@ harness = false
 [[bench]]
 name = "memory_usage"
 harness = false
+
+[profile.release]
+strip = true
+codegen-units = 1
 
 # The profile that 'dist' will build with
 [profile.dist]

@@ -18,6 +18,7 @@ thread 'main' panicked at 'called `Result::unwrap()` on an `Err` value'
 ```
 
 **Current Status**: TypeTransformer handles NULL values gracefully:
+
 - `TypeTransformer::value_to_string` converts NULL to an empty string (for CSV/TSV output)
 - `TypeTransformer::value_to_json` converts NULL to JSON `null` (for JSON output)
 
@@ -33,6 +34,7 @@ SELECT id, name, created_at FROM users;
 **Historical Problem**: Numeric, date, or binary columns could cause conversion errors.
 
 **Current Status**: TypeTransformer safely handles all MySQL value types:
+
 - Integers (`INT`, `BIGINT`, `UNSIGNED`) convert to numbers (JSON) or strings (CSV/TSV)
 - Floats and doubles handle special values (`NaN`, `Infinity`) as strings
 - Date and time values format to ISO-8601 strings
@@ -229,5 +231,6 @@ If you encounter type conversion errors despite TypeTransformer's safety guarant
 5. Note the MySQL server version and any non-standard data types
 
 TypeTransformer handles all standard MySQL value types. Errors typically indicate:
+
 - Invalid date/time component values in the database (e.g., month > 12)
 - Custom or vendor-specific MySQL extensions not covered by the `mysql` crate

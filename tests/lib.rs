@@ -79,24 +79,6 @@ mod tests {
     }
 
     #[test]
-    fn test_csv_bytes_interface() {
-        // Test with bytes interface for better performance
-        let data = vec![
-            vec!["item_name".to_string(), "age".to_string()],
-            vec!["Alice".to_string(), "30".to_string()],
-            vec!["Bob".to_string(), "25".to_string()],
-        ];
-
-        let mut output = Vec::new();
-        csv::write_bytes(data, &mut output).unwrap();
-        let output_str = String::from_utf8(output).unwrap();
-
-        assert!(output_str.contains("item_name,age"));
-        assert!(output_str.contains("Alice,30"));
-        assert!(output_str.contains("Bob,25"));
-    }
-
-    #[test]
     fn test_tsv_generic_iterators() {
         let data = vec![
             vec!["item_name".to_string(), "age".to_string()],

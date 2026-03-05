@@ -54,6 +54,10 @@ fn main() {
         Err(e) => exit_with_error(e, Some("Output file resolution failed")),
     };
 
+    if cli.verbose > 0 && !cli.quiet {
+        eprintln!("Connecting to database...");
+    }
+
     let pool = match create_database_connection(&database_url, &cli) {
         Ok(pool) => pool,
         Err(e) => exit_with_error(
@@ -66,18 +70,14 @@ fn main() {
         Err(e) => exit_with_error(anyhow::anyhow!("Database connection failed: {}", e), None),
     };
 
-    if cli.verbose > 0 && !cli.quiet {
-        println!("Connecting to database...");
-    }
-
     let result: Vec<mysql::Row> = match conn.query(&database_query) {
         Ok(result) => result,
         Err(e) => {
             // Structured error matching on mysql::Error variants
-            let (context, _should_show_details) = match &e {
+            let context = match &e {
                 mysql::Error::MySqlError(mysql_err) => {
                     // Map known MySQL error codes to contextual messages
-                    let context = match mysql_err.code {
+                    match mysql_err.code {
                         1064 => "SQL syntax error in query", // ER_PARSE_ERROR
                         1146 => "Table does not exist",      // ER_NO_SUCH_TABLE
                         1054 => "Column does not exist or is ambiguous", // ER_BAD_FIELD_ERROR
@@ -91,31 +91,23 @@ fn main() {
                         2006 => "Connection lost - server has gone away", // CR_SERVER_GONE_ERROR
                         2013 => "Connection lost during query",   // CR_SERVER_LOST
                         _ => "Query execution failed",
-                    };
-                    (context, true)
+                    }
                 }
-                mysql::Error::IoError(_) => ("Network I/O error during query execution", false),
-                mysql::Error::UrlError(_) => ("Invalid database URL format", false),
-                mysql::Error::DriverError(_) => ("Database driver error", false),
-                _ => ("Query execution failed", false),
+                mysql::Error::IoError(_) => "Network I/O error during query execution",
+                mysql::Error::UrlError(_) => "Invalid database URL format",
+                mysql::Error::DriverError(_) => "Database driver error",
+                _ => "Query execution failed",
             };
 
-            // Create error message with appropriate level of detail
-            let error_message = if cli.verbose > 0 && _should_show_details {
-                format!("{}: {}", context, redact_sql_error(&e.to_string()))
-            } else {
-                context.to_string()
-            };
+            // Always include redacted error detail so users can diagnose issues
+            let error_message = format!("{}: {}", context, redact_sql_error(&e.to_string()));
 
-            exit_with_error(
-                anyhow::anyhow!("{}", error_message),
-                Some("Database query failed"),
-            );
+            exit_with_error(anyhow::anyhow!("{}", error_message), None);
         }
     };
 
     if cli.verbose > 0 && !cli.quiet {
-        println!(
+        eprintln!(
             "Outputting {} records to {}.",
             result.len(),
             output_file.display()
@@ -125,7 +117,7 @@ fn main() {
     if result.is_empty() {
         if cli.allow_empty {
             if cli.verbose > 0 && !cli.quiet {
-                println!("No records found in database, but --allow-empty is set.");
+                eprintln!("No records found in database, but --allow-empty is set.");
             }
             let empty_rows: Vec<mysql::Row> = vec![];
             if let Err(e) = write_output(empty_rows, output_file.as_path(), &cli) {
@@ -133,9 +125,13 @@ fn main() {
             }
         } else {
             if cli.verbose > 0 && !cli.quiet {
-                println!("No records found in database.");
+                eprintln!("No records found in database.");
             }
-            exit_no_rows(Some("No records found in database"));
+            if cli.quiet {
+                exit_no_rows(None);
+            } else {
+                exit_no_rows(Some("No records found in database"));
+            }
         }
     } else if let Err(e) = write_output(result, output_file.as_path(), &cli) {
         exit_with_error(e, Some("Output writing failed"));
@@ -443,16 +439,15 @@ mod tests {
 
     #[test]
     fn test_resolve_database_url_from_env() {
-        let cli = Cli::parse_from([
-            "gold_digger",
-            "--query",
-            "SELECT 1",
-            "--output",
-            "test.json",
-        ]);
-
-        // Set environment variable using temp_env
+        // Parse inside temp_env so clap picks up our env var, not the user's
         temp_env::with_var("DATABASE_URL", Some("mysql://env_test"), || {
+            let cli = Cli::parse_from([
+                "gold_digger",
+                "--query",
+                "SELECT 1",
+                "--output",
+                "test.json",
+            ]);
             let result = resolve_database_url(&cli);
             assert!(result.is_ok());
             assert_eq!(result.unwrap(), "mysql://env_test");
@@ -461,16 +456,15 @@ mod tests {
 
     #[test]
     fn test_resolve_database_url_missing() {
-        let cli = Cli::parse_from([
-            "gold_digger",
-            "--query",
-            "SELECT 1",
-            "--output",
-            "test.json",
-        ]);
-
-        // Ensure env var is not set using temp_env
+        // Parse inside temp_env so clap does not pick up the user's env var
         temp_env::with_var("DATABASE_URL", None::<&str>, || {
+            let cli = Cli::parse_from([
+                "gold_digger",
+                "--query",
+                "SELECT 1",
+                "--output",
+                "test.json",
+            ]);
             let result = resolve_database_url(&cli);
             assert!(result.is_err());
             assert!(
