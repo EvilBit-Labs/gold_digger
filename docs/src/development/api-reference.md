@@ -10,13 +10,25 @@ The complete API documentation is available in the [rustdoc section](../api/gold
 
 ### Core Functions
 
-- [`rows_to_strings()`](../api/gold_digger/fn.rows_to_strings.html) - Convert database rows to string vectors
+- [`rows_to_strings()`](../api/gold_digger/fn.rows_to_strings.html) - Convert database rows to string vectors (delegates to `TypeTransformer` internally)
 - [`get_extension_from_filename()`](../api/gold_digger/fn.get_extension_from_filename.html) - Extract file extensions for format detection
+
+### TypeTransformer
+
+- [`TypeTransformer`](../api/gold_digger/struct.TypeTransformer.html) - Canonical hub for safe MySQL value conversion
+
+#### Associated Functions
+
+- [`TypeTransformer::value_to_string()`](../api/gold_digger/struct.TypeTransformer.html#method.value_to_string) - Convert `mysql::Value` to `String` for CSV/TSV output. Returns error for invalid date/time values.
+- [`TypeTransformer::value_to_json()`](../api/gold_digger/struct.TypeTransformer.html#method.value_to_json) - Convert `mysql::Value` to `serde_json::Value` for JSON output. Returns error for invalid date/time values.
+- [`TypeTransformer::row_to_strings()`](../api/gold_digger/struct.TypeTransformer.html#method.row_to_strings) - Convert entire row to vector of strings.
+- [`TypeTransformer::row_to_json()`](../api/gold_digger/struct.TypeTransformer.html#method.row_to_json) - Convert entire row to JSON object with deterministic key ordering (`BTreeMap`).
 
 ### Output Modules
 
 - [`csv::write()`](../api/gold_digger/csv/fn.write.html) - CSV output generation
 - [`json::write()`](../api/gold_digger/json/fn.write.html) - JSON output generation
+- [`json::write_typed()`](../api/gold_digger/json/fn.write_typed.html) - JSON output with native type conversion (requires `json` feature)
 - [`tab::write()`](../api/gold_digger/tab/fn.write.html) - TSV output generation
 
 ### CLI Interface
@@ -43,6 +55,41 @@ fn example() -> anyhow::Result<()> {
 }
 ```
 
+### Using TypeTransformer for Value Conversion
+
+```rust
+use gold_digger::TypeTransformer;
+use mysql::Value;
+
+fn convert_value(value: &Value) -> anyhow::Result<()> {
+    // Convert to string for CSV/TSV output
+    let s = TypeTransformer::value_to_string(value)?;
+    println!("String: {}", s);
+
+    // Convert to JSON value
+    let json = TypeTransformer::value_to_json(value)?;
+    println!("JSON: {}", serde_json::to_string(&json)?);
+
+    Ok(())
+}
+```
+
+### Using JSON with Native Types
+
+```rust
+#[cfg(feature = "json")]
+use gold_digger::write_typed;
+use mysql::{Pool, Row};
+use std::fs::File;
+
+fn example_json() -> anyhow::Result<()> {
+    let rows: Vec<Row> = vec![]; // query results
+    let output = File::create("output.json")?;
+    write_typed(rows, output, false)?;
+    Ok(())
+}
+```
+
 ### Custom Format Implementation
 
 ```rust,ignore
@@ -64,6 +111,19 @@ Key types used throughout the codebase:
 - `Vec<Vec<String>>` - Standard row format for output modules
 - `anyhow::Result<T>` - Error handling pattern
 - `mysql::Row` - Database result row type
+- `mysql::Value` - MySQL value type (used by `TypeTransformer`)
+- `serde_json::Value` - JSON value type (output of `TypeTransformer::value_to_json`)
+- `BTreeMap<String, serde_json::Value>` - JSON object with deterministic key ordering (output of `TypeTransformer::row_to_json`)
+
+## Safety Guarantees
+
+`TypeTransformer` provides the following safety guarantees for MySQL value conversion:
+
+- **NULL handling**: NULL values convert to empty strings (CSV/TSV) or `serde_json::Value::Null` (JSON)
+- **Invalid UTF-8**: Binary data that is not valid UTF-8 is hex-encoded instead of causing panics (e.g., `0xfffefd`)
+- **Special floats**: NaN and Infinity values are represented as strings (`"NaN"`, `"Infinity"`, `"-Infinity"`)
+- **Date/time validation**: Date and time components are validated before formatting; invalid values return errors for both `value_to_string` and `value_to_json`
+- **Deterministic output**: JSON objects use `BTreeMap` for alphabetical key ordering
 
 ## Error Handling
 

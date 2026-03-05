@@ -7,27 +7,27 @@ use std::path::PathBuf;
 #[command(about = "A MySQL/MariaDB query tool that exports results to structured data files")]
 #[command(version)]
 pub struct Cli {
-    /// Database connection URL
-    #[arg(long, env = "DATABASE_URL")]
+    /// Database connection URL (mysql://user:pass@host:port/db)
+    #[arg(long, env = "DATABASE_URL", value_name = "URL")]
     pub db_url: Option<String>,
 
-    /// SQL query string
-    #[arg(short = 'q', long, conflicts_with = "query_file")]
+    /// SQL query string to execute
+    #[arg(short = 'q', long, conflicts_with = "query_file", value_name = "SQL")]
     pub query: Option<String>,
 
-    /// File containing SQL query
-    #[arg(long, conflicts_with = "query")]
+    /// File containing SQL query to execute
+    #[arg(long, conflicts_with = "query", value_name = "FILE")]
     pub query_file: Option<PathBuf>,
 
-    /// Output file path
-    #[arg(short, long, env = "OUTPUT_FILE")]
+    /// Output file path (format inferred from extension: .csv, .json, .tsv)
+    #[arg(short, long, env = "OUTPUT_FILE", value_name = "FILE")]
     pub output: Option<PathBuf>,
 
-    /// Output format override
-    #[arg(long, value_enum)]
+    /// Output format override (ignores file extension)
+    #[arg(short = 'f', long, value_enum, value_name = "FORMAT")]
     pub format: Option<OutputFormat>,
 
-    /// Enable verbose logging
+    /// Enable verbose logging (-v for info, -vv for debug)
     #[arg(short, long, action = clap::ArgAction::Count)]
     pub verbose: u8,
 
@@ -35,15 +35,15 @@ pub struct Cli {
     #[arg(long, conflicts_with = "verbose")]
     pub quiet: bool,
 
-    /// Pretty-print JSON output
-    #[arg(long)]
+    /// Pretty-print output (only applies to JSON format)
+    #[arg(short = 'p', long)]
     pub pretty: bool,
 
     /// Exit successfully on empty result sets
     #[arg(long)]
     pub allow_empty: bool,
 
-    /// Print current configuration as JSON
+    /// Print current configuration as JSON and exit
     #[arg(long)]
     pub dump_config: bool,
 

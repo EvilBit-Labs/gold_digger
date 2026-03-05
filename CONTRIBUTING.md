@@ -252,10 +252,10 @@ For detailed release process documentation, see the [Release Runbook](docs/src/d
 just act-release-dry v1.0.0-test
 
 # Plan cargo-dist release
-cargo dist plan
+dist plan
 
 # Build artifacts locally
-cargo dist build
+dist build
 ```
 
 ##### Testing Recommendations

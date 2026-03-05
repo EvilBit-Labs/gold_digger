@@ -78,16 +78,16 @@ Fields are quoted only when they contain:
 {
   "data": [
     {
-      "id": "1",
+      "id": 1,
       "name": "John Doe",
       "email": "john@example.com",
-      "created_at": "2024-01-15 10:30:00"
+      "created_at": "2024-01-15T10:30:00.000000"
     },
     {
-      "id": "2",
+      "id": 2,
       "name": "Jane Smith",
       "email": "jane@example.com",
-      "created_at": "2024-01-16 14:22:33"
+      "created_at": "2024-01-16T14:22:33.000000"
     }
   ]
 }
@@ -99,15 +99,15 @@ Fields are quoted only when they contain:
 {
   "data": [
     {
-      "created_at": "2024-01-15 10:30:00",
+      "created_at": "2024-01-15T10:30:00.000000",
       "email": "john@example.com",
-      "id": "1",
+      "id": 1,
       "name": "John Doe"
     },
     {
-      "created_at": "2024-01-16 14:22:33",
+      "created_at": "2024-01-16T14:22:33.000000",
       "email": "jane@example.com",
-      "id": "2",
+      "id": 2,
       "name": "Jane Smith"
     }
   ]
@@ -118,7 +118,7 @@ Fields are quoted only when they contain:
 
 - **API integration** and web services
 - **Complex data structures** with nested objects
-- **Type preservation** (though Gold Digger converts all to strings)
+- **Native type preservation** for numeric and boolean types
 - **Modern applications** expecting JSON input
 
 ### JSON Features
@@ -126,6 +126,7 @@ Fields are quoted only when they contain:
 - **Deterministic ordering**: Keys are always in the same order
 - **NULL safety**: Database NULL values become JSON `null`
 - **Unicode support**: Full UTF-8 character support
+- **Native type preservation**: `TypeTransformer::value_to_json` maps MySQL integers and floats to JSON numbers, NULL to JSON `null`, and dates/times to ISO-8601 strings
 
 ## TSV Format
 
@@ -165,11 +166,11 @@ id  name email created_at
 
 Different formats handle database NULL values differently:
 
-| Format | NULL Representation | Example                                 |
-| ------ | ------------------- | --------------------------------------- |
-| CSV    | Empty string        | `1,John,,2024-01-15`                    |
-| JSON   | JSON `null`         | `{"id":"1","name":"John","email":null}` |
-| TSV    | Empty string        | `1 John  2024-01-15`                    |
+| Format | NULL Representation | Example                               |
+| ------ | ------------------- | ------------------------------------- |
+| CSV    | Empty string        | `1,John,,2024-01-15`                  |
+| JSON   | JSON `null`         | `{"id":1,"name":"John","email":null}` |
+| TSV    | Empty string        | `1 John  2024-01-15`                  |
 
 ## Type Safety and Data Conversion
 
@@ -187,28 +188,29 @@ FROM products;
 
 ### Type Conversion Rules
 
-| MySQL Type         | CSV/TSV Output        | JSON Output                        | NULL Handling         |
-| ------------------ | --------------------- | ---------------------------------- | --------------------- |
-| `INT`, `BIGINT`    | String representation | Number (if valid)                  | Empty string / `null` |
-| `DECIMAL`, `FLOAT` | String representation | Number (if valid)                  | Empty string / `null` |
-| `VARCHAR`, `TEXT`  | Direct string         | String                             | Empty string / `null` |
-| `DATE`, `DATETIME` | ISO format string     | String                             | Empty string / `null` |
-| `BOOLEAN`          | "0" or "1"            | `true`/`false` (if "true"/"false") | Empty string / `null` |
-| `NULL`             | Empty string          | `null`                             | Always handled safely |
+| MySQL Type         | CSV/TSV Output        | JSON Output                          | NULL Handling         |
+| ------------------ | --------------------- | ------------------------------------ | --------------------- |
+| `INT`, `BIGINT`    | String representation | Number                               | Empty string / `null` |
+| `DECIMAL`, `FLOAT` | String representation | Number (or String for NaN/Infinity)  | Empty string / `null` |
+| `VARCHAR`, `TEXT`  | Direct string         | String                               | Empty string / `null` |
+| `DATE`, `DATETIME` | ISO format string     | ISO-8601 string (with `T` separator) | Empty string / `null` |
+| `BOOLEAN`          | "0" or "1"            | Number (0 or 1)                      | Empty string / `null` |
+| `NULL`             | Empty string          | `null`                               | Always handled safely |
 
-### JSON Type Inference
+### JSON Type Preservation
 
-When outputting to JSON, Gold Digger attempts to preserve appropriate data types:
+JSON output preserves native MySQL types via `TypeTransformer::value_to_json`:
 
 ```json
 {
   "data": [
     {
-      "id": 123,           // Integer preserved
-      "price": 19.99,      // Float preserved  
+      "id": 123,           // Integer preserved as JSON number
+      "price": 19.99,      // Float preserved as JSON number
       "name": "Product",   // String preserved
-      "active": true,      // Boolean inferred
-      "description": null  // NULL preserved
+      "active": 1,         // Boolean as number (0 or 1)
+      "description": null, // NULL preserved as JSON null
+      "created_at": "2024-01-15T10:30:00.000000"  // Datetime as ISO-8601 string
     }
   ]
 }
@@ -277,7 +279,7 @@ gold_digger \
 ```bash
 # Generate JSON for API consumption
 gold_digger \
-  --query "SELECT CAST(id AS CHAR) as id, name, email FROM users" \
+  --query "SELECT id, name, email FROM users" \
   --output users.json \
   --pretty
 ```
@@ -305,8 +307,8 @@ cut -f2 users.tsv | sort | uniq -c
 
 **Invalid JSON:**
 
-- Ensure all columns are properly cast
 - Check for NULL handling issues
+- Verify numeric types are properly converted
 
 **TSV parsing errors:**
 

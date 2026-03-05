@@ -1,0 +1,5 @@
+---
+source: tests/type_transformer_snapshots.rs
+expression: error_msg
+---
+Type conversion error: Invalid month value 13 in date

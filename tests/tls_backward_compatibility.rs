@@ -1125,6 +1125,11 @@ mod integration_compatibility_tests {
     fn test_cli_help_snapshot() {
         #[allow(deprecated)]
         let mut cmd = Command::cargo_bin("gold_digger").unwrap();
+
+        // Clear env vars so clap does not embed their values in help output,
+        // which would make snapshots environment-dependent
+        cmd.env_remove("DATABASE_URL").env_remove("OUTPUT_FILE");
+
         let output = cmd.arg("--help").output().unwrap();
 
         let stdout = String::from_utf8_lossy(&output.stdout);

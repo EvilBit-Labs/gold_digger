@@ -4,6 +4,6 @@ expression: stderr
 ---
 error: the argument '--insecure-skip-hostname-verify' cannot be used with '--allow-invalid-certificate'
 
-Usage: gold_digger --insecure-skip-hostname-verify --db-url <DB_URL> --query <QUERY> --output <OUTPUT>
+Usage: gold_digger --insecure-skip-hostname-verify --db-url <URL> --query <SQL> --output <FILE>
 
 For more information, try '--help'.

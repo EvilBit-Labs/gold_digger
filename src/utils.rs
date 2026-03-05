@@ -1,10 +1,50 @@
 /// Utility functions for the gold_digger application
+use std::sync::OnceLock;
+
 use regex::Regex;
+
+/// Pre-compiled redaction patterns for sensitive information in error messages.
+/// Each entry is a (pattern, replacement) tuple compiled once on first use.
+static REDACTION_PATTERNS: OnceLock<Vec<(Regex, &'static str)>> = OnceLock::new();
+
+/// Returns the pre-compiled redaction regex patterns, initializing them on
+/// first call.
+fn get_redaction_patterns() -> &'static Vec<(Regex, &'static str)> {
+    REDACTION_PATTERNS.get_or_init(|| {
+        let pattern_defs: &[(&str, &str)] = &[
+            (r"(?i)password\s*[=:]\s*\S+", "***REDACTED***"),
+            (r"(?i)identified\s+by\s+\S+", "***REDACTED***"),
+            (r"(?i)token\s*[=:]\s*\S+", "***REDACTED***"),
+            (r"(?i)token\s+\S+", "***REDACTED***"),
+            (r"(?i)api[_-]?key\s*[=:]\s*\S+", "***REDACTED***"),
+            (r"(?i)secret\s*[=:]\s*\S+", "***REDACTED***"),
+            (r"(?i)secret\s+\S+", "***REDACTED***"),
+            (r"(?i)://[^:]+:[^@]+@", "://***:***@"),
+        ];
+
+        pattern_defs
+            .iter()
+            .filter_map(|(pattern, replacement)| match Regex::new(pattern) {
+                Ok(re) => Some((re, *replacement)),
+                Err(_e) => {
+                    #[cfg(debug_assertions)]
+                    eprintln!(
+                        "Warning: Failed to compile regex pattern '{}': {}",
+                        pattern, _e
+                    );
+                    None
+                }
+            })
+            .collect()
+    })
+}
 
 /// Redacts sensitive information from SQL error messages
 ///
-/// This function uses regex patterns to identify and replace sensitive information
-/// such as passwords, tokens, API keys, and secrets with redaction markers.
+/// This function uses pre-compiled regex patterns to identify and replace
+/// sensitive information such as passwords, tokens, API keys, and secrets
+/// with redaction markers. Patterns are compiled once on first call using
+/// `OnceLock` for thread-safe lazy initialization.
 ///
 /// # Arguments
 /// * `message` - The error message to redact
@@ -24,37 +64,8 @@ use regex::Regex;
 pub fn redact_sql_error(message: &str) -> String {
     let mut redacted = message.to_string();
 
-    // Define patterns for sensitive information (case-insensitive)
-    let patterns = [
-        // Password patterns - using simpler regex to avoid character class issues
-        (r"(?i)password\s*[=:]\s*\S+", "***REDACTED***"),
-        (r"(?i)identified\s+by\s+\S+", "***REDACTED***"),
-        // Token patterns - handle both "token=value" and "token value" formats
-        (r"(?i)token\s*[=:]\s*\S+", "***REDACTED***"),
-        (r"(?i)token\s+\S+", "***REDACTED***"),
-        // API key patterns
-        (r"(?i)api[_-]?key\s*[=:]\s*\S+", "***REDACTED***"),
-        // Secret patterns - handle both "secret=value" and "secret value" formats
-        (r"(?i)secret\s*[=:]\s*\S+", "***REDACTED***"),
-        (r"(?i)secret\s+\S+", "***REDACTED***"),
-        // Connection string passwords
-        (r"(?i)://[^:]+:[^@]+@", "://***:***@"),
-    ];
-
-    for (pattern, replacement) in &patterns {
-        match Regex::new(pattern) {
-            Ok(re) => {
-                redacted = re.replace_all(&redacted, *replacement).to_string();
-            }
-            Err(_e) => {
-                // Log regex compilation errors in debug builds for development
-                #[cfg(debug_assertions)]
-                eprintln!(
-                    "Warning: Failed to compile regex pattern '{}': {}",
-                    pattern, _e
-                );
-            }
-        }
+    for (re, replacement) in get_redaction_patterns() {
+        redacted = re.replace_all(&redacted, *replacement).to_string();
     }
 
     redacted

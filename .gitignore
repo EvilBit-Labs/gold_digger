@@ -120,3 +120,6 @@ docs/book/
 megalinter-reports/
 .claude/settings.local.json
 .claude.local.*
+
+# Insta snapshot review files
+*.snap.new

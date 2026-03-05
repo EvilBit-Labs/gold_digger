@@ -27,6 +27,15 @@ graph TD
 - MySQL connection management
 - Query execution
 - Result set processing
+- Delegates value conversion to TypeTransformer
+
+### Type Conversion (`type_transformer.rs`)
+
+- Canonical hub for safe MySQL value conversion
+- Panic-free conversion of `mysql::Value` to `String` and `serde_json::Value`
+- Key methods: `value_to_string`, `value_to_json`, `row_to_strings`, `row_to_json`
+- Safety guarantees: NULL handling, invalid UTF-8 hex encoding, special float handling (NaN, Infinity), date/time validation
+- Exported as public API via `lib.rs`
 
 ### Output Layer (`csv.rs`, `json.rs`, `tab.rs`)
 
@@ -46,7 +55,8 @@ graph TD
 
 - Rust's ownership system prevents memory errors
 - Explicit NULL handling
-- Safe type conversions
+- Safe type conversions via TypeTransformer
+- Comprehensive snapshot testing for conversion edge cases
 
 ### Performance
 
@@ -83,6 +93,8 @@ graph TD
     lib --> csv
     lib --> json  
     lib --> tab
+    lib --> type_transformer
+    json --> type_transformer
     cli --> clap
     lib --> mysql
     csv --> serde

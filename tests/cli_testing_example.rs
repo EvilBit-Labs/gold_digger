@@ -88,6 +88,11 @@ fn test_predicate_validation(cli_command: Command) -> Result<()> {
 fn test_error_scenario(cli_command: Command) -> Result<()> {
     let mut cmd = cli_command;
 
+    // Clear env vars to ensure we test the missing-config path
+    cmd.env_remove("DATABASE_URL")
+        .env_remove("DATABASE_QUERY")
+        .env_remove("OUTPUT_FILE");
+
     cmd.assert().failure().stderr(
         predicate::str::contains("Missing database URL").or(predicate::str::contains("required")),
     );
@@ -139,7 +144,12 @@ fn test_environment_variables(
 #[rstest]
 fn test_snapshot_testing(cli_command: Command) -> Result<()> {
     let mut cmd = cli_command;
-    cmd.arg("--help");
+
+    // Clear env vars so clap does not embed their values in help output,
+    // which would make snapshots environment-dependent
+    cmd.env_remove("DATABASE_URL")
+        .env_remove("OUTPUT_FILE")
+        .arg("--help");
 
     let output = cmd.output()?;
     let stdout = String::from_utf8_lossy(&output.stdout);
