@@ -268,7 +268,7 @@ error: conflicting requirements for `dependency`
      target/x86_64-apple-darwin/release/gold_digger
 
    # Or use cargo-dist to produce universal packages automatically
-   cargo dist build
+   dist build
    ```
 
 ### Linux Build Problems

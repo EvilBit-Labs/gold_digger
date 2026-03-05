@@ -338,17 +338,12 @@ impl TypeTransformer {
 
         let mut map = BTreeMap::new();
         for (i, col_name) in columns.into_iter().enumerate() {
-            match row.as_ref(i) {
-                Some(value) => {
-                    let json_val = Self::value_to_json(value).with_context(|| {
-                        format!("Failed to convert column '{}' to JSON", col_name)
-                    })?;
-                    map.insert(col_name, json_val);
-                }
-                None => {
-                    anyhow::bail!("Unexpected missing value at column index {}", i);
-                }
-            }
+            let json_val = match row.as_ref(i) {
+                Some(value) => Self::value_to_json(value)
+                    .with_context(|| format!("Failed to convert column '{}' to JSON", col_name))?,
+                None => serde_json::Value::Null,
+            };
+            map.insert(col_name, json_val);
         }
         Ok(map)
     }

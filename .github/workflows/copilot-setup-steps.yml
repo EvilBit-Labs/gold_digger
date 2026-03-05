@@ -36,4 +36,4 @@ jobs:
                   echo "  - cargo-llvm-cov: $(cargo llvm-cov --version)"
                   echo "  - cargo-audit: $(cargo audit --version)"
                   echo "  - cargo-deny: $(cargo deny --version)"
-                  echo "  - cargo-dist: $(cargo dist --version)"
+                  echo "  - cargo-dist: $(dist --version)"

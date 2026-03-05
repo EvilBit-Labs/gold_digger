@@ -33,7 +33,7 @@ When outputting to JSON format, Gold Digger preserves native MySQL types:
       "id": 123,           // Integer preserved as JSON number
       "price": 19.99,      // Float preserved as JSON number
       "name": "Product",   // String preserved
-      "active": true,      // Boolean preserved (if represented as 1/0 in MySQL)
+      "active": 1,          // Boolean-like TINYINT(1) preserved as JSON number (0/1)
       "description": null  // NULL preserved as JSON null
     }
   ]
@@ -220,14 +220,15 @@ The `TypeTransformer` implementation in `src/type_transformer.rs` provides the c
 
 Developers extending Gold Digger should use the `TypeTransformer` API:
 
-```rust
+```rust,ignore
+use std::collections::BTreeMap;
 use gold_digger::TypeTransformer;
 
 // Convert single value to string (CSV/TSV):
 let s: String = TypeTransformer::value_to_string(&value)?;
 
 // Convert single value to JSON:
-let json_value: serde_json::Value = TypeTransformer::value_to_json(&value);
+let json_value: serde_json::Value = TypeTransformer::value_to_json(&value)?;
 
 // Convert full row to Vec<String>:
 let strings: Vec<String> = TypeTransformer::row_to_strings(row)?;

@@ -20,7 +20,7 @@ The complete API documentation is available in the [rustdoc section](../api/gold
 #### Associated Functions
 
 - [`TypeTransformer::value_to_string()`](../api/gold_digger/struct.TypeTransformer.html#method.value_to_string) - Convert `mysql::Value` to `String` for CSV/TSV output. Returns error for invalid date/time values.
-- [`TypeTransformer::value_to_json()`](../api/gold_digger/struct.TypeTransformer.html#method.value_to_json) - Convert `mysql::Value` to `serde_json::Value` for JSON output. Infallible -- invalid dates become error strings.
+- [`TypeTransformer::value_to_json()`](../api/gold_digger/struct.TypeTransformer.html#method.value_to_json) - Convert `mysql::Value` to `serde_json::Value` for JSON output. Returns error for invalid date/time values.
 - [`TypeTransformer::row_to_strings()`](../api/gold_digger/struct.TypeTransformer.html#method.row_to_strings) - Convert entire row to vector of strings.
 - [`TypeTransformer::row_to_json()`](../api/gold_digger/struct.TypeTransformer.html#method.row_to_json) - Convert entire row to JSON object with deterministic key ordering (`BTreeMap`).
 
@@ -65,11 +65,11 @@ fn convert_value(value: &Value) -> anyhow::Result<()> {
     // Convert to string for CSV/TSV output
     let s = TypeTransformer::value_to_string(value)?;
     println!("String: {}", s);
-    
-    // Convert to JSON value (infallible)
-    let json = TypeTransformer::value_to_json(value);
+
+    // Convert to JSON value
+    let json = TypeTransformer::value_to_json(value)?;
     println!("JSON: {}", serde_json::to_string(&json)?);
-    
+
     Ok(())
 }
 ```
@@ -122,7 +122,7 @@ Key types used throughout the codebase:
 - **NULL handling**: NULL values convert to empty strings (CSV/TSV) or `serde_json::Value::Null` (JSON)
 - **Invalid UTF-8**: Binary data that is not valid UTF-8 is hex-encoded instead of causing panics (e.g., `0xfffefd`)
 - **Special floats**: NaN and Infinity values are represented as strings (`"NaN"`, `"Infinity"`, `"-Infinity"`)
-- **Date/time validation**: Date and time components are validated before formatting; invalid values return errors (`value_to_string`) or error strings (`value_to_json`)
+- **Date/time validation**: Date and time components are validated before formatting; invalid values return errors for both `value_to_string` and `value_to_json`
 - **Deterministic output**: JSON objects use `BTreeMap` for alphabetical key ordering
 
 ## Error Handling
