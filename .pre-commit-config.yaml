@@ -73,6 +73,7 @@ repos:
                 - mdformat-gfm-alerts
                 - mdformat-toc
             types: [markdown]
+            exclude: ^\.claude/
 
     # 🔒 Security audit for Rust dependencies (requires mise - run `just setup` first)
     - repo: local
