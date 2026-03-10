@@ -192,7 +192,7 @@ process_control = "5.2.0"
 rcgen = "0.14.7"
 regex = "1.12.3"
 rstest = "0.26.1"
-sysinfo = "0.38.3"
+sysinfo = "0.38.4"
 temp-env = "0.3.6"
 tempfile = "3.26.0"
 testcontainers = { version = "0.27.1", features = ["blocking"] }
