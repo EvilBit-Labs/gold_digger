@@ -169,7 +169,7 @@ integration_tests = []  # Enable heavy integration tests requiring external data
 
 [dependencies]
 anyhow = "1.0.102"
-clap = { version = "4.5.60", features = ["derive", "env"] }
+clap = { version = "4.6.0", features = ["derive", "env"] }
 clap_complete = "4.6.0"
 csv = "1.4.0"
 mysql = { version = "27.0.0", default-features = false, features = ["rustls-tls", "minimal"] }
