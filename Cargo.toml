@@ -173,7 +173,7 @@ clap = { version = "4.5.60", features = ["derive", "env"] }
 clap_complete = "4.6.0"
 csv = "1.4.0"
 mysql = { version = "27.0.0", default-features = false, features = ["rustls-tls", "minimal"] }
-mysql_common = { version = "0.36.2", optional = true }
+mysql_common = { version = "0.37.0", optional = true }
 regex = "1.12.3"
 # TLS dependencies
 rustls = { version = "0.23.37", features = ["ring"] }
