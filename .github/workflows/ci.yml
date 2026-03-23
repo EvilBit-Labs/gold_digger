@@ -32,7 +32,7 @@ jobs:
             - uses: dtolnay/rust-toolchain@0dd4a6d07aedb0ef7f65e79f3e229a6c102ae2e0 # 1.91.0
               with:
                   components: llvm-tools, cargo, rustfmt, clippy
-            - uses: jdx/mise-action@c1ecc8f748cd28cdeabf76dab3cccde4ce692fe4 # v4.0.0.6.4.0.0
+            - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1.6.4.0.1
               with:
                   install: true
                   cache: true
@@ -53,7 +53,7 @@ jobs:
         needs: quality
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-            - uses: jdx/mise-action@c1ecc8f748cd28cdeabf76dab3cccde4ce692fe4 # v4.0.0.6.4.0.0
+            - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1.6.4.0.1
               with:
                   install: true
                   cache: true
@@ -120,7 +120,7 @@ jobs:
                     - "minimal"
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-            - uses: jdx/mise-action@c1ecc8f748cd28cdeabf76dab3cccde4ce692fe4 # v4.0.0.6.4.0.0
+            - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1.6.4.0.1
               with:
                   install: true
                   cache: true
@@ -157,7 +157,7 @@ jobs:
         needs: quality
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-            - uses: jdx/mise-action@c1ecc8f748cd28cdeabf76dab3cccde4ce692fe4 # v4.0.0.6.4.0.0
+            - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1.6.4.0.1
               with:
                   install: true
                   cache: true
@@ -180,7 +180,7 @@ jobs:
         needs: quality
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-            - uses: jdx/mise-action@c1ecc8f748cd28cdeabf76dab3cccde4ce692fe4 # v4.0.0.6.4.0.0
+            - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1.6.4.0.1
               with:
                   install: true
                   cache: true
@@ -220,7 +220,7 @@ jobs:
             - uses: dtolnay/rust-toolchain@0dd4a6d07aedb0ef7f65e79f3e229a6c102ae2e0 # 1.91.0
               with:
                   components: llvm-tools, cargo, rustfmt, clippy
-            - uses: jdx/mise-action@c1ecc8f748cd28cdeabf76dab3cccde4ce692fe4 # v4.0.0.6.4.0.0
+            - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1.6.4.0.1
               with:
                   install: true
                   cache: true
