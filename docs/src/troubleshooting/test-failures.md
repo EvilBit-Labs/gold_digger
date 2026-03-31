@@ -353,7 +353,7 @@ Error: CSV format validation failed
    ```toml
    # In Cargo.toml
    [dev-dependencies]
-   insta = "1.34"
+   insta = "1.47.2"
    ```
 
    ```rust
