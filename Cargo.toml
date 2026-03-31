@@ -186,7 +186,7 @@ url = "2.5.8"
 [dev-dependencies]
 assert_cmd = "2.2.0"
 criterion = { version = "0.8.2", features = ["html_reports"] }
-insta = "1.46.3"
+insta = "1.47.2"
 predicates = "3.1.4"
 process_control = "5.2.0"
 rcgen = "0.14.7"
