@@ -1299,7 +1299,7 @@ dependencies = [
  "csv",
  "insta",
  "mysql",
- "mysql_common 0.37.0",
+ "mysql_common 0.37.1",
  "predicates",
  "process_control",
  "rcgen",
@@ -1973,9 +1973,9 @@ dependencies = [
 
 [[package]]
 name = "mysql_common"
-version = "0.37.0"
+version = "0.37.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3050537bd6640ffee56d233a668b5f516bfa6f6936be934d552d2c2aec915fac"
+checksum = "bffc2127d4035fa5a614935c663a15a4468e64e798473e0cc21c8df40a607588"
 dependencies = [
  "base64 0.22.1",
  "bigdecimal",
