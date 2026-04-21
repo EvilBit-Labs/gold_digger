@@ -195,7 +195,7 @@ rstest = "0.26.1"
 sysinfo = "0.38.4"
 temp-env = "0.3.6"
 tempfile = "3.27.0"
-testcontainers = { version = "0.27.2", features = ["blocking"] }
+testcontainers = { version = "0.27.3", features = ["blocking"] }
 testcontainers-modules = { version = "0.15.0", features = ["mariadb", "mysql", "blocking"] }
 time = { version = "0.3.47", features = ["macros"] }
 tokio = { version = "1.52.0", features = ["full"] }
