@@ -1,3 +1,11 @@
+//! Streaming JSON writer producing `{"data": [ ... ]}` output.
+//!
+//! [`JsonWriter`] buffers via [`BufWriter`], emits one row at a time, and
+//! uses [`BTreeMap`] to guarantee deterministic column ordering — required
+//! for snapshot tests and diffable automation. Call `write_row` once per
+//! row and `finalize` exactly once at end-of-stream. Pretty-printing is
+//! controlled by `--pretty`.
+
 use std::{
     collections::BTreeMap,
     io::{BufWriter, Write},

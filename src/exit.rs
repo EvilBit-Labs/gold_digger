@@ -1,3 +1,14 @@
+//! Exit-code contract for the `gold_digger` binary (0-5).
+//!
+//! The constants below define the public exit-code surface:
+//! `EXIT_SUCCESS=0`, `EXIT_NO_ROWS=1`, `EXIT_CONFIG_ERROR=2`,
+//! `EXIT_DB_AUTH_ERROR=3`, `EXIT_QUERY_ERROR=4`, `EXIT_IO_ERROR=5`.
+//!
+//! [`map_error_to_exit_code`] currently classifies via substring matches on
+//! `error.to_string()`, which means error message text is part of the public
+//! contract — see todos #002/#017 for the planned migration to a typed
+//! `GoldDiggerError` enum.
+
 use anyhow::Error;
 use std::process;
 

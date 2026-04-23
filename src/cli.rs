@@ -1,3 +1,11 @@
+//! Clap-derive definitions for the `gold_digger` CLI.
+//!
+//! Resolution precedence is CLI flags > environment variables > error.
+//! Fields that accept both (`db_url`, `output`) use clap's `env` attribute
+//! so the fallback shows up in `--help`. Subcommands live under [`Commands`]
+//! and output formats under [`OutputFormat`]; `completion` generates shell
+//! completion scripts via `clap_complete`.
+
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 

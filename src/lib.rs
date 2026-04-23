@@ -1,3 +1,16 @@
+//! Gold Digger: MySQL/MariaDB query tool with structured output.
+//!
+//! The crate is organised into the [`cli`] argument parser, output writers
+//! ([`csv`], [`json`], [`tab`]), the panic-free value converter
+//! ([`type_transformer`]), the exit-code contract ([`exit`]), rustls-backed
+//! TLS ([`tls`]), and shared helpers ([`utils`]). The library exposes
+//! [`rows_to_strings`] and [`get_extension_from_filename`] for callers, plus
+//! the [`FormatWriter`] trait used internally to unify streaming writers.
+//!
+//! TLS is always rustls; consumers must invoke [`init_crypto_provider`] once
+//! before opening a connection pool so rustls has a default crypto provider.
+//! Exit codes follow the 0-5 contract defined in [`exit`].
+
 use std::{env, ffi::OsStr, path::Path, sync::Once};
 
 use anyhow::{Context, Result};

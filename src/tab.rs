@@ -1,3 +1,9 @@
+//! Tab-separated (TSV) writer mirroring the CSV writer's contract.
+//!
+//! Wraps the `csv` crate with `\t` as delimiter and [`QuoteStyle::Necessary`].
+//! Selected when the output file extension is `.tsv` or `.txt`, or as the
+//! default fallback when no recognised extension is present.
+
 use std::io::{BufWriter, Write};
 
 use csv::{QuoteStyle, WriterBuilder};

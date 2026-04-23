@@ -1,3 +1,15 @@
+//! Rustls-only TLS configuration for MySQL/MariaDB connections.
+//!
+//! Supports four validation modes selectable via [`TlsConfig`]:
+//!   1. Platform defaults with strict hostname + certificate validation.
+//!   2. `--insecure-skip-hostname-verify`: trust the CA, skip hostname check.
+//!   3. `--allow-invalid-certificate`: accept self-signed or expired certs
+//!      (testing only — full MITM exposure).
+//!   4. Custom CA bundle via `--tls-ca-file` (PEM format).
+//!
+//! All errors flow through [`TlsError`], which carries actionable guidance
+//! back to the user. No OpenSSL or native-tls — rustls is mandatory.
+
 use anyhow::Result;
 use mysql::{Pool, SslOpts};
 use std::path::PathBuf;

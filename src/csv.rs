@@ -1,3 +1,10 @@
+//! RFC-4180-adjacent CSV writer.
+//!
+//! Wraps the `csv` crate with [`QuoteStyle::Necessary`] — quotes are emitted
+//! only when fields contain delimiters, newlines, or embedded quotes. The
+//! writer is generic over any [`Write`] target so output can be streamed to
+//! a file, stdout, or an in-memory buffer.
+
 use std::io::{BufWriter, Write};
 
 use csv::{QuoteStyle, WriterBuilder};

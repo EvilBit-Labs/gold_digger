@@ -1,4 +1,11 @@
-/// Utility functions for the gold_digger application
+//! Shared utilities for the `gold_digger` binary.
+//!
+//! The module's primary export is [`redact_sql_error`], which scrubs
+//! `password=`, `identified by`, `token=`, `api_key=`, and similar
+//! credential patterns out of error strings before they reach a log sink.
+//! Patterns are compiled once via [`OnceLock`]; callers must never log an
+//! un-redacted MySQL error or connection URL.
+
 use std::sync::OnceLock;
 
 use regex::Regex;

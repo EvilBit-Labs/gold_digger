@@ -1,3 +1,10 @@
+//! Binary entry point for `gold_digger`.
+//!
+//! Parses CLI args (with `DATABASE_URL` / `DATABASE_QUERY` / `OUTPUT_FILE`
+//! env fallbacks), opens a rustls-backed MySQL pool, executes the query, and
+//! dispatches to the writer selected by `--format` or by file extension.
+//! Exit codes follow the 0-5 contract defined in [`gold_digger::exit`].
+
 use std::{env, fs::File, path::PathBuf};
 
 use anyhow::{Context, Result};

@@ -1,3 +1,12 @@
+//! Panic-free conversion from `mysql::Value` to `String` and `serde_json::Value`.
+//!
+//! MySQL's default `from_value::<String>` panics on NULL and on non-string
+//! types. [`TypeTransformer`] routes through explicit match arms so every
+//! variant returns a well-defined representation: empty string for CSV/TSV
+//! NULL, [`serde_json::Value::Null`] for JSON, hex-encoded `0x...` for
+//! non-UTF-8 binary (truncated past 1024 bytes). Datetimes render with an
+//! ISO-8601 `T` separator when emitting JSON.
+
 use std::collections::BTreeMap;
 
 use anyhow::Context;
