@@ -2,9 +2,9 @@ name: CI
 
 on:
     push:
-        branches: [main]
+        branches: [ main ]
     pull_request:
-        branches: [main]
+        branches: [ main ]
     workflow_dispatch:
 
 permissions:
@@ -24,28 +24,26 @@ env:
     GITHUB_ACTIONS: true
 
 jobs:
-    # Code quality checks - only need to run once
     quality:
         runs-on: ubuntu-latest
+        timeout-minutes: 10
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-            - uses: dtolnay/rust-toolchain@0dd4a6d07aedb0ef7f65e79f3e229a6c102ae2e0 # 1.91.0
-              with:
-                  components: llvm-tools, cargo, rustfmt, clippy
-            - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1.6.4.0.1
+            - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
               with:
                   install: true
                   cache: true
                   github_token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Rustfmt Check
-              uses: actions-rust-lang/rustfmt@4066006ec54a31931b9b1fddfd38f2fdf2d27143 # v1.1.2
+            - name: Ensure rustfmt and clippy are installed
+              run: rustup component add rustfmt clippy
 
-            - name: Run clippy (default features)
-              run: cargo clippy -- -D warnings
+            - name: Check formatting
+              run: just lint-rust
 
             - name: Run clippy (minimal features)
-              run: cargo clippy --no-default-features --features "json csv additional_mysql_types" -- -D warnings
+              run: cargo clippy --no-default-features --features "json csv
+                  additional_mysql_types" -- -D warnings
 
     # Test TLS functionality (always available)
     test-tls:
@@ -132,7 +130,8 @@ jobs:
 
             - name: Run tests (minimal features)
               if: matrix.features == 'minimal'
-              run: cargo nextest run --no-default-features --features "json csv additional_mysql_types verbose"
+              run: cargo nextest run --no-default-features --features "json csv
+                  additional_mysql_types verbose"
 
             - name: Build release
               run: |
@@ -214,17 +213,17 @@ jobs:
     # Generate coverage for TLS-enabled builds
     coverage:
         runs-on: ubuntu-latest
-        needs: [test-tls, test-features, test-cross-platform]
+        needs: [ test-tls, test-features, test-cross-platform ]
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-            - uses: dtolnay/rust-toolchain@0dd4a6d07aedb0ef7f65e79f3e229a6c102ae2e0 # 1.91.0
-              with:
-                  components: llvm-tools, cargo, rustfmt, clippy
-            - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1.6.4.0.1
+            - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
               with:
                   install: true
                   cache: true
                   github_token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Ensure rustfmt and clippy are installed
+              run: rustup component add rustfmt clippy llvm-tools
 
             - name: Generate coverage (default features with TLS)
               run: cargo llvm-cov --workspace --no-report
@@ -240,7 +239,7 @@ jobs:
                   cargo llvm-cov report --lcov --output-path lcov.info
 
             - name: Upload to Codecov
-              uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
+              uses: codecov/codecov-action@3f20e214133d0983f9a10f3d63b0faf9241a3daa # v6.0.0
               with:
                   files: lcov.info
                   fail_ci_if_error: false
