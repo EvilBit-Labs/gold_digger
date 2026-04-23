@@ -1320,7 +1320,7 @@ dependencies = [
  "csv",
  "insta",
  "mysql",
- "mysql_common 0.37.1",
+ "mysql_common",
  "predicates",
  "process_control",
  "rcgen",
@@ -1923,9 +1923,9 @@ dependencies = [
 
 [[package]]
 name = "mysql"
-version = "27.0.0"
+version = "28.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "090068bc0a24762663338da78414148333d1ee246a7293c10a517ddf1548b291"
+checksum = "4a732193888328fc060ab901c0ed1355521267a51ffbfd9a0b3786434c6b8e7f"
 dependencies = [
  "bufstream",
  "bytes",
@@ -1935,7 +1935,7 @@ dependencies = [
  "io-enum",
  "libc",
  "lru",
- "mysql_common 0.36.2",
+ "mysql_common",
  "named_pipe",
  "pem",
  "percent-encoding",
@@ -1964,32 +1964,6 @@ dependencies = [
  "syn 2.0.117",
  "termcolor",
  "thiserror",
-]
-
-[[package]]
-name = "mysql_common"
-version = "0.36.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "20e7f6a15265801679ddf1ddb38fd74b4555a677a78378d4561fbe5f0b1d4d72"
-dependencies = [
- "base64 0.22.1",
- "bitflags",
- "btoi",
- "byteorder",
- "bytes",
- "crc32fast",
- "flate2",
- "getrandom 0.3.4",
- "num-bigint",
- "num-traits",
- "regex",
- "saturating",
- "serde",
- "serde_json",
- "sha1",
- "sha2",
- "thiserror",
- "uuid",
 ]
 
 [[package]]
@@ -2848,9 +2822,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.38"
+version = "0.23.39"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69f9466fb2c14ea04357e91413efb882e2a6d4a406e625449bc0a5d360d53a21"
+checksum = "7c2c118cb077cca2822033836dfb1b975355dfb784b5e8da48f7b6c5db74e60e"
 dependencies = [
  "aws-lc-rs",
  "log",
