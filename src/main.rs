@@ -14,7 +14,7 @@ use mysql::Pool;
 use mysql::prelude::Queryable;
 
 use gold_digger::cli::{Cli, Commands, OutputFormat, Shell};
-use gold_digger::exit::{exit_no_rows, exit_success, exit_with_error};
+use gold_digger::exit::{GoldDiggerError, exit_no_rows, exit_success, exit_with_error};
 use gold_digger::rows_to_strings;
 use gold_digger::utils::redact_sql_error;
 
@@ -209,41 +209,69 @@ fn create_database_connection(database_url: &str, cli: &Cli) -> Result<Pool> {
     })
 }
 
-/// Resolves the database URL from CLI arguments or environment variables
+/// Resolves the database URL from CLI arguments or environment variables.
+///
+/// Errors are wrapped in [`GoldDiggerError::Config`] so the exit-code
+/// classifier can identify them via downcast (stable across message text
+/// refactors).
 fn resolve_database_url(cli: &Cli) -> Result<String> {
     if let Some(url) = &cli.db_url {
         Ok(url.clone())
     } else {
-        gold_digger::get_required_env("DATABASE_URL").context(
-            "Missing database URL. Provide --db-url or set DATABASE_URL environment variable",
-        )
+        std::env::var("DATABASE_URL").map_err(|_| {
+            GoldDiggerError::Config(
+                "Missing database URL. Provide --db-url or set DATABASE_URL environment variable"
+                    .into(),
+            )
+            .into()
+        })
     }
 }
 
-/// Resolves the database query from CLI arguments or environment variables
+/// Resolves the database query from CLI arguments, an external file, or
+/// environment variables.
+///
+/// File-read failures map to [`GoldDiggerError::Io`] (exit 5); missing
+/// configuration maps to [`GoldDiggerError::Config`] (exit 2).
 fn resolve_database_query(cli: &Cli) -> Result<String> {
     if let Some(query) = &cli.query {
         Ok(query.clone())
     } else if let Some(query_file) = &cli.query_file {
         std::fs::read_to_string(query_file).map_err(|e| {
-            anyhow::anyhow!("Failed to read query file {}: {}", query_file.display(), e)
+            // Preserve both the typed I/O classification and the original
+            // path context that previous integration tests assert on.
+            anyhow::Error::from(GoldDiggerError::Io(e)).context(format!(
+                "Failed to read query file {}",
+                query_file.display()
+            ))
         })
     } else {
-        gold_digger::get_required_env("DATABASE_QUERY").context(
-            "Missing database query. Provide --query, --query-file, or set DATABASE_QUERY environment variable",
-        )
+        std::env::var("DATABASE_QUERY").map_err(|_| {
+            GoldDiggerError::Config(
+                "Missing database query. Provide --query, --query-file, or set DATABASE_QUERY environment variable".into(),
+            )
+            .into()
+        })
     }
 }
 
-/// Resolves the output file path from CLI arguments or environment variables
+/// Resolves the output file path from CLI arguments or environment variables.
+///
+/// Errors are wrapped in [`GoldDiggerError::Config`] for stable exit-code
+/// classification.
 fn resolve_output_file(cli: &Cli) -> Result<PathBuf> {
     if let Some(output) = &cli.output {
         Ok(output.clone())
     } else {
-        let output = gold_digger::get_required_env("OUTPUT_FILE").context(
-            "Missing output file. Provide --output or set OUTPUT_FILE environment variable",
-        )?;
-        Ok(PathBuf::from(output))
+        std::env::var("OUTPUT_FILE")
+            .map(PathBuf::from)
+            .map_err(|_| {
+                GoldDiggerError::Config(
+                    "Missing output file. Provide --output or set OUTPUT_FILE environment variable"
+                        .into(),
+                )
+                .into()
+            })
     }
 }
 
