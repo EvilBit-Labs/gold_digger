@@ -2,8 +2,8 @@ name: Security
 
 on:
     workflow_run:
-        workflows: [CI]
-        types: [completed]
+        workflows: [ CI ]
+        types: [ completed ]
     schedule:
         - cron: "0 6 * * *"
     workflow_dispatch:
@@ -26,7 +26,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-            - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1.6.4.0.1
+            - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151
               with:
                   install: true
                   cache: true
@@ -42,16 +42,19 @@ jobs:
               run: cargo cyclonedx --format json
 
             - name: Upload SBOM artifact
-              uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
               with:
                   name: sbom-cyclonedx
                   path: gold_digger.cdx.json
 
             - name: Vulnerability scan with Grype
-              run: grype sbom:gold_digger.cdx.json --fail-on critical -o sarif --file grype-results.sarif
+              run: grype sbom:gold_digger.cdx.json --fail-on critical -o sarif --file
+                  grype-results.sarif
 
             - name: Upload Grype SARIF
-              if: always() && (github.event_name != 'workflow_run' || github.event.workflow_run.head_repository.full_name == github.repository)
+              if: always() && (github.event_name != 'workflow_run' ||
+                  github.event.workflow_run.head_repository.full_name ==
+                  github.repository)
               uses: github/codeql-action/upload-sarif@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4.35.2
               with:
                   sarif_file: grype-results.sarif
