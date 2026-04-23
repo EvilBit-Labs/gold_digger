@@ -114,6 +114,18 @@ fn validate_minute_second_micro(
     Ok(())
 }
 
+const HEX_CHARS: &[u8; 16] = b"0123456789abcdef";
+
+fn encode_hex_with_prefix(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(2 + bytes.len() * 2);
+    out.push_str("0x");
+    for &b in bytes {
+        out.push(HEX_CHARS[(b >> 4) as usize] as char);
+        out.push(HEX_CHARS[(b & 0x0f) as usize] as char);
+    }
+    out
+}
+
 /// Converts bytes to a string, falling back to hex encoding for non-UTF-8
 /// data. Large binary payloads (> 1024 bytes) are truncated with a size
 /// indicator.
@@ -122,15 +134,13 @@ fn bytes_to_string(bytes: &[u8]) -> String {
         Ok(s) => s.to_string(),
         Err(_) => {
             if bytes.len() > 1024 {
-                let hex_prefix: String = bytes
-                    .iter()
-                    .take(32)
-                    .map(|b| format!("{:02x}", b))
-                    .collect();
-                format!("0x{}... ({} bytes)", hex_prefix, bytes.len())
+                format!(
+                    "{}... ({} bytes)",
+                    encode_hex_with_prefix(&bytes[..32]),
+                    bytes.len()
+                )
             } else {
-                let hex_string: String = bytes.iter().map(|b| format!("{:02x}", b)).collect();
-                format!("0x{}", hex_string)
+                encode_hex_with_prefix(bytes)
             }
         }
     }
