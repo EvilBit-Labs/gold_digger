@@ -31,8 +31,8 @@ Always consult these files in order when working with this codebase:
 
 ### Review Process
 
-- This project prefers **CodeRabbit.ai** for code review
-- Do **NOT** enable GitHub Copilot auto-review in pull requests
+- Do not merge your own changes - submit a PR for review by the maintainer
+- Do not disregard valid warnings or errors from linters, formatters, or tests - address them before proposing changes, even if they are pre-existing issues
 - Maintainer: **UncleSp1d3r** (single-maintainer workflow)
 
 ## Build/Lint/Test Commands
