@@ -624,6 +624,80 @@ mod tests {
         });
     }
 
+    // ---------------------------------------------------------------------
+    // CLI-vs-env precedence regression tests (todo #036).
+    //
+    // These pin the historical "Some(&_) pattern bug" so that any future
+    // regression in the resolve_* functions where CLI flags failed to
+    // override the corresponding env var would surface immediately.
+    // ---------------------------------------------------------------------
+
+    #[test]
+    fn test_resolve_database_url_cli_overrides_env() {
+        temp_env::with_var("DATABASE_URL", Some("mysql://from-env"), || {
+            let cli = Cli::parse_from([
+                "gold_digger",
+                "--db-url",
+                "mysql://from-cli",
+                "--query",
+                "SELECT 1",
+                "--output",
+                "test.json",
+            ]);
+            let result = resolve_database_url(&cli);
+            assert!(result.is_ok(), "resolve failed: {:?}", result.err());
+            assert_eq!(
+                result.unwrap(),
+                "mysql://from-cli",
+                "CLI --db-url must win over DATABASE_URL env var"
+            );
+        });
+    }
+
+    #[test]
+    fn test_resolve_database_query_cli_overrides_env() {
+        temp_env::with_var("DATABASE_QUERY", Some("SELECT 'from_env'"), || {
+            let cli = Cli::parse_from([
+                "gold_digger",
+                "--db-url",
+                "mysql://test",
+                "--query",
+                "SELECT 'from_cli'",
+                "--output",
+                "test.json",
+            ]);
+            let result = resolve_database_query(&cli);
+            assert!(result.is_ok(), "resolve failed: {:?}", result.err());
+            assert_eq!(
+                result.unwrap(),
+                "SELECT 'from_cli'",
+                "CLI --query must win over DATABASE_QUERY env var"
+            );
+        });
+    }
+
+    #[test]
+    fn test_resolve_output_file_cli_overrides_env() {
+        temp_env::with_var("OUTPUT_FILE", Some("/tmp/from_env.csv"), || {
+            let cli = Cli::parse_from([
+                "gold_digger",
+                "--db-url",
+                "mysql://test",
+                "--query",
+                "SELECT 1",
+                "--output",
+                "/tmp/from_cli.json",
+            ]);
+            let result = resolve_output_file(&cli);
+            assert!(result.is_ok(), "resolve failed: {:?}", result.err());
+            assert_eq!(
+                result.unwrap(),
+                PathBuf::from("/tmp/from_cli.json"),
+                "CLI --output must win over OUTPUT_FILE env var"
+            );
+        });
+    }
+
     #[test]
     fn test_dump_configuration() -> anyhow::Result<()> {
         let cli = build_test_cli();

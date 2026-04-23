@@ -362,3 +362,36 @@ Error: Invalid database URL format
 ```
 
 **Solution:** Ensure URL follows `mysql://user:pass@host:port/db` format.
+
+## Memory Profile (F007)
+
+Gold Digger currently materialises the full result set in memory before writing — there is no row-by-row streaming yet. Streaming is tracked as F007 (planned for v0.4.0). Until streaming lands, plan around the in-memory model when sizing queries.
+
+### Rough memory budget
+
+Resident memory is dominated by the `Vec<Vec<String>>` produced by `rows_to_strings` plus, for JSON, an intermediate `BTreeMap<String, serde_json::Value>` per row. The constants below are approximate and will vary with column count, value width, and output format.
+
+| Rows | Columns | Avg cell width | CSV/TSV resident | JSON resident |
+| ---: | ------: | -------------: | ---------------: | ------------: |
+|   1k |      10 |       64 bytes |          ~640 KB |       ~1.3 MB |
+| 100k |      10 |       64 bytes |           ~64 MB |       ~130 MB |
+|   1M |      10 |       64 bytes |          ~640 MB |       ~1.3 GB |
+|   1M |      30 |       64 bytes |          ~1.9 GB |       ~3.8 GB |
+
+On a 16 GB host expect OOM somewhere between 2M and 3M rows depending on column count and output format.
+
+### Mitigations until streaming lands
+
+- **Add `LIMIT`** to bounded queries.
+- **Paginate** via `WHERE id > ? ORDER BY id LIMIT ?` in a wrapping shell loop.
+- **Split per partition** (date range, tenant) and concatenate output files post-hoc.
+- **Prefer CSV/TSV** over JSON when raw bytes-per-row matters; JSON approximately doubles the working set during encoding.
+
+## `--dump-config` Caveat
+
+`--dump-config` prints the resolved configuration as JSON, with a best-effort credential redactor applied to URLs and known secret keys (`password=`, `token=`, `api_key=`, `identified by`). The redactor does **not** catch arbitrary base64/hex/JWT secrets or non-English secret labels.
+
+Treat the output as **probably-safe but not certified-safe** before sharing externally:
+
+- Skim the JSON for tokens, API keys, base64 blobs, and labels in languages the redactor pattern set may not cover.
+- Tracked improvements live in repo todos #004 (route through canonical `redact_sql_error`) and #029 (adversarial test corpus).

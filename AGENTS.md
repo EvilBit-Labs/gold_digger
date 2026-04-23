@@ -120,7 +120,7 @@ cargo build --no-default-features --features "json csv additional_mysql_types ve
 ### Cursor Rules Compliance
 
 - Follow `.cursor/rules/rust-best-practices.mdc` for module organization
-- Use format module contract: `fn write<W: Write>(rows: impl IntoIterator<Item = impl IntoIterator<Item = impl AsRef<str>>>, output: &mut W) -> anyhow::Result<()>`
+- Use format module contract: `fn write<R, F, W>(rows: R, output: W) -> anyhow::Result<()> where R: IntoIterator<Item = F>, F: IntoIterator<Item = String>, W: Write`. Rows are owned `Vec<Vec<String>>` produced by `rows_to_strings`; the writer is consumed by value (wrap in `BufWriter` at the call site). Note: `JsonWriter` is the only type that currently implements the `FormatWriter` trait — `csv` and `tab` use this free-function pattern.
 - Implement streaming support with generic writers
 - Use `#[cfg(feature = "...")]` for conditional compilation
 
@@ -128,13 +128,15 @@ cargo build --no-default-features --features "json csv additional_mysql_types ve
 
 Gold Digger is a production-ready Rust CLI tool for MySQL/MariaDB database queries with structured output (CSV, JSON, TSV). It features comprehensive CLI interface, rustls-only TLS, and safe data type handling.
 
-**Current Architecture (v0.2.6):**
+**Current Architecture:**
 
 - CLI-first with environment variable fallbacks using `clap`
 - Rustls-only TLS implementation (no OpenSSL dependencies)
 - Safe MySQL value conversion with NULL handling
 - Structured exit codes and error handling
 - Modular output format system
+
+(See `Cargo.toml` for the active version; do not hardcode versions in this file.)
 
 **Command Examples:**
 
@@ -184,8 +186,6 @@ use gold_digger::TypeTransformer;
 1. **No Dotenv Support:** Despite README implications, there is no `.env` file support in the code. Use exported environment variables only.
 
 2. **JSON Output:** Uses BTreeMap for deterministic key ordering as required.
-
-3. **Pattern Matching Bug:** In `src/main.rs`, the `if let Some(url) = &cli.db_url` pattern (and similar patterns in the resolve functions) uses `Some(&_)` which should be `Some(_)` in the match arm.
 
 ### Configuration Architecture
 
@@ -406,8 +406,8 @@ SELECT CAST(id AS CHAR) as id, CAST(created_at AS CHAR) as created_at FROM users
 
 ### Version Management
 
-- Current discrepancy: CHANGELOG.md shows v0.2.6, Cargo.toml shows v0.2.5
-- Sync versions before any releases
+- `Cargo.toml` is the source of truth for the active version
+- Sync `CHANGELOG.md` headings with `Cargo.toml` before any release
 - Use semantic versioning with conventional commits
 
 ## Testing Strategy
@@ -444,13 +444,13 @@ testcontainers = "0.15"                                      # For real MySQL/Ma
 
 ## Quick Reference
 
-| File                           | Purpose          | Key Issues                                 |
+| File                           | Purpose          | Notes                                      |
 | ------------------------------ | ---------------- | ------------------------------------------ |
-| `src/main.rs`                  | Entry point      | Exit codes, pattern bug, env var handling  |
+| `src/main.rs`                  | Entry point      | CLI-first config resolution, exit codes    |
 | `src/lib.rs`                   | Core logic       | Delegates to TypeTransformer               |
 | `src/type_transformer.rs`      | Value conversion | TypeTransformer: safe MySQL value handling |
 | `src/json.rs`                  | JSON output      | BTreeMap for deterministic ordering        |
-| `Cargo.toml`                   | Dependencies     | Version mismatch with CHANGELOG            |
+| `Cargo.toml`                   | Dependencies     | Source of truth for active version         |
 | `project_spec/requirements.md` | Target features  | Comprehensive feature roadmap              |
 
 ---

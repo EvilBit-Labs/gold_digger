@@ -47,7 +47,13 @@ pub use type_transformer::TypeTransformer;
 #[cfg(feature = "json")]
 pub use json::{write_json_maps, write_typed};
 
-/// Trait for writing data in different formats
+/// Streaming writer trait for output formats that produce one row at a time.
+///
+/// Currently implemented only by [`json::JsonWriter`]; the `csv` and `tab`
+/// modules expose a free `write()` function that takes a fully materialised
+/// `Vec<Vec<String>>` instead of using this trait. New format modules should
+/// only implement `FormatWriter` if they support genuine streaming output;
+/// otherwise follow the free-function contract documented in `AGENTS.md`.
 pub trait FormatWriter {
     fn write_header(&mut self, columns: &[String]) -> Result<()>;
     fn write_row(&mut self, row: &[String]) -> Result<()>;

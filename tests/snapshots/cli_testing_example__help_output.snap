@@ -11,18 +11,59 @@ Commands:
   help        Print this message or the help of the given subcommand(s)
 
 Options:
-      --db-url <URL>                   Database connection URL (mysql://user:pass@host:port/db) [env: DATABASE_URL=]
-  -q, --query <SQL>                    SQL query string to execute
-      --query-file <FILE>              File containing SQL query to execute
-  -o, --output <FILE>                  Output file path (format inferred from extension: .csv, .json, .tsv) [env: OUTPUT_FILE=]
-  -f, --format <FORMAT>                Output format override (ignores file extension) [possible values: csv, json, tsv]
-  -v, --verbose...                     Enable verbose logging (-v for info, -vv for debug)
-      --quiet                          Suppress all output except errors
-  -p, --pretty                         Pretty-print output (only applies to JSON format)
-      --allow-empty                    Exit successfully on empty result sets
-      --dump-config                    Print current configuration as JSON and exit
-      --tls-ca-file <TLS_CA_FILE>      Path to CA certificate file for trust anchor pinning
-      --insecure-skip-hostname-verify  Skip hostname verification (keeps chain and time validation)
-      --allow-invalid-certificate      Disable certificate validation entirely (DANGEROUS)
-  -h, --help                           Print help
-  -V, --version                        Print version
+      --db-url <URL>
+          Database connection URL (mysql://user:pass@host:port/db)
+          
+          [env: DATABASE_URL=]
+
+  -q, --query <SQL>
+          SQL query string to execute
+
+      --query-file <FILE>
+          File containing SQL query to execute.
+          
+          Reads any file the gold_digger process can read; there is no allowlist or sandbox today (tracked under repo todo #023). Avoid passing untrusted paths and do not run gold_digger as `root` with this flag against externally-supplied paths. See SECURITY.md.
+
+  -o, --output <FILE>
+          Output file path (format inferred from extension: .csv, .json, .tsv)
+          
+          [env: OUTPUT_FILE=]
+
+  -f, --format <FORMAT>
+          Output format override (ignores file extension)
+          
+          [possible values: csv, json, tsv]
+
+  -v, --verbose...
+          Enable verbose logging (-v for info, -vv for debug)
+
+      --quiet
+          Suppress all output except errors
+
+  -p, --pretty
+          Pretty-print output (only applies to JSON format)
+
+      --allow-empty
+          Exit successfully on empty result sets
+
+      --dump-config
+          Print current configuration as JSON and exit.
+          
+          Output uses a best-effort credential redactor (URL passwords, `password=`, `token=`, `api_key=`, `identified by`). It does NOT catch arbitrary base64/hex/JWT secrets or non-English secret labels. Review the JSON before sharing in bug reports or chat.
+
+      --tls-ca-file <TLS_CA_FILE>
+          Path to CA certificate file for trust anchor pinning
+
+      --insecure-skip-hostname-verify
+          Skip hostname verification (keeps chain and time validation)
+
+      --allow-invalid-certificate
+          Disable certificate validation entirely (DANGEROUS — full MITM exposure).
+          
+          Disables BOTH the certificate chain and hostname checks. Any network attacker who can intercept the TCP connection can present an attacker-controlled certificate, complete the TLS handshake, and read or modify the database protocol — including plaintext credentials. Never use against a production database. Prefer `--tls-ca-file <path>` for self-signed CAs (full validation against an explicit anchor) or `--insecure-skip-hostname-verify` for hostname-only mismatches. See SECURITY.md.
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version

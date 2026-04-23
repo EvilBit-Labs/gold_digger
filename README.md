@@ -130,7 +130,8 @@ gold_digger completion zsh > ~/.zsh/completions/_gold_digger
 gold_digger completion fish > ~/.config/fish/completions/gold_digger.fish
 gold_digger completion powershell > $PROFILE
 
-# Debug configuration (credentials redacted)
+# Debug configuration (best-effort credential redaction;
+# review output before sharing — see SECURITY.md)
 gold_digger --db-url "mysql://user:pass@localhost:3306/mydb" \
   --query "SELECT 1" --output test.json --dump-config
 
@@ -144,7 +145,9 @@ gold_digger --db-url "mysql://user:pass@dev.db:3306/mydb" \
   --insecure-skip-hostname-verify \
   --query "SELECT COUNT(*) FROM logs" --output count.json
 
-# Accept invalid certificates for testing (DANGEROUS)
+# Accept invalid certificates for testing (DANGEROUS — full MITM exposure;
+# disables BOTH cert chain and hostname validation. Never use against a
+# production DB. Prefer --tls-ca-file for self-signed CAs. See SECURITY.md.)
 gold_digger --db-url "mysql://user:pass@test.db:3306/mydb" \
   --allow-invalid-certificate \
   --query "SELECT * FROM test_data" --output test.csv
@@ -152,23 +155,33 @@ gold_digger --db-url "mysql://user:pass@test.db:3306/mydb" \
 
 ### CLI Options
 
-| Flag                              | Short | Environment Variable | Description                                             |
-| --------------------------------- | ----- | -------------------- | ------------------------------------------------------- |
-| `--db-url <URL>`                  | -     | `DATABASE_URL`       | Database connection string                              |
-| `--query <SQL>`                   | `-q`  | `DATABASE_QUERY`     | SQL query to execute                                    |
-| `--query-file <FILE>`             | -     | -                    | Read SQL from file (mutually exclusive with `--query`)  |
-| `--output <FILE>`                 | `-o`  | `OUTPUT_FILE`        | Output file path                                        |
-| `--format <FORMAT>`               | -     | -                    | Force output format: `csv`, `json`, or `tsv`            |
-| `--pretty`                        | -     | -                    | Pretty-print JSON output                                |
-| `--verbose`                       | `-v`  | -                    | Enable verbose logging (repeatable: `-v`, `-vv`)        |
-| `--quiet`                         | -     | -                    | Suppress non-error output                               |
-| `--allow-empty`                   | -     | -                    | Exit with code 0 even if no results                     |
-| `--dump-config`                   | -     | -                    | Print current configuration as JSON                     |
-| `--tls-ca-file <FILE>`            | -     | -                    | Use custom CA certificate file for trust anchor pinning |
-| `--insecure-skip-hostname-verify` | -     | -                    | Skip hostname verification (keeps chain validation)     |
-| `--allow-invalid-certificate`     | -     | -                    | Disable certificate validation entirely (DANGEROUS)     |
+| Flag                              | Short | Environment Variable | Description                                                                                                                                                        |
+| --------------------------------- | ----- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--db-url <URL>`                  | -     | `DATABASE_URL`       | Database connection string                                                                                                                                         |
+| `--query <SQL>`                   | `-q`  | `DATABASE_QUERY`     | SQL query to execute                                                                                                                                               |
+| `--query-file <FILE>`             | -     | -                    | Read SQL from file (mutually exclusive with `--query`). Reads any file the process can read — see SECURITY.md before passing untrusted paths or running as `root`. |
+| `--output <FILE>`                 | `-o`  | `OUTPUT_FILE`        | Output file path                                                                                                                                                   |
+| `--format <FORMAT>`               | -     | -                    | Force output format: `csv`, `json`, or `tsv`                                                                                                                       |
+| `--pretty`                        | -     | -                    | Pretty-print JSON output                                                                                                                                           |
+| `--verbose`                       | `-v`  | -                    | Enable verbose logging (repeatable: `-v`, `-vv`)                                                                                                                   |
+| `--quiet`                         | -     | -                    | Suppress non-error output                                                                                                                                          |
+| `--allow-empty`                   | -     | -                    | Exit with code 0 even if no results                                                                                                                                |
+| `--dump-config`                   | -     | -                    | Print current configuration as JSON                                                                                                                                |
+| `--tls-ca-file <FILE>`            | -     | -                    | Use custom CA certificate file for trust anchor pinning                                                                                                            |
+| `--insecure-skip-hostname-verify` | -     | -                    | Skip hostname verification (keeps chain validation)                                                                                                                |
+| `--allow-invalid-certificate`     | -     | -                    | Disable certificate validation entirely (DANGEROUS)                                                                                                                |
 
-**Note**: TLS flags are mutually exclusive - use only one at a time.
+**Note**: TLS flags are mutually exclusive - use only one at a time. `--allow-invalid-certificate` disables both certificate chain and hostname validation (full MITM exposure); see [SECURITY.md](SECURITY.md#--allow-invalid-certificate-mitm-exposure) before using it.
+
+## Known Limits
+
+Gold Digger currently materialises the full result set in memory before writing — there is no row-by-row streaming yet (tracked as F007 / v0.4.0). Plan around that constraint when sizing queries:
+
+- A SELECT returning ~1M rows of ~10 columns at ~64 bytes per cell already consumes ~640 MB of resident memory before serialisation; the working set roughly doubles during JSON encoding due to the intermediate `BTreeMap<String, Value>` per row.
+- On a 16 GB host, expect OOM somewhere between 2M and 3M rows depending on column count, value width, and output format. CSV/TSV are cheaper than JSON.
+- Mitigations until streaming lands: add `LIMIT` to queries, paginate via `WHERE id > ? LIMIT ?` in a wrapping script, or split exports per partition/date range.
+
+For a full memory-vs-rows table see [`docs/src/usage/configuration.md`](docs/src/usage/configuration.md#memory-profile-f007).
 
 ### Subcommands
 

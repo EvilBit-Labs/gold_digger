@@ -23,7 +23,12 @@ pub struct Cli {
     #[arg(short = 'q', long, conflicts_with = "query_file", value_name = "SQL")]
     pub query: Option<String>,
 
-    /// File containing SQL query to execute
+    /// File containing SQL query to execute.
+    ///
+    /// Reads any file the gold_digger process can read; there is no
+    /// allowlist or sandbox today (tracked under repo todo #023). Avoid
+    /// passing untrusted paths and do not run gold_digger as `root` with
+    /// this flag against externally-supplied paths. See SECURITY.md.
     #[arg(long, conflicts_with = "query", value_name = "FILE")]
     pub query_file: Option<PathBuf>,
 
@@ -51,7 +56,12 @@ pub struct Cli {
     #[arg(long)]
     pub allow_empty: bool,
 
-    /// Print current configuration as JSON and exit
+    /// Print current configuration as JSON and exit.
+    ///
+    /// Output uses a best-effort credential redactor (URL passwords,
+    /// `password=`, `token=`, `api_key=`, `identified by`). It does NOT
+    /// catch arbitrary base64/hex/JWT secrets or non-English secret
+    /// labels. Review the JSON before sharing in bug reports or chat.
     #[arg(long)]
     pub dump_config: bool,
 
@@ -92,7 +102,16 @@ pub struct TlsOptions {
     #[arg(long, group = "tls_mode")]
     pub insecure_skip_hostname_verify: bool,
 
-    /// Disable certificate validation entirely (DANGEROUS)
+    /// Disable certificate validation entirely (DANGEROUS — full MITM exposure).
+    ///
+    /// Disables BOTH the certificate chain and hostname checks. Any
+    /// network attacker who can intercept the TCP connection can present
+    /// an attacker-controlled certificate, complete the TLS handshake,
+    /// and read or modify the database protocol — including plaintext
+    /// credentials. Never use against a production database. Prefer
+    /// `--tls-ca-file <path>` for self-signed CAs (full validation
+    /// against an explicit anchor) or `--insecure-skip-hostname-verify`
+    /// for hostname-only mismatches. See SECURITY.md.
     #[arg(long, group = "tls_mode")]
     pub allow_invalid_certificate: bool,
 }

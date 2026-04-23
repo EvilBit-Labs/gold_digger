@@ -68,6 +68,34 @@ Security issues are prioritized over feature development.
 - **No Sensitive Data in Output**: Database credentials are never included in results
 - **Structured Output**: Safe CSV, JSON, and TSV generation
 
+## Operational Risk Surface
+
+Some CLI flags and features carry security-relevant trade-offs. Operators must understand these before deploying Gold Digger in production environments or handing the binary to non-experts.
+
+### `--allow-invalid-certificate` (MITM exposure)
+
+This flag disables **both** the certificate chain and hostname checks performed by rustls. Any network attacker able to intercept the TCP connection can present an attacker-controlled certificate, complete the TLS handshake, and read or modify the database protocol — including plaintext credentials.
+
+- **Never** use `--allow-invalid-certificate` against a production database.
+- **Prefer `--tls-ca-file <path>`** for self-signed CAs — this keeps full chain and hostname validation against an explicitly trusted anchor.
+- **Prefer `--insecure-skip-hostname-verify`** when only the hostname presented in the certificate does not match — chain validation still runs and the time-window check still applies.
+- The flag is intentionally not gated by an interactive prompt; treat its presence in any deployment manifest, CI workflow, or shell history as an incident that requires rotating the affected DB credentials.
+
+### `--query-file <path>` (file-read scope)
+
+`--query-file` reads any file readable by the Gold Digger process. There is no allowlist or sandboxing today (tracked under repo todo #023):
+
+- Running Gold Digger as `root` or under a service account with broad filesystem access lets an attacker who can choose the path read arbitrary files (system configs, other tenants' SQL, secrets).
+- Store query files in a dedicated, restricted directory owned by the Gold Digger user and audit who can write to that directory.
+- Do not pass user-supplied paths to `--query-file` from outside the trust boundary (e.g. webhook payloads, CI parameters from forks).
+
+### `--dump-config` (best-effort redaction)
+
+`--dump-config` prints the resolved configuration as JSON, with a best-effort credential redactor applied to URLs and known secret keys. The redactor pattern set is finite — it does not catch arbitrary encodings (base64, hex, JWT) or non-English secret labels. Treat any `--dump-config` output as **probably-safe but not certified-safe** when attaching it to bug reports or pasting it into chat.
+
+- Skim the JSON for tokens, API keys, base64 blobs, or labels in languages your eye does not parse before sharing externally.
+- Tracked improvements: repo todos #004 (route through the canonical `redact_sql_error`), #029 (adversarial test corpus).
+
 ## Security Best Practices
 
 ### For Users
