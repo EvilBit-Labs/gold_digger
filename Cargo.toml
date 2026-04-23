@@ -221,9 +221,10 @@ harness = false
 [profile.release]
 strip = true
 codegen-units = 1
+lto = "fat"
+panic = "abort"
 
 # The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"
-lto = "thin"
 overflow-checks = true

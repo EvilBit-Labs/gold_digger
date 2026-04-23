@@ -183,11 +183,9 @@ use gold_digger::TypeTransformer;
 
 1. **No Dotenv Support:** Despite README implications, there is no `.env` file support in the code. Use exported environment variables only.
 
-2. **Non-Standard Exit Codes:** `exit(-1)` becomes exit code 255, not the standard codes specified in requirements.
+2. **JSON Output:** Uses BTreeMap for deterministic key ordering as required.
 
-3. **JSON Output:** Uses BTreeMap for deterministic key ordering as required.
-
-4. **Pattern Matching Bug:** In `src/main.rs`, the `if let Some(url) = &cli.db_url` pattern (and similar patterns in the resolve functions) uses `Some(&_)` which should be `Some(_)` in the match arm.
+3. **Pattern Matching Bug:** In `src/main.rs`, the `if let Some(url) = &cli.db_url` pattern (and similar patterns in the resolve functions) uses `Some(&_)` which should be `Some(_)` in the match arm.
 
 ### Configuration Architecture
 
@@ -225,10 +223,11 @@ fn resolve_config_value(cli: &Cli) -> anyhow::Result<String> {
 
 **Entry Point (`src/main.rs`):**
 
-- Reads 3 required env vars, exits with 255 if missing
-- Creates MySQL connection pool, fetches ALL rows into memory
-- Exits with code 1 if result set is empty
-- Dispatches to writer based on file extension
+- Resolves config via CLI flags first, then `DATABASE_URL` / `DATABASE_QUERY` / `OUTPUT_FILE` env fallbacks
+- Exits with `EXIT_CONFIG_ERROR` (2) when required config is missing (see `src/exit.rs` for the full 0-5 contract)
+- Creates MySQL connection pool, fetches ALL rows into memory (streaming tracked under F007)
+- Exits with code 1 (`EXIT_NO_ROWS`) if the result set is empty unless `--allow-empty` is set
+- Dispatches to writer based on `--format` flag, then file extension
 
 **Core Library (`src/lib.rs`):**
 
