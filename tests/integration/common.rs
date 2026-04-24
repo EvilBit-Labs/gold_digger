@@ -136,8 +136,10 @@ impl GoldDiggerCli {
         // Set query
         cmd.arg("--query").arg(&test_case.query);
 
-        // Set output file
-        cmd.arg("--output").arg(output_path);
+        // Set output file. Tests pre-create an empty `NamedTempFile` and
+        // pass its path, so `--force` is required for gold_digger's
+        // default-refuse-existing policy (todo #024).
+        cmd.arg("--output").arg(output_path).arg("--force");
 
         // Add additional CLI arguments
         for arg in &test_case.cli_args {
@@ -204,8 +206,10 @@ impl GoldDiggerCli {
         // Set query
         cmd.arg("--query").arg(&test_case.query);
 
-        // Set output file
-        cmd.arg("--output").arg(output_path);
+        // Set output file. Tests pre-create an empty `NamedTempFile` and
+        // pass its path, so `--force` is required for gold_digger's
+        // default-refuse-existing policy (todo #024).
+        cmd.arg("--output").arg(output_path).arg("--force");
 
         // Add additional CLI arguments
         for arg in &test_case.cli_args {
@@ -325,7 +329,9 @@ impl GoldDiggerCli {
             .arg("--query")
             .arg(&test_case.query)
             .arg("--output")
-            .arg(output_path);
+            .arg(output_path)
+            // See todo #024; tests seed the output path via NamedTempFile.
+            .arg("--force");
 
         // Add additional CLI arguments
         for arg in &test_case.cli_args {
@@ -361,7 +367,8 @@ impl GoldDiggerCli {
         // Set database URL (never log the actual URL for security)
         cmd.arg("--db-url").arg(db_url);
         cmd.arg("--query").arg(&test_case.query);
-        cmd.arg("--output").arg(output_path);
+        // See todo #024; tests seed the output path via NamedTempFile.
+        cmd.arg("--output").arg(output_path).arg("--force");
 
         // Add additional CLI arguments
         for arg in &test_case.cli_args {
@@ -502,7 +509,8 @@ impl GoldDiggerCli {
         // Set database URL (never log the actual URL for security)
         cmd.arg("--db-url").arg(db_url);
         cmd.arg("--query").arg(&test_case.query);
-        cmd.arg("--output").arg(output_path);
+        // See todo #024; tests seed the output path via NamedTempFile.
+        cmd.arg("--output").arg(output_path).arg("--force");
 
         // Add additional CLI arguments
         for arg in &test_case.cli_args {
@@ -1031,7 +1039,9 @@ impl AssertCmdIntegration {
             .arg("--query")
             .arg(&test_case.query)
             .arg("--output")
-            .arg(output_file.path());
+            .arg(output_file.path())
+            // See todo #024; tests seed the output path via NamedTempFile.
+            .arg("--force");
 
         // Add CLI arguments
         for arg in &test_case.cli_args {
@@ -1073,7 +1083,9 @@ impl AssertCmdIntegration {
             .arg("--query-file")
             .arg(query_file.path())
             .arg("--output")
-            .arg(output_file.path());
+            .arg(output_file.path())
+            // See todo #024; tests seed the output path via NamedTempFile.
+            .arg("--force");
 
         // Execute and return assertion along with both files
         let assert = cmd.assert();
@@ -1099,6 +1111,8 @@ impl AssertCmdIntegration {
             .arg(&test_case.query)
             .arg("--output")
             .arg(output_file.path())
+            // See todo #024; tests seed the output path via NamedTempFile.
+            .arg("--force")
             .timeout(timeout);
 
         // Add CLI arguments

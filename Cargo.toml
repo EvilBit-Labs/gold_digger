@@ -185,6 +185,11 @@ serde_json = "1.0.149"
 thiserror = "2.0.18"
 url = "2.5.8"
 
+# Unix-only: provides `O_NOFOLLOW` for O_NOFOLLOW path-safety on output
+# file creation (todo #024). Used only via `OpenOptions::custom_flags`.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [dev-dependencies]
 assert_cmd = "2.2.1"
 criterion = { version = "0.8.2", features = ["html_reports"] }

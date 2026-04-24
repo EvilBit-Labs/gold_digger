@@ -25,10 +25,17 @@ pub struct Cli {
 
     /// File containing SQL query to execute.
     ///
-    /// Reads any file the gold_digger process can read; there is no
-    /// allowlist or sandbox today (tracked under repo todo #023). Avoid
-    /// passing untrusted paths and do not run gold_digger as `root` with
-    /// this flag against externally-supplied paths. See SECURITY.md.
+    /// Path-safety guards (todo #023): the path is canonicalized via
+    /// `std::fs::canonicalize` before the file is read, which rejects
+    /// symlinks that cross filesystem boundaries and resolves traversal
+    /// components (`..`). The extension must be `.sql`, `.txt`, or
+    /// missing; recognised executable extensions (`.exe`, `.dll`, `.so`,
+    /// `.dylib`, `.bin`) are refused with a configuration error to stop
+    /// accidental reads of binaries as SQL. Files larger than 10 MiB are
+    /// refused to cap DoS risk. Do not run gold_digger as `root` with
+    /// `--query-file` pointing at externally-supplied paths, and prefer a
+    /// dedicated directory owned by the gold_digger user for query files.
+    /// See SECURITY.md.
     #[arg(long, conflicts_with = "query", value_name = "FILE")]
     pub query_file: Option<PathBuf>,
 
@@ -55,6 +62,20 @@ pub struct Cli {
     /// Exit successfully on empty result sets
     #[arg(long)]
     pub allow_empty: bool,
+
+    /// Overwrite the output file if it already exists.
+    ///
+    /// By default, gold_digger refuses to clobber an existing output file
+    /// (path-safety: todo #024). It opens the output with
+    /// `O_CREAT | O_EXCL` semantics on Unix so a pre-existing file — or a
+    /// symlink at the target path — is a hard error. Pass `--force` to
+    /// request explicit overwrite; symlinks at the target are still
+    /// refused on Unix via `O_NOFOLLOW`. This guards against an attacker
+    /// pre-placing a symlink at a predictable output path (e.g.
+    /// `/tmp/results.json`) and redirecting the write to an
+    /// attacker-chosen target. See SECURITY.md.
+    #[arg(long)]
+    pub force: bool,
 
     /// Print current configuration as JSON and exit.
     ///

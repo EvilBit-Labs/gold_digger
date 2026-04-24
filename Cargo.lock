@@ -1334,6 +1334,7 @@ dependencies = [
  "criterion",
  "csv",
  "insta",
+ "libc",
  "mysql",
  "mysql_common",
  "predicates",

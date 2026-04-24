@@ -83,11 +83,25 @@ This flag disables **both** the certificate chain and hostname checks performed 
 
 ### `--query-file <path>` (file-read scope)
 
-`--query-file` reads any file readable by the Gold Digger process. There is no allowlist or sandboxing today (tracked under repo todo #023):
+`--query-file` reads any file readable by the Gold Digger process. Path-safety guards landed with todo #023 and limit — but do not eliminate — the risk:
 
-- Running Gold Digger as `root` or under a service account with broad filesystem access lets an attacker who can choose the path read arbitrary files (system configs, other tenants' SQL, secrets).
+- **Canonicalisation.** The path is passed through `std::fs::canonicalize` before the file is opened. `..` is resolved and symlinks are collapsed, so the extension / size checks below apply to the true target, not the link.
+- **Extension deny-list.** Paths ending in `.exe`, `.dll`, `.so`, `.dylib`, `.bin`, `.bat`, `.cmd`, `.com` (case-insensitive) are refused with a configuration error. Paths with `.sql`, `.txt`, or no extension are accepted.
+- **Size cap.** Files larger than 10 MiB are refused to cap DoS / memory blow-up risk.
+
+Residual risks remain: running Gold Digger as `root` or under a service account with broad filesystem access still lets an attacker who can choose the path read arbitrary `.sql` / `.txt` files (other tenants' SQL, anything with a matching extension). Treat `--query-file` paths supplied from outside the trust boundary (webhook payloads, CI parameters from forks) as untrusted:
+
 - Store query files in a dedicated, restricted directory owned by the Gold Digger user and audit who can write to that directory.
-- Do not pass user-supplied paths to `--query-file` from outside the trust boundary (e.g. webhook payloads, CI parameters from forks).
+- Do not pass user-supplied paths to `--query-file` from outside the trust boundary.
+
+### `--output <path>` (file-write scope)
+
+Path-safety guards on the output path landed with todo #024:
+
+- **Refuse-existing by default.** Gold Digger opens the output with `O_CREAT | O_EXCL` semantics (Unix: `OpenOptions::create_new`; Windows: the equivalent fallback). A pre-existing file at the target path is a hard error with a message prompting the operator to pass `--force`. This blocks the "accidental clobber" footgun and the TOCTOU race where an attacker pre-plants a file at a predictable path.
+- **Refuse symlinks (Unix).** The output file is opened with `O_NOFOLLOW`, so a symlink at the target — attacker-placed or otherwise — is refused regardless of `--force`. This closes the classic "symlink at `/tmp/results.json`" redirect attack.
+- **0o600 permissions (Unix).** Created files are owner read/write only. Query results often contain sensitive data; the previous default of honouring the umask could leave world-readable files behind.
+- **`--force` opts into overwrite.** Explicit overwrite still refuses symlinks (`O_NOFOLLOW`) and preserves the 0o600 mode.
 
 ### `--dump-config` (best-effort redaction)
 
