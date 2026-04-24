@@ -642,15 +642,6 @@ impl TlsConfig {
         }
     }
 
-    /// Creates a TLS configuration from CLI TLS options
-    pub fn from_tls_options(tls_options: &crate::cli::TlsOptions) -> Result<Self, TlsError> {
-        Self::from_cli_args(
-            tls_options.tls_ca_file.as_ref(),
-            tls_options.insecure_skip_hostname_verify,
-            tls_options.allow_invalid_certificate,
-        )
-    }
-
     /// Creates a TLS configuration from CLI arguments with validation
     pub fn from_cli_args(
         ca_file: Option<&PathBuf>,
@@ -698,7 +689,14 @@ impl TlsConfig {
         Ok(Self { validation_mode })
     }
 
-    /// Displays security warnings for insecure TLS modes
+    /// Displays security warnings for insecure TLS modes.
+    ///
+    /// For [`TlsValidationMode::AcceptInvalid`] the warning is followed by
+    /// a 3-second deliberate delay (todo #022). The companion flag gate
+    /// (`--i-understand-this-is-insecure`) already blocks accidental
+    /// activation, but the delay gives a chance to `Ctrl+C` and makes the
+    /// `[DANGER]` line unmissable in interactive terminals. The delay is
+    /// skipped in test builds to keep unit tests fast.
     pub fn display_security_warnings(&self) {
         match &self.validation_mode {
             TlsValidationMode::SkipHostnameVerification => {
@@ -715,6 +713,14 @@ impl TlsConfig {
                 eprintln!(
                     "   Only use this for testing with self-signed certificates in secure environments."
                 );
+                // Deliberate pause so the banner cannot be missed and the
+                // user has a chance to Ctrl+C (todo #022). Skipped under
+                // `cfg(test)` so unit tests don't sleep.
+                #[cfg(not(test))]
+                {
+                    eprintln!("   Proceeding in 3 seconds (press Ctrl+C to abort)...");
+                    std::thread::sleep(std::time::Duration::from_secs(3));
+                }
             }
             TlsValidationMode::Platform | TlsValidationMode::CustomCa { .. } => {
                 // No warnings for secure modes
@@ -1733,47 +1739,6 @@ mod tests {
 
     // Additional comprehensive unit tests for TLS configuration
     // Requirements covered: 3.4, 6.1, 6.2, 6.3, 6.4
-
-    #[test]
-    fn test_tls_config_from_tls_options() {
-        use crate::cli::TlsOptions;
-
-        // Test platform mode (no flags)
-        let tls_options = TlsOptions {
-            tls_ca_file: None,
-            insecure_skip_hostname_verify: false,
-            allow_invalid_certificate: false,
-        };
-        let config = TlsConfig::from_tls_options(&tls_options).unwrap();
-        assert!(matches!(
-            config.validation_mode(),
-            TlsValidationMode::Platform
-        ));
-
-        // Test skip hostname mode
-        let tls_options = TlsOptions {
-            tls_ca_file: None,
-            insecure_skip_hostname_verify: true,
-            allow_invalid_certificate: false,
-        };
-        let config = TlsConfig::from_tls_options(&tls_options).unwrap();
-        assert!(matches!(
-            config.validation_mode(),
-            TlsValidationMode::SkipHostnameVerification
-        ));
-
-        // Test accept invalid mode
-        let tls_options = TlsOptions {
-            tls_ca_file: None,
-            insecure_skip_hostname_verify: false,
-            allow_invalid_certificate: true,
-        };
-        let config = TlsConfig::from_tls_options(&tls_options).unwrap();
-        assert!(matches!(
-            config.validation_mode(),
-            TlsValidationMode::AcceptInvalid
-        ));
-    }
 
     #[test]
     fn test_tls_config_mutual_exclusion_validation() {

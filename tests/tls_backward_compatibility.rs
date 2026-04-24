@@ -184,6 +184,7 @@ mod database_url_compatibility_tests {
                     tls_ca_file: None,
                     insecure_skip_hostname_verify: false,
                     allow_invalid_certificate: true,
+                    i_understand_this_is_insecure: true,
                 },
                 TlsValidationMode::AcceptInvalid,
             ),
@@ -194,6 +195,7 @@ mod database_url_compatibility_tests {
                     tls_ca_file: None,
                     insecure_skip_hostname_verify: true,
                     allow_invalid_certificate: false,
+                    i_understand_this_is_insecure: false,
                 },
                 TlsValidationMode::SkipHostnameVerification,
             ),
@@ -204,6 +206,7 @@ mod database_url_compatibility_tests {
                     tls_ca_file: Some(cert_path.clone()),
                     insecure_skip_hostname_verify: false,
                     allow_invalid_certificate: false,
+                    i_understand_this_is_insecure: false,
                 },
                 TlsValidationMode::CustomCa {
                     ca_file_path: cert_path.clone(),
@@ -216,6 +219,7 @@ mod database_url_compatibility_tests {
                     tls_ca_file: None,
                     insecure_skip_hostname_verify: false,
                     allow_invalid_certificate: false,
+                    i_understand_this_is_insecure: false,
                 },
                 TlsValidationMode::Platform,
             ),
@@ -223,7 +227,7 @@ mod database_url_compatibility_tests {
 
         for (url, cli_tls_options, expected_mode) in test_cases {
             // Create TLS config from CLI options (this simulates the actual CLI parsing)
-            let tls_config = TlsConfig::from_tls_options(&cli_tls_options)?;
+            let tls_config = cli_tls_options.to_tls_config()?;
 
             // Assert that the CLI flags determine the validation mode, not URL parameters
             assert_eq!(
@@ -468,9 +472,10 @@ mod tls_connection_compatibility_tests {
             tls_ca_file: None,
             insecure_skip_hostname_verify: false,
             allow_invalid_certificate: false,
+            i_understand_this_is_insecure: false,
         };
 
-        let config = TlsConfig::from_tls_options(&default_tls_options)?;
+        let config = default_tls_options.to_tls_config()?;
         assert!(matches!(
             config.validation_mode(),
             TlsValidationMode::Platform
@@ -483,9 +488,10 @@ mod tls_connection_compatibility_tests {
             tls_ca_file: Some(cert_path.clone()),
             insecure_skip_hostname_verify: false,
             allow_invalid_certificate: false,
+            i_understand_this_is_insecure: false,
         };
 
-        let config = TlsConfig::from_tls_options(&ca_tls_options)?;
+        let config = ca_tls_options.to_tls_config()?;
         if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
             assert_eq!(ca_file_path, &cert_path);
         } else {
@@ -497,9 +503,10 @@ mod tls_connection_compatibility_tests {
             tls_ca_file: None,
             insecure_skip_hostname_verify: true,
             allow_invalid_certificate: false,
+            i_understand_this_is_insecure: false,
         };
 
-        let config = TlsConfig::from_tls_options(&skip_hostname_options)?;
+        let config = skip_hostname_options.to_tls_config()?;
         assert!(matches!(
             config.validation_mode(),
             TlsValidationMode::SkipHostnameVerification
@@ -510,9 +517,10 @@ mod tls_connection_compatibility_tests {
             tls_ca_file: None,
             insecure_skip_hostname_verify: false,
             allow_invalid_certificate: true,
+            i_understand_this_is_insecure: true,
         };
 
-        let config = TlsConfig::from_tls_options(&accept_invalid_options)?;
+        let config = accept_invalid_options.to_tls_config()?;
         assert!(matches!(
             config.validation_mode(),
             TlsValidationMode::AcceptInvalid
@@ -996,8 +1004,9 @@ mod tls_always_available_tests {
             tls_ca_file: None,
             insecure_skip_hostname_verify: false,
             allow_invalid_certificate: false,
+            i_understand_this_is_insecure: false,
         };
-        let _config = TlsConfig::from_tls_options(&tls_options)?;
+        let _config = tls_options.to_tls_config()?;
 
         // Test CLI parsing with TLS flags
         let _cli = Cli::try_parse_from([

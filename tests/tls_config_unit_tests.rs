@@ -55,7 +55,7 @@ mod cli_flag_parsing_tests {
             "test.json",
         ])?;
 
-        let tls_config = TlsConfig::from_tls_options(&cli.tls_options)?;
+        let tls_config = cli.tls_options.to_tls_config()?;
 
         assert!(matches!(
             tls_config.validation_mode(),
@@ -84,7 +84,7 @@ mod cli_flag_parsing_tests {
             cert_path.to_str().unwrap(),
         ])?;
 
-        let tls_config = TlsConfig::from_tls_options(&cli.tls_options)?;
+        let tls_config = cli.tls_options.to_tls_config()?;
 
         if let TlsValidationMode::CustomCa { ca_file_path } = tls_config.validation_mode() {
             assert_eq!(ca_file_path, &cert_path);
@@ -110,7 +110,7 @@ mod cli_flag_parsing_tests {
             "--insecure-skip-hostname-verify",
         ])?;
 
-        let tls_config = TlsConfig::from_tls_options(&cli.tls_options)?;
+        let tls_config = cli.tls_options.to_tls_config()?;
 
         assert!(matches!(
             tls_config.validation_mode(),
@@ -124,6 +124,11 @@ mod cli_flag_parsing_tests {
     /// Requirement: 6.4 - Invalid certificate acceptance
     #[test]
     fn test_cli_allow_invalid_certificate_flag() -> Result<()> {
+        // --allow-invalid-certificate now requires the companion
+        // confirmation flag --i-understand-this-is-insecure (todo #022
+        // / CWE-295). The single-flag path is covered by a dedicated
+        // negative test below; this test keeps the happy-path assertion
+        // that AcceptInvalid is selected when both flags are provided.
         let cli = Cli::try_parse_from([
             "gold_digger",
             "--db-url",
@@ -133,9 +138,10 @@ mod cli_flag_parsing_tests {
             "--output",
             "test.json",
             "--allow-invalid-certificate",
+            "--i-understand-this-is-insecure",
         ])?;
 
-        let tls_config = TlsConfig::from_tls_options(&cli.tls_options)?;
+        let tls_config = cli.tls_options.to_tls_config()?;
 
         assert!(matches!(
             tls_config.validation_mode(),
@@ -143,6 +149,37 @@ mod cli_flag_parsing_tests {
         ));
 
         Ok(())
+    }
+
+    /// --allow-invalid-certificate alone (without companion) must fail
+    /// closed with a config-error TlsError variant so the exit-code
+    /// layer routes to exit 2 (todo #022).
+    #[test]
+    fn test_cli_allow_invalid_certificate_requires_companion_flag() {
+        temp_env::with_var("GOLD_DIGGER_ALLOW_INVALID", None::<&str>, || {
+            let cli = Cli::try_parse_from([
+                "gold_digger",
+                "--db-url",
+                "mysql://test",
+                "--query",
+                "SELECT 1",
+                "--output",
+                "test.json",
+                "--allow-invalid-certificate",
+            ])
+            .expect("cli parse should succeed; the gate is at conversion time");
+
+            let err = cli
+                .tls_options
+                .to_tls_config()
+                .expect_err("bare --allow-invalid-certificate must be rejected");
+
+            assert!(matches!(
+                err,
+                gold_digger::tls::TlsError::MutuallyExclusiveFlags { .. }
+            ));
+            assert!(err.to_string().contains("--i-understand-this-is-insecure"));
+        });
     }
 
     /// Test mutual exclusion: --tls-ca-file and --insecure-skip-hostname-verify
@@ -250,9 +287,10 @@ mod tls_config_creation_tests {
             tls_ca_file: None,
             insecure_skip_hostname_verify: false,
             allow_invalid_certificate: false,
+            i_understand_this_is_insecure: false,
         };
 
-        let config = TlsConfig::from_tls_options(&tls_options)?;
+        let config = tls_options.to_tls_config()?;
 
         assert!(matches!(
             config.validation_mode(),
@@ -273,9 +311,10 @@ mod tls_config_creation_tests {
             tls_ca_file: Some(cert_path.clone()),
             insecure_skip_hostname_verify: false,
             allow_invalid_certificate: false,
+            i_understand_this_is_insecure: false,
         };
 
-        let config = TlsConfig::from_tls_options(&tls_options)?;
+        let config = tls_options.to_tls_config()?;
 
         if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
             assert_eq!(ca_file_path, &cert_path);
@@ -294,9 +333,10 @@ mod tls_config_creation_tests {
             tls_ca_file: None,
             insecure_skip_hostname_verify: true,
             allow_invalid_certificate: false,
+            i_understand_this_is_insecure: false,
         };
 
-        let config = TlsConfig::from_tls_options(&tls_options)?;
+        let config = tls_options.to_tls_config()?;
 
         assert!(matches!(
             config.validation_mode(),
@@ -314,9 +354,10 @@ mod tls_config_creation_tests {
             tls_ca_file: None,
             insecure_skip_hostname_verify: false,
             allow_invalid_certificate: true,
+            i_understand_this_is_insecure: true,
         };
 
-        let config = TlsConfig::from_tls_options(&tls_options)?;
+        let config = tls_options.to_tls_config()?;
 
         assert!(matches!(
             config.validation_mode(),

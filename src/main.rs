@@ -18,7 +18,7 @@ use gold_digger::exit::{GoldDiggerError, exit_no_rows, exit_success, exit_with_e
 use gold_digger::rows_to_strings;
 use gold_digger::utils::{redact_dump_query, redact_sql_error};
 
-use gold_digger::tls::{TlsConfig, create_tls_connection};
+use gold_digger::tls::create_tls_connection;
 
 /// Main entry point for the gold_digger CLI tool.
 ///
@@ -147,17 +147,27 @@ fn main() {
     exit_success(None);
 }
 
-/// Creates a database connection pool with rustls-only TLS configuration from CLI
+/// Creates a database connection pool with rustls-only TLS configuration from CLI.
+///
+/// The `TlsOptions` → `TlsConfig` adapter now lives in [`gold_digger::cli`]
+/// (todo #045) so the `tls` module has zero dependency on CLI types. The
+/// second-confirmation gate for `--allow-invalid-certificate` is enforced by
+/// [`gold_digger::cli::TlsOptions::to_tls_config`] (todo #022); bare
+/// `--allow-invalid-certificate` without `--i-understand-this-is-insecure`
+/// (or the `GOLD_DIGGER_ALLOW_INVALID=1` env var) returns a config error here.
 fn create_database_connection(database_url: &str, cli: &Cli) -> Result<Pool> {
     // Create TLS configuration from CLI options
     let tls_config = if cli.tls_options.tls_ca_file.is_some()
         || cli.tls_options.insecure_skip_hostname_verify
         || cli.tls_options.allow_invalid_certificate
     {
-        let config = TlsConfig::from_tls_options(&cli.tls_options)
+        let config = cli
+            .tls_options
+            .to_tls_config()
             .map_err(|e| anyhow::anyhow!("TLS configuration error: {}", e))?;
 
-        // Display security warnings for insecure modes
+        // Display security warnings for insecure modes (includes the
+        // mandatory DANGER delay for AcceptInvalid — see #022).
         config.display_security_warnings();
 
         Some(config)

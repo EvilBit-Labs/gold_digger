@@ -61,6 +61,15 @@ Options:
           Disable certificate validation entirely (DANGEROUS — full MITM exposure).
           
           Disables BOTH the certificate chain and hostname checks. Any network attacker who can intercept the TCP connection can present an attacker-controlled certificate, complete the TLS handshake, and read or modify the database protocol — including plaintext credentials. Never use against a production database. Prefer `--tls-ca-file <path>` for self-signed CAs (full validation against an explicit anchor) or `--insecure-skip-hostname-verify` for hostname-only mismatches. See SECURITY.md.
+          
+          **Requires a second confirmation flag:** pass `--i-understand-this-is-insecure` (or set `GOLD_DIGGER_ALLOW_INVALID=1`) to actually activate the mode. This is a guard against the flag being accidentally left in a script; stderr-only `[DANGER]` warnings are swallowed by `2>/dev/null` in CI and cron (todo #022, CWE-295 / CWE-296).
+
+      --i-understand-this-is-insecure
+          Second-confirmation flag required alongside `--allow-invalid-certificate`.
+          
+          Acts as an explicit opt-in that the user understands they are disabling all TLS certificate validation and accepting full MITM exposure. Alternatively set the `GOLD_DIGGER_ALLOW_INVALID=1` environment variable (for ops-managed deployments). Without one of these, `--allow-invalid-certificate` is treated as a configuration error (exit 2) rather than silently downgrading security.
+          
+          [env: GOLD_DIGGER_ALLOW_INVALID=]
 
   -h, --help
           Print help (see a summary with '-h')

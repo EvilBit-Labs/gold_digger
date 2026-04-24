@@ -90,9 +90,9 @@ pub enum Shell {
     PowerShell,
 }
 
-/// TLS configuration options (mutually exclusive)
+/// TLS configuration options (mutually exclusive validation modes, plus a
+/// second-confirmation flag for `--allow-invalid-certificate`).
 #[derive(Args, Debug, Clone)]
-#[group(id = "tls_mode", multiple = false)]
 pub struct TlsOptions {
     /// Path to CA certificate file for trust anchor pinning
     #[arg(long, group = "tls_mode")]
@@ -112,8 +112,64 @@ pub struct TlsOptions {
     /// `--tls-ca-file <path>` for self-signed CAs (full validation
     /// against an explicit anchor) or `--insecure-skip-hostname-verify`
     /// for hostname-only mismatches. See SECURITY.md.
+    ///
+    /// **Requires a second confirmation flag:** pass
+    /// `--i-understand-this-is-insecure` (or set
+    /// `GOLD_DIGGER_ALLOW_INVALID=1`) to actually activate the mode. This
+    /// is a guard against the flag being accidentally left in a script;
+    /// stderr-only `[DANGER]` warnings are swallowed by `2>/dev/null` in
+    /// CI and cron (todo #022, CWE-295 / CWE-296).
     #[arg(long, group = "tls_mode")]
     pub allow_invalid_certificate: bool,
+
+    /// Second-confirmation flag required alongside `--allow-invalid-certificate`.
+    ///
+    /// Acts as an explicit opt-in that the user understands they are
+    /// disabling all TLS certificate validation and accepting full MITM
+    /// exposure. Alternatively set the `GOLD_DIGGER_ALLOW_INVALID=1`
+    /// environment variable (for ops-managed deployments). Without one of
+    /// these, `--allow-invalid-certificate` is treated as a configuration
+    /// error (exit 2) rather than silently downgrading security.
+    #[arg(long, env = "GOLD_DIGGER_ALLOW_INVALID")]
+    pub i_understand_this_is_insecure: bool,
+}
+
+impl TlsOptions {
+    /// Builds a [`crate::tls::TlsConfig`] from the parsed CLI flags.
+    ///
+    /// # Why this lives in the CLI layer (#045)
+    ///
+    /// `TlsConfig` is an infrastructure primitive that should compile
+    /// without any `clap`-decorated input type. The adapter from
+    /// [`TlsOptions`] → [`crate::tls::TlsConfig`] lives here so the `tls`
+    /// module depends only on primitive types (bool + `Option<PathBuf>`),
+    /// enabling a future extraction into a sibling crate.
+    ///
+    /// # Fail-closed second confirmation (#022)
+    ///
+    /// If `--allow-invalid-certificate` is set WITHOUT either
+    /// `--i-understand-this-is-insecure` or
+    /// `GOLD_DIGGER_ALLOW_INVALID=1`, this function returns a
+    /// [`crate::tls::TlsError::MutuallyExclusiveFlags`] variant (which
+    /// maps to exit 2 / config error). The call site is expected to
+    /// surface this error verbatim — stderr `[DANGER]` warnings are
+    /// swallowed by `2>/dev/null` in CI / cron, so structural
+    /// enforcement is the only reliable signal.
+    pub fn to_tls_config(&self) -> Result<crate::tls::TlsConfig, crate::tls::TlsError> {
+        if self.allow_invalid_certificate && !self.i_understand_this_is_insecure {
+            return Err(crate::tls::TlsError::MutuallyExclusiveFlags {
+                flags:
+                    "--allow-invalid-certificate requires the companion flag --i-understand-this-is-insecure (or env GOLD_DIGGER_ALLOW_INVALID=1).                      Refusing to disable certificate validation without explicit confirmation. See SECURITY.md (todo #022)."
+                        .to_string(),
+            });
+        }
+
+        crate::tls::TlsConfig::from_cli_args(
+            self.tls_ca_file.as_ref(),
+            self.insecure_skip_hostname_verify,
+            self.allow_invalid_certificate,
+        )
+    }
 }
 
 #[derive(ValueEnum, Clone, Debug)]

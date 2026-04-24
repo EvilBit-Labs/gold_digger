@@ -189,7 +189,8 @@ newlines' AS special_chars,
                 test_query,
             )
             .with_format(format.clone())
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
             let result = self.execute_format_preservation_test(db_config, &test_case)?;
             results.push(result);
@@ -363,7 +364,8 @@ newlines' AS special_chars,
 
         let test_case_obj = TestCase::new(test_case.name, test_case.query)
             .with_format(OutputFormat::Csv)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let output_file = self.temp_manager.create_output_file(&OutputFormat::Csv)?;
         let result = self
@@ -408,7 +410,8 @@ newlines' AS special_chars,
 
         let test_case_obj = TestCase::new(test_case.name, test_case.query)
             .with_format(OutputFormat::Json)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let output_file = self.temp_manager.create_output_file(&OutputFormat::Json)?;
         let result = self
@@ -525,7 +528,8 @@ newlines' AS special_chars,
 
         let test_case_obj = TestCase::new(test_case.name, test_case.query)
             .with_format(OutputFormat::Csv)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let output_file = self.temp_manager.create_output_file(&OutputFormat::Csv)?;
         let result = self
@@ -573,7 +577,8 @@ newlines' AS special_chars,
 
         let test_case_obj = TestCase::new(test_case.name, test_case.query)
             .with_format(OutputFormat::Json)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let output_file = self.temp_manager.create_output_file(&OutputFormat::Json)?;
         let result = self
@@ -633,7 +638,8 @@ newlines' AS special_chars,
 
         let test_case_obj = TestCase::new(test_case.name, test_case.query)
             .with_format(OutputFormat::Csv)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let output_file = self.temp_manager.create_output_file(&OutputFormat::Csv)?;
         let result = self
@@ -680,7 +686,8 @@ newlines' AS special_chars,
 
         let test_case = TestCase::new("collation_ordering", query)
             .with_format(OutputFormat::Json)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let output_file = self.temp_manager.create_output_file(&OutputFormat::Json)?;
         let result = self.cli.execute(&test_case, db_url, output_file.path())?;
@@ -873,7 +880,8 @@ impl NullValueAndJsonTests {
                 null_test_query,
             )
             .with_format(format.clone())
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
             let result = self.execute_null_handling_test(db_config, &test_case, &format)?;
             results.push(result);
@@ -1023,7 +1031,8 @@ impl NullValueAndJsonTests {
         // Test CSV format - NULL should become empty strings
         let csv_test = TestCase::new("csv_null_handling", format_specific_query)
             .with_format(OutputFormat::Csv)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let csv_result =
             self.execute_format_specific_null_test(db_config, &csv_test, &OutputFormat::Csv)?;
@@ -1032,7 +1041,8 @@ impl NullValueAndJsonTests {
         // Test JSON format - NULL should become JSON null values
         let json_test = TestCase::new("json_null_handling", format_specific_query)
             .with_format(OutputFormat::Json)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let json_result =
             self.execute_format_specific_null_test(db_config, &json_test, &OutputFormat::Json)?;
@@ -1041,7 +1051,8 @@ impl NullValueAndJsonTests {
         // Test TSV format - NULL should become empty strings
         let tsv_test = TestCase::new("tsv_null_handling", format_specific_query)
             .with_format(OutputFormat::Tsv)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let tsv_result =
             self.execute_format_specific_null_test(db_config, &tsv_test, &OutputFormat::Tsv)?;
@@ -1124,7 +1135,8 @@ impl NullValueAndJsonTests {
 
         let test_case_obj = TestCase::new(test_case.name, test_case.query)
             .with_format(OutputFormat::Json)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let output_file = self.temp_manager.create_output_file(&OutputFormat::Json)?;
         let result = self
@@ -1171,7 +1183,8 @@ impl NullValueAndJsonTests {
 
         let test_case_obj = TestCase::new(test_case.name, test_case.query)
             .with_format(OutputFormat::Json)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let output_file = self.temp_manager.create_output_file(&OutputFormat::Json)?;
 
@@ -1727,7 +1740,8 @@ impl TemporalBinaryDataTypeTests {
                 test_query,
             )
             .with_format(format.clone())
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
             let result = self.execute_formatting_consistency_test(db_config, &test_case)?;
             results.push(result);
@@ -1849,7 +1863,8 @@ impl TemporalBinaryDataTypeTests {
 
         let test_case_obj = TestCase::new(test_case.name, test_case.query)
             .with_format(OutputFormat::Csv)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let output_file = self.temp_manager.create_output_file(&OutputFormat::Csv)?;
         let result = self
@@ -1902,7 +1917,8 @@ impl TemporalBinaryDataTypeTests {
 
         let test_case_obj = TestCase::new(test_case.name, test_case.query)
             .with_format(OutputFormat::Json)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let output_file = self.temp_manager.create_output_file(&OutputFormat::Json)?;
         let result = self
@@ -2035,7 +2051,8 @@ impl TemporalBinaryDataTypeTests {
 
         let test_case_obj = TestCase::new(test_case.name, test_case.verify_query)
             .with_format(OutputFormat::Csv)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let output_file = self.temp_manager.create_output_file(&OutputFormat::Csv)?;
         let result = self
@@ -2084,6 +2101,7 @@ impl TemporalBinaryDataTypeTests {
         let test_case_obj = TestCase::new(test_case.name, test_case.query)
             .with_format(OutputFormat::Json)
             .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure")
             .with_arg("--verbose");
 
         let output_file = self.temp_manager.create_output_file(&OutputFormat::Json)?;
@@ -2784,6 +2802,7 @@ impl NumericDataTypeTests {
         let test_case_obj = TestCase::new(test_case.name, test_case.query)
             .with_format(OutputFormat::Csv)
             .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure")
             .with_arg("--verbose");
 
         let output_file = self.temp_manager.create_output_file(&OutputFormat::Csv)?;
@@ -2830,7 +2849,8 @@ impl NumericDataTypeTests {
     ) -> Result<NumericTestResult> {
         let test_case_obj = TestCase::new(test_case.name, test_case.query)
             .with_format(OutputFormat::Json)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let output_file = self.temp_manager.create_output_file(&OutputFormat::Json)?;
         let result = self
@@ -2897,7 +2917,8 @@ impl NumericDataTypeTests {
 
         let test_case_obj = TestCase::new(test_case.name, test_case.query)
             .with_format(OutputFormat::Csv)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let output_file = self.temp_manager.create_output_file(&OutputFormat::Csv)?;
         let result = self
@@ -2945,7 +2966,8 @@ impl NumericDataTypeTests {
 
         let test_case_obj = TestCase::new(test_case.name, test_case.query)
             .with_format(OutputFormat::Json)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let output_file = self.temp_manager.create_output_file(&OutputFormat::Json)?;
         let result = self
@@ -3012,7 +3034,8 @@ impl NumericDataTypeTests {
 
         let test_case_obj = TestCase::new(test_case.name, test_case.query)
             .with_format(OutputFormat::Json)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let output_file = self.temp_manager.create_output_file(&OutputFormat::Json)?;
         let result = self
@@ -3063,7 +3086,8 @@ impl NumericDataTypeTests {
 
         let test_case_obj = TestCase::new(test_case.name, test_case.query)
             .with_format(OutputFormat::Csv)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let output_file = self.temp_manager.create_output_file(&OutputFormat::Csv)?;
 
@@ -3133,7 +3157,8 @@ impl NumericDataTypeTests {
 
         let test_case_obj = TestCase::new(&test_case.name, &test_case.query)
             .with_format(test_case.format.clone())
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let output_file = self.temp_manager.create_output_file(&test_case.format)?;
         let result = self
@@ -4162,7 +4187,8 @@ impl DataTypeValidationFramework {
 
         let test_case_obj = TestCase::new(&test_case.name, &query)
             .with_format(OutputFormat::Json)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let output_file = self.temp_manager.create_output_file(&OutputFormat::Json)?;
         let execution_result = self
@@ -4332,7 +4358,8 @@ impl DataTypeValidationFramework {
 
         let test_case_obj = TestCase::new(&test_case.name, &query)
             .with_format(OutputFormat::Csv)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let output_file = self.temp_manager.create_output_file(&OutputFormat::Csv)?;
 
@@ -4475,7 +4502,8 @@ impl DataTypeValidationFramework {
 
         let test_case = TestCase::new(&regression_case.name, &regression_case.query)
             .with_format(OutputFormat::Json)
-            .with_arg("--allow-invalid-certificate");
+            .with_arg("--allow-invalid-certificate")
+            .with_arg("--i-understand-this-is-insecure");
 
         let output_file = self.temp_manager.create_output_file(&OutputFormat::Json)?;
         let execution_result = self.cli.execute(&test_case, db_url, output_file.path())?;
