@@ -1,9 +1,18 @@
 use std::hint::black_box;
 
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
-use gold_digger::{csv, json, rows_to_strings, tab};
+use gold_digger::{TypeTransformer, csv, json, rows_to_strings, tab};
 use mysql::{OptsBuilder, Pool, prelude::*};
+use std::collections::BTreeMap;
 use std::io::Cursor;
+
+/// Convert raw MySQL rows into the typed-JSON representation consumed by
+/// `json::write` after todo #015 (the string-inference path was deleted).
+fn rows_to_json_maps(rows: Vec<mysql::Row>) -> Vec<BTreeMap<String, serde_json::Value>> {
+    rows.into_iter()
+        .map(|row| TypeTransformer::row_to_json(row).expect("bench row conversion"))
+        .collect()
+}
 
 /// Helper function to create a test database connection for generating rows
 fn create_test_pool() -> Pool {
@@ -91,18 +100,18 @@ fn benchmark_json_memory(c: &mut Criterion) {
 
     group.bench_function("end_to_end_10000_rows_compact", |b| {
         b.iter(|| {
-            let string_rows = black_box(rows_to_strings(black_box(large_rows.clone())).unwrap());
+            let maps = black_box(rows_to_json_maps(black_box(large_rows.clone())));
             let mut output = Cursor::new(Vec::new());
-            json::write(black_box(string_rows.clone()), &mut output).unwrap();
+            json::write(black_box(maps), &mut output, false).unwrap();
             black_box(output.into_inner())
         })
     });
 
     group.bench_function("end_to_end_10000_rows_pretty", |b| {
         b.iter(|| {
-            let string_rows = black_box(rows_to_strings(black_box(large_rows.clone())).unwrap());
+            let maps = black_box(rows_to_json_maps(black_box(large_rows.clone())));
             let mut output = Cursor::new(Vec::new());
-            json::write_with_pretty(black_box(string_rows.clone()), &mut output, true).unwrap();
+            json::write(black_box(maps), &mut output, true).unwrap();
             black_box(output.into_inner())
         })
     });
@@ -151,9 +160,9 @@ fn benchmark_format_comparison(c: &mut Criterion) {
     // JSON compact
     group.bench_function("json_compact_10000_rows", |b| {
         b.iter(|| {
-            let string_rows = black_box(rows_to_strings(black_box(large_rows.clone())).unwrap());
+            let maps = black_box(rows_to_json_maps(black_box(large_rows.clone())));
             let mut output = Cursor::new(Vec::new());
-            json::write(black_box(string_rows.clone()), &mut output).unwrap();
+            json::write(black_box(maps), &mut output, false).unwrap();
             black_box(output.into_inner())
         })
     });
@@ -161,9 +170,9 @@ fn benchmark_format_comparison(c: &mut Criterion) {
     // JSON pretty
     group.bench_function("json_pretty_10000_rows", |b| {
         b.iter(|| {
-            let string_rows = black_box(rows_to_strings(black_box(large_rows.clone())).unwrap());
+            let maps = black_box(rows_to_json_maps(black_box(large_rows.clone())));
             let mut output = Cursor::new(Vec::new());
-            json::write_with_pretty(black_box(string_rows.clone()), &mut output, true).unwrap();
+            json::write(black_box(maps), &mut output, true).unwrap();
             black_box(output.into_inner())
         })
     });

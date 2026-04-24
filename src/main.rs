@@ -17,6 +17,7 @@ use gold_digger::cli::{Cli, Commands, OutputFormat, Shell};
 use gold_digger::exit::{GoldDiggerError, exit_no_rows, exit_success, exit_with_error};
 use gold_digger::rows_to_strings;
 use gold_digger::utils::{redact_dump_query, redact_sql_error};
+use std::collections::BTreeMap;
 
 use gold_digger::tls::create_tls_connection;
 
@@ -291,24 +292,32 @@ fn resolve_output_file(cli: &Cli) -> Result<PathBuf> {
 /// as JSON numbers, NULLs as JSON null, etc.). For CSV and TSV, converts rows to
 /// strings first via `rows_to_strings`, ensuring conversion succeeds before
 /// creating/truncating the output file.
+///
+/// Format selection (todo #019): if `--format` is absent AND the output file
+/// extension is unknown (or missing), returns [`GoldDiggerError::Config`]
+/// instead of silently defaulting to TSV. The previous behaviour surfaced a
+/// "silent format selection" hazard — an `.xml` or `.yaml` output path would
+/// quietly emit tab-separated data with no signal to the caller.
 fn write_output(rows: Vec<mysql::Row>, output_file: &std::path::Path, cli: &Cli) -> Result<()> {
     let format = if let Some(format) = &cli.format {
         format.clone()
     } else {
-        OutputFormat::from_extension(output_file)
+        OutputFormat::from_extension(output_file).ok_or_else(|| {
+            GoldDiggerError::Config(format!(
+                "Cannot infer output format from '{}'. Recognised extensions: .csv, .json, .tsv, .tab, .txt. Pass --format <csv|json|tsv> to select explicitly.",
+                output_file.display()
+            ))
+        })?
     };
 
     match format {
-        #[cfg(feature = "csv")]
         OutputFormat::Csv => {
             let string_rows = rows_to_strings(rows)?;
             let output = File::create(output_file).context("Failed to create output file")?;
             gold_digger::csv::write(string_rows, output)?;
         }
-        #[cfg(feature = "json")]
         OutputFormat::Json => {
             use gold_digger::TypeTransformer;
-            use std::collections::BTreeMap;
 
             // Convert rows to JSON maps before creating the file to avoid
             // leaving an empty/truncated file on conversion failure.
@@ -322,17 +331,13 @@ fn write_output(rows: Vec<mysql::Row>, output_file: &std::path::Path, cli: &Cli)
                 .collect::<Result<Vec<_>>>()?;
 
             let output = File::create(output_file).context("Failed to create output file")?;
-            gold_digger::json::write_json_maps(json_maps, output, cli.pretty)?;
+            gold_digger::json::write(json_maps, output, cli.pretty)?;
         }
         OutputFormat::Tsv => {
             let string_rows = rows_to_strings(rows)?;
             let output = File::create(output_file).context("Failed to create output file")?;
             gold_digger::tab::write(string_rows, output)?;
         }
-        #[cfg(not(feature = "csv"))]
-        OutputFormat::Csv => anyhow::bail!("CSV support not compiled in"),
-        #[cfg(not(feature = "json"))]
-        OutputFormat::Json => anyhow::bail!("JSON support not compiled in"),
     }
 
     Ok(())
@@ -408,8 +413,10 @@ fn dump_configuration(cli: &Cli) -> Result<()> {
         "pretty": cli.pretty,
         "allow_empty": cli.allow_empty,
         "features": {
-            "json": cfg!(feature = "json"),
-            "csv": cfg!(feature = "csv"),
+            // JSON and CSV output are built into the binary unconditionally
+            // (todo #011 removed the vestigial feature flags).
+            "json": true,
+            "csv": true,
             "verbose": cfg!(feature = "verbose"),
             "additional_mysql_types": cfg!(feature = "additional_mysql_types"),
             "tls": true  // TLS is always available (rustls-only implementation)

@@ -142,11 +142,13 @@ cargo_common_metadata = "allow"    # TODO: Revisit this
 multiple_crate_versions = "allow"
 
 [features]
-default = ["json", "csv", "additional_mysql_types", "verbose"]
-
-# Output format support
-json = []  # Enable JSON output format with deterministic field ordering
-csv = []   # Enable CSV output format with RFC4180 compliance
+default = ["additional_mysql_types", "verbose"]
+# NOTE (todo #011): the former `json` and `csv` features were empty marker
+# flags -- the modules were always compiled, the `csv` crate was always
+# linked, and `--no-default-features --features "json csv"` produced a
+# binary byte-identical to the default build. Gating JSON/CSV output is
+# therefore not a real build-time choice; the flags were removed to stop
+# advertising a non-existent attack-surface reduction.
 
 # Extended MySQL type support for complex data types
 additional_mysql_types = [

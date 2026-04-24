@@ -4,8 +4,12 @@
 //! ([`csv`], [`json`], [`tab`]), the panic-free value converter
 //! ([`type_transformer`]), the exit-code contract ([`exit`]), rustls-backed
 //! TLS ([`tls`]), and shared helpers ([`utils`]). The library exposes
-//! [`rows_to_strings`] and [`get_extension_from_filename`] for callers, plus
-//! the [`FormatWriter`] trait used internally to unify streaming writers.
+//! [`rows_to_strings`] and [`get_extension_from_filename`] for callers.
+//!
+//! Each writer module exposes a single `write(...)` free function. CSV and
+//! TSV take `IntoIterator<Item = IntoIterator<Item = String>>`; JSON takes
+//! pre-converted `BTreeMap<String, serde_json::Value>` maps so the caller
+//! can validate every row before truncating the output file.
 //!
 //! TLS is always rustls; consumers must invoke [`init_crypto_provider`] once
 //! before opening a connection pool so rustls has a default crypto provider.
@@ -43,22 +47,6 @@ pub mod type_transformer;
 pub mod utils;
 
 pub use type_transformer::TypeTransformer;
-
-#[cfg(feature = "json")]
-pub use json::{write_json_maps, write_typed};
-
-/// Streaming writer trait for output formats that produce one row at a time.
-///
-/// Currently implemented only by [`json::JsonWriter`]; the `csv` and `tab`
-/// modules expose a free `write()` function that takes a fully materialised
-/// `Vec<Vec<String>>` instead of using this trait. New format modules should
-/// only implement `FormatWriter` if they support genuine streaming output;
-/// otherwise follow the free-function contract documented in `AGENTS.md`.
-pub trait FormatWriter {
-    fn write_header(&mut self, columns: &[String]) -> Result<()>;
-    fn write_row(&mut self, row: &[String]) -> Result<()>;
-    fn finalize(self) -> Result<()>;
-}
 
 /// Converts MySQL rows to a vector of string vectors, with the first row as headers.
 ///

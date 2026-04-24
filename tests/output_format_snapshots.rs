@@ -1,5 +1,7 @@
 use gold_digger::{csv, json, tab};
 use insta::assert_snapshot;
+use serde_json::{Value, json};
+use std::collections::BTreeMap;
 use std::io::Cursor;
 
 /// Create test data with standard values
@@ -10,6 +12,75 @@ fn create_test_data() -> Vec<Vec<String>> {
         vec!["2".to_string(), "Bob".to_string(), "200".to_string()],
         vec!["3".to_string(), "Charlie".to_string(), "300".to_string()],
     ]
+}
+
+/// Build typed JSON maps for the JSON writer.
+///
+/// After todo #015 deleted the `JsonWriter`/string-inference path, JSON
+/// output consumes pre-converted `BTreeMap<String, Value>` maps. These
+/// helpers model what `TypeTransformer::row_to_json` would produce for the
+/// corresponding scenario -- strings stay strings, numbers stay numbers,
+/// NULLs are `Value::Null`.
+fn typed_standard_rows() -> Vec<BTreeMap<String, Value>> {
+    vec![
+        build_map(&[
+            ("id", json!(1)),
+            ("name", json!("Alice")),
+            ("value", json!(100)),
+        ]),
+        build_map(&[
+            ("id", json!(2)),
+            ("name", json!("Bob")),
+            ("value", json!(200)),
+        ]),
+        build_map(&[
+            ("id", json!(3)),
+            ("name", json!("Charlie")),
+            ("value", json!(300)),
+        ]),
+    ]
+}
+
+fn typed_null_rows() -> Vec<BTreeMap<String, Value>> {
+    vec![
+        build_map(&[
+            ("id", json!(1)),
+            ("name", json!("Alice")),
+            ("value", json!(100)),
+        ]),
+        build_map(&[
+            ("id", json!(2)),
+            ("name", Value::Null),
+            ("value", json!(200)),
+        ]),
+        build_map(&[
+            ("id", json!(3)),
+            ("name", json!("Charlie")),
+            ("value", Value::Null),
+        ]),
+    ]
+}
+
+fn typed_large_number_rows() -> Vec<BTreeMap<String, Value>> {
+    vec![
+        build_map(&[
+            ("id", json!(1)),
+            ("bigint", json!(i64::MAX)),
+            ("uint", json!(u64::MAX)),
+        ]),
+        build_map(&[
+            ("id", json!(2)),
+            ("bigint", json!(i64::MIN)),
+            ("uint", json!(0u64)),
+        ]),
+    ]
+}
+
+fn build_map(entries: &[(&str, Value)]) -> BTreeMap<String, Value> {
+    entries
+        .iter()
+        .map(|(k, v)| ((*k).to_string(), v.clone()))
+        .collect()
 }
 
 /// Create test data with null values (empty strings)
@@ -43,23 +114,6 @@ fn create_test_data_with_special_chars() -> Vec<Vec<String>> {
 /// Create empty result set
 fn create_empty_data() -> Vec<Vec<String>> {
     vec![vec!["id".to_string(), "name".to_string()]]
-}
-
-/// Create test data with large integers and boundary values
-fn create_test_data_with_large_numbers() -> Vec<Vec<String>> {
-    vec![
-        vec!["id".to_string(), "bigint".to_string(), "uint".to_string()],
-        vec![
-            "1".to_string(),
-            "9223372036854775807".to_string(),
-            "18446744073709551615".to_string(),
-        ],
-        vec![
-            "2".to_string(),
-            "-9223372036854775808".to_string(),
-            "0".to_string(),
-        ],
-    ]
 }
 
 #[test]
@@ -134,9 +188,9 @@ fn test_csv_empty_result_set() {
 
 #[test]
 fn test_json_standard_data() {
-    let data = create_test_data();
+    let data = typed_standard_rows();
     let mut output = Cursor::new(Vec::new());
-    json::write(data.clone(), &mut output).unwrap();
+    json::write(data, &mut output, false).unwrap();
     let result = String::from_utf8(output.into_inner()).unwrap();
     insta::with_settings!({
         snapshot_path => "tests/snapshots",
@@ -148,9 +202,9 @@ fn test_json_standard_data() {
 
 #[test]
 fn test_json_pretty_printed() {
-    let data = create_test_data();
+    let data = typed_standard_rows();
     let mut output = Cursor::new(Vec::new());
-    json::write_with_pretty(data.clone(), &mut output, true).unwrap();
+    json::write(data, &mut output, true).unwrap();
     let result = String::from_utf8(output.into_inner()).unwrap();
     insta::with_settings!({
         snapshot_path => "tests/snapshots",
@@ -162,9 +216,8 @@ fn test_json_pretty_printed() {
 
 #[test]
 fn test_json_empty_result_set() {
-    let data = create_empty_data();
     let mut output = Cursor::new(Vec::new());
-    json::write(data.clone(), &mut output).unwrap();
+    json::write(Vec::new(), &mut output, false).unwrap();
     let result = String::from_utf8(output.into_inner()).unwrap();
     insta::with_settings!({
         snapshot_path => "tests/snapshots",
@@ -176,9 +229,9 @@ fn test_json_empty_result_set() {
 
 #[test]
 fn test_json_null_handling() {
-    let data = create_test_data_with_nulls();
+    let data = typed_null_rows();
     let mut output = Cursor::new(Vec::new());
-    json::write(data.clone(), &mut output).unwrap();
+    json::write(data, &mut output, false).unwrap();
     let result = String::from_utf8(output.into_inner()).unwrap();
     insta::with_settings!({
         snapshot_path => "tests/snapshots",
@@ -190,9 +243,9 @@ fn test_json_null_handling() {
 
 #[test]
 fn test_json_large_integers() {
-    let data = create_test_data_with_large_numbers();
+    let data = typed_large_number_rows();
     let mut output = Cursor::new(Vec::new());
-    json::write(data.clone(), &mut output).unwrap();
+    json::write(data, &mut output, false).unwrap();
     let result = String::from_utf8(output.into_inner()).unwrap();
     insta::with_settings!({
         snapshot_path => "tests/snapshots",

@@ -120,7 +120,7 @@ cargo build --no-default-features --features "json csv additional_mysql_types ve
 ### Cursor Rules Compliance
 
 - Follow `.cursor/rules/rust-best-practices.mdc` for module organization
-- Use format module contract: `fn write<R, F, W>(rows: R, output: W) -> anyhow::Result<()> where R: IntoIterator<Item = F>, F: IntoIterator<Item = String>, W: Write`. Rows are owned `Vec<Vec<String>>` produced by `rows_to_strings`; the writer is consumed by value (wrap in `BufWriter` at the call site). Note: `JsonWriter` is the only type that currently implements the `FormatWriter` trait — `csv` and `tab` use this free-function pattern.
+- Use format module contract: every writer module exposes a single free `write(...)` function -- no trait abstraction, no per-writer struct (the `FormatWriter` trait was deleted in todo #020 as unused scaffolding). `csv::write` and `tab::write` take `rows: impl IntoIterator<Item = impl IntoIterator<Item = String>>` and a writer consumed by value. `json::write` takes `Vec<BTreeMap<String, serde_json::Value>>` (pre-converted via `TypeTransformer::row_to_json`) plus a `pretty: bool` flag -- this shape lets the caller validate every row before truncating the output file. Wrap the caller-provided writer in a `BufWriter` at the boundary.
 - Implement streaming support with generic writers
 - Use `#[cfg(feature = "...")]` for conditional compilation
 

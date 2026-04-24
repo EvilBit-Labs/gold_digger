@@ -1,8 +1,9 @@
 #[cfg(test)]
 mod tests {
-    use gold_digger::{FormatWriter, json::JsonWriter, rows_to_strings};
-    use gold_digger::{csv, tab};
+    use gold_digger::rows_to_strings;
+    use gold_digger::{csv, json, tab};
     use mysql::Row;
+    use std::collections::BTreeMap;
     use std::io::Cursor;
 
     #[test]
@@ -27,22 +28,25 @@ mod tests {
     }
 
     #[test]
-    fn test_json_writer_format() {
+    fn test_json_write_typed_maps() {
+        // After todo #015, `json::write` is the single public entry point
+        // and consumes pre-converted typed maps (strings stay strings,
+        // integers stay integers) rather than re-inferring types from
+        // stringified values.
         let mut cursor = Cursor::new(Vec::new());
-        let mut writer = JsonWriter::new(&mut cursor, false);
+        let mut map = BTreeMap::new();
+        map.insert("id".to_string(), serde_json::json!(1));
+        map.insert(
+            "item_name".to_string(),
+            serde_json::Value::String("test".to_string()),
+        );
 
-        let columns = vec!["id".to_string(), "item_name".to_string()];
-        let row = vec!["1".to_string(), "test".to_string()];
-
-        writer.write_header(&columns).unwrap();
-        writer.write_row(&row).unwrap();
-        writer.finalize().unwrap();
+        json::write(vec![map], &mut cursor, false).unwrap();
 
         let output = String::from_utf8(cursor.into_inner()).unwrap();
         assert!(output.contains(r#"{"data":["#));
         assert!(output.contains(r#"]}"#));
-        // With type inference, "1" becomes integer 1, "test" remains string
-        assert!(output.contains(r#""id":1"#) || output.contains(r#""id":"1""#));
+        assert!(output.contains(r#""id":1"#));
         assert!(output.contains(r#""item_name":"test""#));
     }
 

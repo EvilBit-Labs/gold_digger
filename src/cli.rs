@@ -180,11 +180,20 @@ pub enum OutputFormat {
 }
 
 impl OutputFormat {
-    pub fn from_extension(path: &std::path::Path) -> Self {
-        match path.extension().and_then(|s| s.to_str()) {
-            Some("csv") => Self::Csv,
-            Some("json") => Self::Json,
-            _ => Self::Tsv, // Default fallback
+    /// Infers an output format from the file extension.
+    ///
+    /// Matching is case-insensitive (`.CSV`, `.Json`, `.TSV` all recognised)
+    /// so Windows path-preservation does not silently flip the output format.
+    /// Returns `None` for missing or unrecognised extensions so the caller
+    /// can surface a clear "specify --format" error instead of silently
+    /// defaulting to TSV (see todo #019; fail-fast per coding-style rule).
+    pub fn from_extension(path: &std::path::Path) -> Option<Self> {
+        let ext = path.extension().and_then(|s| s.to_str())?;
+        match ext.to_ascii_lowercase().as_str() {
+            "csv" => Some(Self::Csv),
+            "json" => Some(Self::Json),
+            "tsv" | "tab" | "txt" => Some(Self::Tsv),
+            _ => None,
         }
     }
 
@@ -194,5 +203,64 @@ impl OutputFormat {
             Self::Json => "json",
             Self::Tsv => "tsv",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn from_extension_csv_lowercase() {
+        assert!(matches!(
+            OutputFormat::from_extension(&PathBuf::from("out.csv")),
+            Some(OutputFormat::Csv)
+        ));
+    }
+
+    #[test]
+    fn from_extension_json_lowercase() {
+        assert!(matches!(
+            OutputFormat::from_extension(&PathBuf::from("out.json")),
+            Some(OutputFormat::Json)
+        ));
+    }
+
+    #[test]
+    fn from_extension_tsv_lowercase() {
+        assert!(matches!(
+            OutputFormat::from_extension(&PathBuf::from("out.tsv")),
+            Some(OutputFormat::Tsv)
+        ));
+    }
+
+    #[test]
+    fn from_extension_uppercase_is_case_insensitive() {
+        assert!(matches!(
+            OutputFormat::from_extension(&PathBuf::from("OUT.CSV")),
+            Some(OutputFormat::Csv)
+        ));
+        assert!(matches!(
+            OutputFormat::from_extension(&PathBuf::from("OUT.JSON")),
+            Some(OutputFormat::Json)
+        ));
+        assert!(matches!(
+            OutputFormat::from_extension(&PathBuf::from("OUT.Tsv")),
+            Some(OutputFormat::Tsv)
+        ));
+    }
+
+    #[test]
+    fn from_extension_unknown_returns_none() {
+        assert!(OutputFormat::from_extension(&PathBuf::from("out.xml")).is_none());
+        assert!(OutputFormat::from_extension(&PathBuf::from("out.yaml")).is_none());
+        assert!(OutputFormat::from_extension(&PathBuf::from("out.data")).is_none());
+    }
+
+    #[test]
+    fn from_extension_missing_returns_none() {
+        assert!(OutputFormat::from_extension(&PathBuf::from("out")).is_none());
+        assert!(OutputFormat::from_extension(&PathBuf::from("")).is_none());
     }
 }
