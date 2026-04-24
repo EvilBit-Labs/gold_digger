@@ -15,6 +15,7 @@ use mysql::prelude::Queryable;
 
 use gold_digger::cli::{Cli, Commands, OutputFormat, Shell};
 use gold_digger::exit::{GoldDiggerError, exit_no_rows, exit_success, exit_with_error};
+use gold_digger::logging::{init_tracing, make_progress};
 use gold_digger::rows_to_strings;
 use gold_digger::utils::{redact_dump_query, redact_sql_error};
 use std::collections::BTreeMap;
@@ -29,6 +30,13 @@ fn main() {
     gold_digger::init_crypto_provider();
 
     let cli = Cli::parse();
+
+    // Install the tracing subscriber before any work that might log. All
+    // `tracing::*!` calls elsewhere in the binary (exit paths, TLS warnings,
+    // main-loop progress logs) rely on this being set before they fire
+    // (todo #163). Subcommands / `--dump-config` also benefit: error
+    // reporting routes through `tracing::error!` even in those branches.
+    init_tracing(cli.verbose, cli.quiet);
 
     // Handle subcommands first
     if let Some(command) = cli.command {
@@ -62,25 +70,37 @@ fn main() {
         Err(e) => exit_with_error(e, Some("Output file resolution failed")),
     };
 
-    if cli.verbose > 0 && !cli.quiet {
-        eprintln!("Connecting to database...");
-    }
+    // Connect phase: spinner (indeterminate duration). Hidden when
+    // `--quiet` or stderr is not a TTY (todo #162).
+    let connect_progress = make_progress(cli.quiet, None, "Connecting to database...");
+    tracing::info!("Connecting to database...");
 
     let pool = match create_database_connection(&database_url, &cli) {
         Ok(pool) => pool,
-        Err(e) => exit_with_error(
-            anyhow::anyhow!("Database connection pool creation failed: {}", e),
-            None,
-        ),
+        Err(e) => {
+            connect_progress.finish_and_clear();
+            exit_with_error(
+                anyhow::anyhow!("Database connection pool creation failed: {}", e),
+                None,
+            )
+        }
     };
     let mut conn = match pool.get_conn() {
         Ok(conn) => conn,
-        Err(e) => exit_with_error(anyhow::anyhow!("Database connection failed: {}", e), None),
+        Err(e) => {
+            connect_progress.finish_and_clear();
+            exit_with_error(anyhow::anyhow!("Database connection failed: {}", e), None)
+        }
     };
+    connect_progress.finish_and_clear();
+
+    // Query phase: spinner (indeterminate duration).
+    let query_progress = make_progress(cli.quiet, None, "Executing query...");
 
     let result: Vec<mysql::Row> = match conn.query(&database_query) {
         Ok(result) => result,
         Err(e) => {
+            query_progress.finish_and_clear();
             // Structured error matching on mysql::Error variants
             let context = match &e {
                 mysql::Error::MySqlError(mysql_err) => {
@@ -107,42 +127,61 @@ fn main() {
                 _ => "Query execution failed",
             };
 
-            // Always include redacted error detail so users can diagnose issues
+            // Always include redacted error detail so users can diagnose
+            // issues. `redact_sql_error` is the single canonical redactor
+            // (todo #016 / P1-C); any credential embedded in the mysql
+            // crate's error string is scrubbed before it reaches the log.
             let error_message = format!("{}: {}", context, redact_sql_error(&e.to_string()));
 
             exit_with_error(anyhow::anyhow!("{}", error_message), None);
         }
     };
+    query_progress.finish_and_clear();
 
-    if cli.verbose > 0 && !cli.quiet {
-        eprintln!(
-            "Outputting {} records to {}.",
-            result.len(),
-            output_file.display()
-        );
-    }
+    tracing::info!(
+        rows = result.len(),
+        file = %output_file.display(),
+        "Outputting {} records to {}.",
+        result.len(),
+        output_file.display()
+    );
 
     if result.is_empty() {
         if cli.allow_empty {
-            if cli.verbose > 0 && !cli.quiet {
-                eprintln!("No records found in database, but --allow-empty is set.");
-            }
+            tracing::info!("No records found in database, but --allow-empty is set.");
             let empty_rows: Vec<mysql::Row> = vec![];
             if let Err(e) = write_output(empty_rows, output_file.as_path(), &cli) {
                 exit_with_error(e, Some("Output writing failed"));
             }
         } else {
-            if cli.verbose > 0 && !cli.quiet {
-                eprintln!("No records found in database.");
-            }
+            tracing::info!("No records found in database.");
             if cli.quiet {
                 exit_no_rows(None);
             } else {
                 exit_no_rows(Some("No records found in database"));
             }
         }
-    } else if let Err(e) = write_output(result, output_file.as_path(), &cli) {
-        exit_with_error(e, Some("Output writing failed"));
+    } else {
+        // Write phase: progress bar with known row count + ETA. `result`
+        // is already fully materialised here (streaming is a separate todo
+        // — #005), so we size the bar to the row count and advance in a
+        // single step after `write_output` returns. This still gives users
+        // useful feedback (bar appears briefly, ETA resolves, bar
+        // completes) for multi-second writes of large result sets; the
+        // bar is hidden under `--quiet` or when stderr is not a TTY.
+        let total_rows = u64::try_from(result.len()).unwrap_or(u64::MAX);
+        let write_progress = make_progress(
+            cli.quiet,
+            Some(total_rows),
+            &format!("Writing {} rows...", total_rows),
+        );
+
+        if let Err(e) = write_output(result, output_file.as_path(), &cli) {
+            write_progress.finish_and_clear();
+            exit_with_error(e, Some("Output writing failed"));
+        }
+        write_progress.set_position(total_rows);
+        write_progress.finish_and_clear();
     }
 
     exit_success(None);

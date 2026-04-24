@@ -40,20 +40,39 @@ pub fn create_tls_connection(
             Ok(Some(ssl_opts)) => {
                 opts_builder = opts_builder.ssl_opts(ssl_opts);
 
-                // Log TLS configuration details in verbose mode
+                // Log TLS configuration details in verbose mode. Route
+                // through `tracing::info!` so verbosity is filtered by the
+                // subscriber (todo #163) and NOT printed when `--quiet`
+                // limits to error-level. The `verbose` bool is still
+                // honoured here so the TLS startup details can be gated
+                // behind `-v` even when the tracing level would otherwise
+                // emit `info!` (default level is `warn`).
                 if verbose {
                     match config.validation_mode() {
                         TlsValidationMode::Platform => {
-                            eprintln!("[TLS] Using platform certificate store");
+                            tracing::info!("[TLS] Using platform certificate store");
                         }
                         TlsValidationMode::CustomCa { ca_file_path } => {
-                            eprintln!("[TLS] Using custom CA file: {}", ca_file_path.display());
+                            tracing::info!(
+                                "[TLS] Using custom CA file: {}",
+                                ca_file_path.display()
+                            );
                         }
                         TlsValidationMode::SkipHostnameVerification => {
-                            eprintln!("[WARNING] TLS: Hostname verification disabled");
+                            tracing::warn!(
+                                "{}",
+                                crate::logging::warn_banner(
+                                    "[WARNING] TLS: Hostname verification disabled"
+                                )
+                            );
                         }
                         TlsValidationMode::AcceptInvalid => {
-                            eprintln!("[DANGER] TLS: Certificate validation disabled");
+                            tracing::error!(
+                                "{}",
+                                crate::logging::danger_banner(
+                                    "[DANGER] TLS: Certificate validation disabled"
+                                )
+                            );
                         }
                     }
                 }
@@ -75,7 +94,7 @@ pub fn create_tls_connection(
         opts_builder = opts_builder.ssl_opts(ssl_opts);
 
         if verbose {
-            eprintln!(
+            tracing::info!(
                 "[TLS] Using explicit configuration (platform certificates, hostname verification enabled)"
             );
         }

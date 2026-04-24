@@ -99,27 +99,55 @@ impl TlsConfig {
     /// `[DANGER]` line unmissable in interactive terminals. The delay is
     /// skipped in test builds to keep unit tests fast.
     pub fn display_security_warnings(&self) {
+        // Route through tracing so credential redaction / level filtering
+        // still applies (todo #163). Colouring is applied via the
+        // `logging::warn_banner` / `logging::danger_banner` helpers, which
+        // respect `NO_COLOR` and TTY detection (todo #161). Using
+        // `tracing::warn!` / `tracing::error!` rather than `eprintln!` also
+        // means these warnings now obey `--quiet` (error-level) filtering.
+        use crate::logging::{danger_banner, warn_banner};
+
         match &self.validation_mode {
             TlsValidationMode::SkipHostnameVerification => {
-                eprintln!(
-                    "[WARNING] Hostname verification disabled. Connection is vulnerable to man-in-the-middle attacks."
+                tracing::warn!(
+                    "{}",
+                    warn_banner(
+                        "[WARNING] Hostname verification disabled. Connection is vulnerable to man-in-the-middle attacks."
+                    )
                 );
-                eprintln!("   Only use this option if you understand the security implications.");
+                tracing::warn!(
+                    "{}",
+                    warn_banner(
+                        "   Only use this option if you understand the security implications."
+                    )
+                );
             }
             TlsValidationMode::AcceptInvalid => {
-                eprintln!("[DANGER] Certificate validation completely disabled!");
-                eprintln!(
-                    "   This connection provides NO security against man-in-the-middle attacks."
+                tracing::error!(
+                    "{}",
+                    danger_banner("[DANGER] Certificate validation completely disabled!")
                 );
-                eprintln!(
-                    "   Only use this for testing with self-signed certificates in secure environments."
+                tracing::error!(
+                    "{}",
+                    danger_banner(
+                        "   This connection provides NO security against man-in-the-middle attacks."
+                    )
+                );
+                tracing::error!(
+                    "{}",
+                    danger_banner(
+                        "   Only use this for testing with self-signed certificates in secure environments."
+                    )
                 );
                 // Deliberate pause so the banner cannot be missed and the
                 // user has a chance to Ctrl+C (todo #022). Skipped under
                 // `cfg(test)` so unit tests don't sleep.
                 #[cfg(not(test))]
                 {
-                    eprintln!("   Proceeding in 3 seconds (press Ctrl+C to abort)...");
+                    tracing::error!(
+                        "{}",
+                        danger_banner("   Proceeding in 3 seconds (press Ctrl+C to abort)...")
+                    );
                     std::thread::sleep(std::time::Duration::from_secs(3));
                 }
             }

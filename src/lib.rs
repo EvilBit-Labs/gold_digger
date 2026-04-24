@@ -37,6 +37,8 @@ pub mod csv;
 pub mod exit;
 /// JSON output module.
 pub mod json;
+/// Structured logging, colour, and progress helpers.
+pub mod logging;
 /// Tab-delimited output module.
 pub mod tab;
 /// TLS configuration module.

@@ -114,11 +114,16 @@ pub fn exit_with_error(error: Error, context: Option<&str>) -> ! {
     let exit_code = map_error_to_exit_code(&error);
     let error_msg = error.to_string();
 
-    // Log the error with context if provided
+    // Log the error with context if provided. Routed through
+    // `tracing::error!` so the subscriber (installed by `main()` before
+    // any work begins) applies level filtering, formatting, and future
+    // redaction layers. Errors emit at ERROR level, so they fire even
+    // under `--quiet` (the documented contract: quiet suppresses
+    // everything except errors).
     if let Some(ctx) = context {
-        eprintln!("{}: {}", ctx, error_msg);
+        tracing::error!("{}: {}", ctx, error_msg);
     } else {
-        eprintln!("{}", error_msg);
+        tracing::error!("{}", error_msg);
     }
 
     process::exit(exit_code);
@@ -215,7 +220,7 @@ pub fn map_error_to_exit_code(error: &Error) -> i32 {
 /// * `message` - Optional success message to print before exiting
 pub fn exit_success(message: Option<&str>) -> ! {
     if let Some(msg) = message {
-        eprintln!("{}", msg);
+        tracing::info!("{}", msg);
     }
     process::exit(EXIT_SUCCESS);
 }
@@ -227,7 +232,10 @@ pub fn exit_success(message: Option<&str>) -> ! {
 /// * `message` - Optional message to print before exiting
 pub fn exit_no_rows(message: Option<&str>) -> ! {
     if let Some(msg) = message {
-        eprintln!("{}", msg);
+        // Empty-result-set is a warning, not an error: the query ran,
+        // it just didn't match anything. Emitted at WARN so it survives
+        // the default level filter but is suppressed under `--quiet`.
+        tracing::warn!("{}", msg);
     }
     process::exit(EXIT_NO_ROWS);
 }
