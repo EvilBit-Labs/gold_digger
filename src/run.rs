@@ -7,6 +7,17 @@
 //!
 //! All failures are routed through [`crate::exit::exit_with_error`] so the
 //! binary always exits with a stable, documented code.
+//!
+//! # Streaming (F007, todo #005)
+//!
+//! The pipeline uses `mysql::Queryable::query_iter` and feeds each row
+//! into a [`crate::sink::RowSink`] chosen by the requested output format.
+//! Peak memory is linear in the **column count**, not the row count:
+//! only the current `mysql::Row` (plus per-row conversion scratch) is
+//! live at a time. The streaming sinks write to a sibling `<output>.tmp`
+//! path and rename to the final path on full success, preserving the
+//! atomic-output guarantee even when a type-conversion error fires on
+//! row N.
 
 use mysql::prelude::Queryable;
 
@@ -15,11 +26,11 @@ use crate::config::{resolve_database_query, resolve_database_url, resolve_output
 use crate::connection::create_database_connection;
 use crate::exit::{exit_no_rows, exit_success, exit_with_error};
 use crate::logging::make_progress;
-use crate::output::write_output;
+use crate::output::build_sink;
 use crate::utils::redact_sql_error;
 
 /// Executes the main query pipeline: resolve config → create pool → run
-/// query → dispatch to writer.
+/// streaming query → feed sink.
 ///
 /// Never returns to the caller: every termination path goes through the
 /// [`crate::exit`] helpers so the binary always exits with a stable,
@@ -63,45 +74,134 @@ pub fn run(cli: Cli) -> ! {
     };
     connect_progress.finish_and_clear();
 
-    // Query phase: spinner (indeterminate duration).
-    let query_progress = make_progress(cli.quiet, None, "Executing query...");
-
-    let result: Vec<mysql::Row> = match conn.query(&database_query) {
-        Ok(result) => result,
-        Err(e) => {
-            query_progress.finish_and_clear();
-            exit_with_error(map_query_error(&e), None);
-        }
-    };
-    query_progress.finish_and_clear();
-
-    tracing::info!(
-        rows = result.len(),
-        file = %output_file.display(),
-        "Outputting {} records to {}.",
-        result.len(),
-        output_file.display()
-    );
-
-    if result.is_empty() {
-        handle_empty_result(&cli, output_file.as_path());
-    } else {
-        write_rows(&cli, result, output_file.as_path());
-    }
+    stream_query(&cli, &mut conn, &database_query, output_file.as_path());
 
     exit_success(None);
 }
 
-/// Handles an empty result set. If `--allow-empty` is set, writes an
-/// empty output file and returns; otherwise exits with [`exit_no_rows`].
-fn handle_empty_result(cli: &Cli, output_file: &std::path::Path) {
+/// Streams the query result into the appropriate sink.
+///
+/// Row count is unknown until the stream completes, so progress is
+/// shown as a spinner (indeterminate). After every row the spinner's
+/// message is updated with the running count. On empty results the
+/// branch defers to [`handle_empty_result`] which still honours
+/// `--allow-empty`.
+fn stream_query(
+    cli: &Cli,
+    conn: &mut mysql::PooledConn,
+    database_query: &str,
+    output_file: &std::path::Path,
+) {
+    // Query phase: spinner (indeterminate duration).
+    let progress = make_progress(cli.quiet, None, "Executing query...");
+
+    // `query_iter` returns a streaming QueryResult that yields
+    // `Result<Row, mysql::Error>` as rows arrive — no full materialisation.
+    let mut result = match conn.query_iter(database_query) {
+        Ok(r) => r,
+        Err(e) => {
+            progress.finish_and_clear();
+            exit_with_error(map_query_error(&e), None);
+        }
+    };
+
+    // Columns are known up-front from the first result-set metadata. We
+    // snapshot them once, *before* pulling any rows, so `on_headers` can
+    // fire even when the stream turns out to be empty.
+    let columns: Vec<String> = result
+        .columns()
+        .as_ref()
+        .iter()
+        .map(|c| c.name_str().to_string())
+        .collect();
+
+    // Build the sink lazily: only after we know the query parsed and we
+    // have column metadata. This preserves the previous behaviour where
+    // the output file was never created on a bad query.
+    let mut sink = match build_sink(output_file, cli) {
+        Ok(s) => s,
+        Err(e) => {
+            progress.finish_and_clear();
+            exit_with_error(e, Some("Output sink creation failed"));
+        }
+    };
+
+    if let Err(e) = sink.on_headers(&columns) {
+        progress.finish_and_clear();
+        exit_with_error(e, Some("Failed to write output headers"));
+    }
+
+    let mut rows_seen: u64 = 0;
+    progress.set_message("Streaming rows...");
+
+    for row_result in result.by_ref() {
+        let row = match row_result {
+            Ok(row) => row,
+            Err(e) => {
+                progress.finish_and_clear();
+                // Any mysql::Error from row fetch flows through the same
+                // credential-redacting classifier as the initial query
+                // error so streaming failures don't leak creds.
+                exit_with_error(map_query_error(&e), None);
+            }
+        };
+
+        if let Err(e) = sink.on_row(&row) {
+            progress.finish_and_clear();
+            exit_with_error(e, Some("Row processing failed"));
+        }
+
+        rows_seen = rows_seen.saturating_add(1);
+        // Update the spinner message every 1000 rows to avoid redraw
+        // pressure on huge result sets while still giving users feedback.
+        if rows_seen.is_multiple_of(1000) {
+            progress.set_message(format!("Streaming rows... ({} so far)", rows_seen));
+        }
+    }
+
+    // Drop the streaming result *before* finalize so any lingering server
+    // traffic is drained and the connection is returned to a clean state.
+    drop(result);
+
+    if rows_seen == 0 {
+        // Empty result: we already wrote `on_headers`, so the sink holds
+        // a `.tmp` file with an empty envelope / header row. For
+        // `--allow-empty` we finalize (commit the empty file); otherwise
+        // we drop the sink (the tmp gets cleaned up) and exit with 1.
+        progress.finish_and_clear();
+        handle_empty_result(cli, sink);
+        return;
+    }
+
+    if let Err(e) = sink.finalize() {
+        progress.finish_and_clear();
+        exit_with_error(e, Some("Output finalisation failed"));
+    }
+
+    progress.finish_and_clear();
+    tracing::info!(
+        rows = rows_seen,
+        file = %output_file.display(),
+        "Outputting {} records to {}.",
+        rows_seen,
+        output_file.display()
+    );
+}
+
+/// Handles an empty result set. If `--allow-empty` is set, finalizes the
+/// sink (committing an empty `{"data":[]}` or header-only CSV/TSV file);
+/// otherwise drops the sink (which cleans up its `.tmp`) and exits with
+/// [`exit_no_rows`].
+fn handle_empty_result(cli: &Cli, sink: Box<dyn crate::sink::RowSink>) {
     if cli.allow_empty {
         tracing::info!("No records found in database, but --allow-empty is set.");
-        let empty_rows: Vec<mysql::Row> = vec![];
-        if let Err(e) = write_output(empty_rows, output_file, cli) {
+        if let Err(e) = sink.finalize() {
             exit_with_error(e, Some("Output writing failed"));
         }
     } else {
+        // Drop the streaming sink; its `Drop` impl removes the `.tmp`
+        // file so the filesystem shows no partial output.
+        drop(sink);
         tracing::info!("No records found in database.");
         if cli.quiet {
             exit_no_rows(None);
@@ -109,29 +209,6 @@ fn handle_empty_result(cli: &Cli, output_file: &std::path::Path) {
             exit_no_rows(Some("No records found in database"));
         }
     }
-}
-
-/// Writes a non-empty result set, attaching a progress bar sized to the
-/// known row count. `result` is already fully materialised here (streaming
-/// is a separate todo — #005), so we size the bar to the row count and
-/// advance in a single step after `write_output` returns. This still gives
-/// users useful feedback (bar appears briefly, ETA resolves, bar completes)
-/// for multi-second writes of large result sets; the bar is hidden under
-/// `--quiet` or when stderr is not a TTY.
-fn write_rows(cli: &Cli, result: Vec<mysql::Row>, output_file: &std::path::Path) {
-    let total_rows = u64::try_from(result.len()).unwrap_or(u64::MAX);
-    let write_progress = make_progress(
-        cli.quiet,
-        Some(total_rows),
-        &format!("Writing {} rows...", total_rows),
-    );
-
-    if let Err(e) = write_output(result, output_file, cli) {
-        write_progress.finish_and_clear();
-        exit_with_error(e, Some("Output writing failed"));
-    }
-    write_progress.set_position(total_rows);
-    write_progress.finish_and_clear();
 }
 
 /// Maps a [`mysql::Error`] from query execution into a contextual

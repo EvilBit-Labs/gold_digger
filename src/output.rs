@@ -1,84 +1,98 @@
-//! Output format dispatch and safe output-file creation.
+//! Output format dispatch, sink construction, and safe output-file creation.
 //!
-//! For JSON output, uses [`crate::TypeTransformer`] to preserve native MySQL
-//! types (integers as JSON numbers, NULLs as JSON null, etc.). For CSV and
-//! TSV, converts rows to strings first via [`crate::rows_to_strings`],
-//! ensuring conversion succeeds before creating/truncating the output file.
+//! The live query-execution path no longer materialises the full result
+//! set into a `Vec<mysql::Row>`. The [`build_sink`] function selects a
+//! [`crate::sink::RowSink`] implementation based on the requested format
+//! (`--format` > file extension > error) and `src/run.rs` streams rows
+//! into it directly. The legacy [`write_output`] helper, which took a
+//! fully-materialised `Vec<mysql::Row>`, is retained for test-only use so
+//! snapshot tests can feed in-memory row vectors without going through
+//! the streaming pipeline.
 //!
 //! Path-safety (todo #024): the output file is created through
 //! [`create_output_file`], which enforces `O_NOFOLLOW` + `0o600` + no-clobber
 //! defaults on Unix. Passing `--force` opts into overwriting an existing file
 //! but still refuses to follow symlinks.
 
-use std::collections::BTreeMap;
 use std::fs::{File, OpenOptions};
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 use crate::cli::{Cli, OutputFormat};
 use crate::exit::GoldDiggerError;
-use crate::rows_to_strings;
+use crate::sink::{RowSink, csv_sink, json_sink, tsv_sink};
 
-/// Writes output in the specified format.
-///
-/// For JSON output, uses `TypeTransformer` to preserve native MySQL types (integers
-/// as JSON numbers, NULLs as JSON null, etc.). For CSV and TSV, converts rows to
-/// strings first via `rows_to_strings`, ensuring conversion succeeds before
-/// creating/truncating the output file.
+/// Resolves the output format from `--format` or the file extension,
+/// returning a typed config error (exit 2) when neither is usable.
 ///
 /// Format selection (todo #019): if `--format` is absent AND the output file
 /// extension is unknown (or missing), returns [`GoldDiggerError::Config`]
 /// instead of silently defaulting to TSV. The previous behaviour surfaced a
 /// "silent format selection" hazard — an `.xml` or `.yaml` output path would
 /// quietly emit tab-separated data with no signal to the caller.
-///
-/// Path-safety (todo #024): the output file is created through
-/// [`create_output_file`], which enforces `O_NOFOLLOW` + `0o600` + no-clobber
-/// defaults on Unix. Passing `--force` opts into overwriting an existing file
-/// but still refuses to follow symlinks.
-pub fn write_output(rows: Vec<mysql::Row>, output_file: &Path, cli: &Cli) -> Result<()> {
-    let format = if let Some(format) = &cli.format {
-        format.clone()
+pub fn resolve_output_format(output_file: &Path, cli: &Cli) -> Result<OutputFormat> {
+    if let Some(format) = &cli.format {
+        Ok(format.clone())
     } else {
         OutputFormat::from_extension(output_file).ok_or_else(|| {
             GoldDiggerError::Config(format!(
                 "Cannot infer output format from '{}'. Recognised extensions: .csv, .json, .tsv, .tab, .txt. Pass --format <csv|json|tsv> to select explicitly.",
                 output_file.display()
             ))
-        })?
-    };
+            .into()
+        })
+    }
+}
 
+/// Builds a format-specific [`RowSink`] for streaming query results.
+///
+/// The returned sink owns a file handle on the sibling `<output>.tmp`
+/// path; [`RowSink::finalize`] renames the `.tmp` onto `output` on
+/// successful completion, and the sink's `Drop` cleans up on failure.
+pub fn build_sink(output_file: &Path, cli: &Cli) -> Result<Box<dyn RowSink>> {
+    let format = resolve_output_format(output_file, cli)?;
     match format {
-        OutputFormat::Csv => {
-            let string_rows = rows_to_strings(rows)?;
-            let output = create_output_file(output_file, cli.force)?;
-            crate::csv::write(string_rows, output)?;
-        }
-        OutputFormat::Json => {
-            use crate::TypeTransformer;
+        OutputFormat::Csv => csv_sink(output_file, cli.force),
+        OutputFormat::Json => json_sink(output_file, cli.force, cli.pretty),
+        OutputFormat::Tsv => tsv_sink(output_file, cli.force),
+    }
+}
 
-            // Convert rows to JSON maps before creating the file to avoid
-            // leaving an empty/truncated file on conversion failure.
-            let json_maps: Vec<BTreeMap<String, serde_json::Value>> = rows
-                .into_iter()
-                .enumerate()
-                .map(|(i, row)| {
-                    TypeTransformer::row_to_json(row)
-                        .with_context(|| format!("Failed to convert row {}", i + 1))
-                })
-                .collect::<Result<Vec<_>>>()?;
+/// Writes a fully-materialised `Vec<mysql::Row>` by driving the
+/// streaming sink pipeline.
+///
+/// This function is retained for snapshot tests and the empty-result
+/// branch in [`crate::run`]. New code on the live path should use
+/// [`build_sink`] with `conn.query_iter` directly to avoid pulling the
+/// entire result set into memory.
+///
+/// Path-safety (todo #024): the output file is created through
+/// [`create_output_file`], which enforces `O_NOFOLLOW` + `0o600` + no-clobber
+/// defaults on Unix. Passing `--force` opts into overwriting an existing file
+/// but still refuses to follow symlinks.
+pub fn write_output(rows: Vec<mysql::Row>, output_file: &Path, cli: &Cli) -> Result<()> {
+    let mut sink = build_sink(output_file, cli)?;
 
-            let output = create_output_file(output_file, cli.force)?;
-            crate::json::write(json_maps, output, cli.pretty)?;
-        }
-        OutputFormat::Tsv => {
-            let string_rows = rows_to_strings(rows)?;
-            let output = create_output_file(output_file, cli.force)?;
-            crate::tab::write(string_rows, output)?;
-        }
+    // Extract headers from the first row (if any) before iterating data;
+    // empty result sets still emit a valid envelope / header row because
+    // the sinks treat `on_headers` as always-called.
+    let headers: Vec<String> = if let Some(first) = rows.first() {
+        first
+            .columns_ref()
+            .iter()
+            .map(|col| col.name_str().to_string())
+            .collect()
+    } else {
+        Vec::new()
+    };
+    sink.on_headers(&headers)?;
+
+    for row in rows.iter() {
+        sink.on_row(row)?;
     }
 
+    sink.finalize()?;
     Ok(())
 }
 

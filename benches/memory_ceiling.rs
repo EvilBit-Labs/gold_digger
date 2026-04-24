@@ -1,20 +1,27 @@
-//! Memory-ceiling scalability benchmark for `rows_to_strings`.
+//! Historical memory-ceiling baseline for the pre-streaming `rows_to_strings` path.
 //!
-//! This benchmark establishes a regression-guard baseline for the F007
-//! streaming-refactor work. It measures both:
+//! **Status:** Todo #005 landed streaming (`conn.query_iter` + `RowSink`),
+//! so `rows_to_strings` is no longer on the live query-execution path.
+//! This benchmark is retained as a historical reference for the old
+//! fully-buffered conversion so future regression work has something to
+//! diff against — it does NOT reflect the production memory profile as
+//! of F007.
 //!
-//! 1. The wall-clock cost of the current fully-buffered conversion at
+//! The benchmark measures both:
+//!
+//! 1. The wall-clock cost of the legacy fully-buffered conversion at
 //!    progressively larger row counts (1k / 10k / 100k synthetic rows).
 //! 2. An estimate of the resulting `Vec<Vec<String>>` footprint and the
 //!    process resident-set size (RSS) via `sysinfo`.
 //!
+//! Under the streaming pipeline peak RSS is linear in the column count
+//! (one `mysql::Row` live at a time), not the row count, so the curves
+//! below should be read as "what memory pressure looked like before F007",
+//! not "what to expect today".
+//!
 //! The benchmark is synthetic — it builds `mysql::Row` values in-process
 //! via `mysql_common::row::new_row` (accessed through `mysql::mysql_common`)
 //! so no live MySQL/MariaDB server is required.
-//!
-//! Per the todo's acceptance criteria this produces *numbers*, not
-//! assertions; the `eprintln!` output can be diffed across runs when
-//! reviewing F007 streaming work.
 //!
 //! Run with: `cargo bench --bench memory_ceiling`
 

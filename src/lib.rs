@@ -49,6 +49,8 @@ pub mod logging;
 pub mod output;
 /// Query-execution pipeline (binary entry point glue).
 pub mod run;
+/// Streaming row-sink trait and per-format implementations (F007).
+pub mod sink;
 /// Tab-delimited output module.
 pub mod tab;
 /// TLS configuration module.
