@@ -31,6 +31,12 @@ pub fn init_crypto_provider() {
 
 /// CLI interface module.
 pub mod cli;
+/// Shell completion script generation.
+pub mod completion;
+/// Configuration resolution and dumping.
+pub mod config;
+/// Database connection pool construction with rustls-only TLS.
+pub mod connection;
 /// CSV output module.
 pub mod csv;
 /// Exit code helper module.
@@ -39,6 +45,10 @@ pub mod exit;
 pub mod json;
 /// Structured logging, colour, and progress helpers.
 pub mod logging;
+/// Output format dispatch and safe output-file creation.
+pub mod output;
+/// Query-execution pipeline (binary entry point glue).
+pub mod run;
 /// Tab-delimited output module.
 pub mod tab;
 /// TLS configuration module.
