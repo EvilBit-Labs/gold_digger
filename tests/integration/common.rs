@@ -20,6 +20,24 @@ use super::{GoldDiggerResult, OutputFormat, TestCase};
 
 // TempFileManager is defined in this module, no need to re-export
 
+/// Environment variables that Clap reads via `#[arg(env = "...")]`. These
+/// must be removed from any spawned binary so that user-shell exports do not
+/// leak into integration tests. Mirrors `tests::test_support::cli::ENV_VARS_TO_REMOVE`
+/// (kept local because each integration test file is its own crate).
+const ENV_VARS_TO_REMOVE: &[&str] = &["DATABASE_URL", "DATABASE_QUERY", "OUTPUT_FILE", "NO_COLOR"];
+
+/// Build the binary `Command` with all Clap-bound env vars removed. Use in
+/// every site that invokes `gold_digger`; never call `Command::cargo_bin`
+/// directly from this module.
+fn fresh_cmd() -> anyhow::Result<Command> {
+    #[allow(deprecated)]
+    let mut cmd = Command::cargo_bin("gold_digger")?;
+    for var in ENV_VARS_TO_REMOVE {
+        cmd.env_remove(var);
+    }
+    Ok(cmd)
+}
+
 /// Enhanced CLI execution utilities for Gold Digger using assert_cmd and predicates
 ///
 /// This struct provides a robust CLI testing framework that replaces the previous
@@ -110,8 +128,7 @@ impl GoldDiggerCli {
         let start_time = Instant::now();
 
         // Build command using assert_cmd
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger")?;
+        let mut cmd = fresh_cmd()?;
 
         // Set database URL (never log the actual URL for security)
         cmd.arg("--db-url").arg(db_url);
@@ -179,8 +196,7 @@ impl GoldDiggerCli {
         let start_time = Instant::now();
 
         // Build command using assert_cmd
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger")?;
+        let mut cmd = fresh_cmd()?;
 
         // Set database URL (never log the actual URL for security)
         cmd.arg("--db-url").arg(db_url);
@@ -302,8 +318,7 @@ impl GoldDiggerCli {
         db_url: &str,
         output_path: &Path,
     ) -> Result<Output> {
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger")?;
+        let mut cmd = fresh_cmd()?;
 
         cmd.arg("--db-url")
             .arg(db_url)
@@ -341,8 +356,7 @@ impl GoldDiggerCli {
         stdout_contains: Option<&str>,
         stderr_contains: Option<&str>,
     ) -> Result<GoldDiggerResult> {
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger")?;
+        let mut cmd = fresh_cmd()?;
 
         // Set database URL (never log the actual URL for security)
         cmd.arg("--db-url").arg(db_url);
@@ -483,8 +497,7 @@ impl GoldDiggerCli {
         db_url: &str,
         output_path: &Path,
     ) -> Result<GoldDiggerResult> {
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger")?;
+        let mut cmd = fresh_cmd()?;
 
         // Set database URL (never log the actual URL for security)
         cmd.arg("--db-url").arg(db_url);
@@ -1011,8 +1024,7 @@ impl AssertCmdIntegration {
         let output_file = temp_manager.create_output_file(&test_case.expected_format)?;
 
         // Build command
-        #[allow(deprecated)]
-        let mut cmd = assert_cmd::Command::cargo_bin("gold_digger")?;
+        let mut cmd = fresh_cmd()?;
 
         cmd.arg("--db-url")
             .arg(db_url)
@@ -1054,8 +1066,7 @@ impl AssertCmdIntegration {
         let output_file = temp_manager.create_output_file(output_format)?;
 
         // Build command
-        #[allow(deprecated)]
-        let mut cmd = assert_cmd::Command::cargo_bin("gold_digger")?;
+        let mut cmd = fresh_cmd()?;
 
         cmd.arg("--db-url")
             .arg(db_url)
@@ -1080,8 +1091,7 @@ impl AssertCmdIntegration {
         let output_file = temp_manager.create_output_file(&test_case.expected_format)?;
 
         // Build command
-        #[allow(deprecated)]
-        let mut cmd = assert_cmd::Command::cargo_bin("gold_digger")?;
+        let mut cmd = fresh_cmd()?;
 
         cmd.arg("--db-url")
             .arg(db_url)

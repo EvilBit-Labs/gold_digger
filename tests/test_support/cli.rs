@@ -6,11 +6,32 @@
 #![allow(dead_code)]
 
 use anyhow::{Context, Result};
+use assert_cmd::Command;
 use assert_cmd::cargo;
 use std::collections::HashMap;
 use std::path::Path;
 use std::process::Output;
 use std::time::{Duration, Instant};
+
+/// Environment variables that Clap reads via `#[arg(env = "...")]`. These
+/// must be removed from any spawned binary so that user-shell exports do not
+/// leak into integration tests (recorded as a recurring failure mode in
+/// project memory). `NO_COLOR` is included for forward compatibility with
+/// upcoming color/ANSI work.
+pub const ENV_VARS_TO_REMOVE: &[&str] =
+    &["DATABASE_URL", "DATABASE_QUERY", "OUTPUT_FILE", "NO_COLOR"];
+
+/// Returns a fresh `assert_cmd::Command` for the `gold_digger` binary with
+/// every Clap-bound environment variable cleared. Always prefer this helper
+/// over building `cargo_bin_cmd!("gold_digger")` ad hoc — it prevents the
+/// developer's shell environment from silently changing test behaviour.
+pub fn clean_cmd() -> Command {
+    let mut cmd = cargo::cargo_bin_cmd!("gold_digger");
+    for var in ENV_VARS_TO_REMOVE {
+        cmd.env_remove(var);
+    }
+    cmd
+}
 
 /// CLI command builder for Gold Digger tests
 #[derive(Debug, Clone)]
@@ -143,7 +164,11 @@ impl GoldDiggerCommand {
 
         // Using assert_cmd v2.1+ cargo::cargo_bin_cmd! macro for command construction
         // See: https://github.com/assert-rs/assert_cmd/blob/main/CHANGELOG.md#210
+        // Strip Clap-bound env vars so user-shell exports cannot leak in.
         let mut cmd = cargo::cargo_bin_cmd!("gold_digger");
+        for var in ENV_VARS_TO_REMOVE {
+            cmd.env_remove(var);
+        }
 
         // Add database URL
         if let Some(url) = &self.db_url {

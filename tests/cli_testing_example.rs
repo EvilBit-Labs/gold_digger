@@ -17,10 +17,21 @@ use rstest::{fixture, rstest};
 use std::time::Duration;
 use tempfile::NamedTempFile;
 
-/// Fixture for creating a basic CLI command
+/// Clap-bound env vars that must be removed from spawned binaries to prevent
+/// developer-shell exports from leaking into integration tests.
+const ENV_VARS_TO_REMOVE: &[&str] = &["DATABASE_URL", "DATABASE_QUERY", "OUTPUT_FILE", "NO_COLOR"];
+
+/// Fixture for creating a basic CLI command with all Clap-bound env vars
+/// stripped. Tests that need specific env vars set should use `.env(...)`
+/// after the fixture is constructed; absent that, the binary sees a clean
+/// environment regardless of the developer's shell.
 #[fixture]
 fn cli_command() -> Command {
-    assert_cmd::cargo::cargo_bin_cmd!("gold_digger")
+    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("gold_digger");
+    for var in ENV_VARS_TO_REMOVE {
+        cmd.env_remove(var);
+    }
+    cmd
 }
 
 /// Fixture for creating a temporary output file
@@ -88,38 +99,41 @@ fn test_predicate_validation(cli_command: Command) -> Result<()> {
 fn test_error_scenario(cli_command: Command) -> Result<()> {
     let mut cmd = cli_command;
 
-    // Clear env vars to ensure we test the missing-config path
-    cmd.env_remove("DATABASE_URL")
-        .env_remove("DATABASE_QUERY")
-        .env_remove("OUTPUT_FILE");
-
-    cmd.assert().failure().stderr(
+    // The fixture already strips DATABASE_URL/DATABASE_QUERY/OUTPUT_FILE, so
+    // running with no flags should hit the "missing database URL" config path.
+    // Per src/exit.rs::EXIT_CONFIG_ERROR this maps to exit 2.
+    cmd.assert().code(2).stderr(
         predicate::str::contains("Missing database URL").or(predicate::str::contains("required")),
     );
 
     Ok(())
 }
 
-/// Test environment variable handling with parameterized scenarios
+/// Test environment variable handling with parameterized scenarios.
+///
+/// Expected exit codes per src/exit.rs:
+/// - `both_env_vars_set`: full config but unreachable host -> EXIT_DB_AUTH_ERROR (3)
+/// - `only_db_url` / `only_query`: missing config field -> EXIT_CONFIG_ERROR (2)
 #[rstest]
-#[case("both_env_vars_set")]
-#[case("only_db_url")]
-#[case("only_query")]
+#[case("both_env_vars_set", 3)]
+#[case("only_db_url", 2)]
+#[case("only_query", 2)]
 fn test_environment_variables(
     cli_command: Command,
     temp_output_file: NamedTempFile,
     #[case] scenario: &str,
+    #[case] expected_exit_code: i32,
 ) -> Result<()> {
     let mut cmd = cli_command;
 
     // Set environment variables based on scenario
     match scenario {
         "both_env_vars_set" => {
-            cmd.env("DATABASE_URL", "mysql://test:test@localhost/test");
+            cmd.env("DATABASE_URL", "mysql://test:test@127.0.0.1:1/test");
             cmd.env("DATABASE_QUERY", "SELECT 1");
         }
         "only_db_url" => {
-            cmd.env("DATABASE_URL", "mysql://test:test@localhost/test");
+            cmd.env("DATABASE_URL", "mysql://test:test@127.0.0.1:1/test");
         }
         "only_query" => {
             cmd.env("DATABASE_QUERY", "SELECT 1");
@@ -129,8 +143,7 @@ fn test_environment_variables(
 
     cmd.arg("--output").arg(temp_output_file.path());
 
-    // This would fail due to missing required config, but demonstrates env var usage
-    cmd.assert().failure().stderr(
+    cmd.assert().code(expected_exit_code).stderr(
         predicate::str::contains("connection")
             .or(predicate::str::contains("error"))
             .or(predicate::str::contains("Missing"))
@@ -163,7 +176,11 @@ fn test_snapshot_testing(cli_command: Command) -> Result<()> {
     Ok(())
 }
 
-/// Test different output formats with parameterization
+/// Test different output formats with parameterization.
+///
+/// Each invocation supplies a complete config but points at an unroutable
+/// host, so the connection-establishment failure should map to
+/// EXIT_DB_AUTH_ERROR (3) per src/exit.rs.
 #[rstest]
 #[case("csv")]
 #[case("json")]
@@ -174,16 +191,15 @@ fn test_format_specification(
     #[case] format: &str,
 ) -> Result<()> {
     let mut cmd = cli_command;
-    cmd.env("DATABASE_URL", "mysql://test:test@localhost/test")
+    cmd.env("DATABASE_URL", "mysql://test:test@127.0.0.1:1/test")
         .env("DATABASE_QUERY", "SELECT 1 as test_column")
         .arg("--output")
         .arg(temp_output_file.path())
         .arg("--format")
         .arg(format);
 
-    // This would fail due to invalid database, but demonstrates format testing
     cmd.assert()
-        .failure()
+        .code(3)
         .stderr(predicate::str::contains("connection").or(predicate::str::contains("error")));
 
     Ok(())
@@ -213,15 +229,18 @@ fn test_credential_redaction(cli_command: Command, temp_output_file: NamedTempFi
     Ok(())
 }
 
-/// Test CLI flag precedence with parameterized scenarios
+/// Test CLI flag precedence with parameterized scenarios.
+///
+/// All scenarios supply complete configuration pointed at an unroutable
+/// host, so the resulting connection failure maps to EXIT_DB_AUTH_ERROR (3).
 #[rstest]
 #[case(
     "cli_overrides_env",
-    "mysql://cli:cli@localhost/cli",
-    "mysql://env:env@localhost/env"
+    "mysql://cli:cli@127.0.0.1:1/cli",
+    "mysql://env:env@127.0.0.1:1/env"
 )]
-#[case("cli_only", "mysql://cli:cli@localhost/cli", "")]
-#[case("env_only", "", "mysql://env:env@localhost/env")]
+#[case("cli_only", "mysql://cli:cli@127.0.0.1:1/cli", "")]
+#[case("env_only", "", "mysql://env:env@127.0.0.1:1/env")]
 fn test_cli_flag_precedence(
     cli_command: Command,
     temp_output_file: NamedTempFile,
@@ -244,9 +263,8 @@ fn test_cli_flag_precedence(
         .arg("--output")
         .arg(temp_output_file.path());
 
-    // This would fail due to invalid database, but demonstrates precedence testing
     cmd.assert()
-        .failure()
+        .code(3)
         .stderr(predicate::str::contains("connection").or(predicate::str::contains("error")));
 
     Ok(())
@@ -282,7 +300,9 @@ fn test_mutually_exclusive_options(
         _ => panic!("Unknown scenario: {}", scenario),
     }
 
-    cmd.assert().failure().stderr(
+    // Clap rejects mutually-exclusive flags before main runs and exits with
+    // its default error code (2), which lines up with EXIT_CONFIG_ERROR.
+    cmd.assert().code(2).stderr(
         predicate::str::contains("cannot be used with").or(predicate::str::contains("conflict")),
     );
 

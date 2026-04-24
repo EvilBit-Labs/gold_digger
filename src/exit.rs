@@ -416,4 +416,76 @@ mod tests {
         let anyhow_err: Error = typed.into();
         assert_eq!(map_error_to_exit_code(&anyhow_err), EXIT_NO_ROWS);
     }
+
+    // ---------------------------------------------------------------------
+    // Property tests (todo #032). Two invariants:
+    //   1. The substring classifier never panics and always returns a code in
+    //      [EXIT_NO_ROWS..=EXIT_IO_ERROR] (i.e. 1..=5; never 0, never -1, never
+    //      anything outside the documented public contract).
+    //   2. The typed `GoldDiggerError` variants are wording-stable: any random
+    //      string passed into `Config(..)` always produces EXIT_CONFIG_ERROR,
+    //      `DbAuth(..)` always EXIT_DB_AUTH_ERROR, `Query(..)` always
+    //      EXIT_QUERY_ERROR. These guard against future refactors that might
+    //      accidentally make the typed path consult the message text.
+    // ---------------------------------------------------------------------
+    use proptest::prelude::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig {
+            // 1k cases keeps the test under a second locally while still
+            // covering a broad input space. The acceptance criterion in the
+            // todo asks for "no panics" and "bounded codes", both of which
+            // converge well before 10k.
+            cases: 1024,
+            ..ProptestConfig::default()
+        })]
+
+        /// Substring classifier must never panic and must always return a
+        /// code inside the documented public range, regardless of input.
+        #[test]
+        fn proptest_substring_classifier_returns_valid_code(s in any::<String>()) {
+            let err = anyhow!("{}", s);
+            let code = map_error_to_exit_code(&err);
+            prop_assert!(
+                (EXIT_NO_ROWS..=EXIT_IO_ERROR).contains(&code),
+                "exit code {} outside contract [1..=5] for input {:?}",
+                code,
+                s,
+            );
+        }
+
+        /// Typed `Config` variant maps to `EXIT_CONFIG_ERROR` for ALL message
+        /// payloads — the typed path is defined to ignore message text.
+        #[test]
+        fn proptest_typed_config_is_stable(s in any::<String>()) {
+            let typed = GoldDiggerError::Config(s);
+            prop_assert_eq!(typed.exit_code(), EXIT_CONFIG_ERROR);
+        }
+
+        /// Typed `DbAuth` variant maps to `EXIT_DB_AUTH_ERROR` for ALL
+        /// message payloads.
+        #[test]
+        fn proptest_typed_db_auth_is_stable(s in any::<String>()) {
+            let typed = GoldDiggerError::DbAuth(s);
+            prop_assert_eq!(typed.exit_code(), EXIT_DB_AUTH_ERROR);
+        }
+
+        /// Typed `Query` variant maps to `EXIT_QUERY_ERROR` for ALL message
+        /// payloads, even ones that look like I/O or auth failures to the
+        /// substring classifier.
+        #[test]
+        fn proptest_typed_query_is_stable(s in any::<String>()) {
+            let typed = GoldDiggerError::Query(s);
+            prop_assert_eq!(typed.exit_code(), EXIT_QUERY_ERROR);
+        }
+
+        /// Wrapping a typed variant inside an `anyhow::Error` (with or
+        /// without `.context(..)` layers) must preserve the typed exit code.
+        #[test]
+        fn proptest_typed_through_anyhow_chain(s in any::<String>(), ctx in any::<String>()) {
+            let typed = GoldDiggerError::Config(s);
+            let anyhow_err: Error = anyhow::Error::from(typed).context(ctx);
+            prop_assert_eq!(map_error_to_exit_code(&anyhow_err), EXIT_CONFIG_ERROR);
+        }
+    }
 }

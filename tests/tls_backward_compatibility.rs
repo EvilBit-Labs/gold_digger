@@ -66,6 +66,21 @@ fn generate_test_certificate() -> Result<String> {
     Ok(cert_pem)
 }
 
+/// Clap-bound env vars that must be removed from spawned binaries to prevent
+/// developer-shell exports from leaking into integration tests.
+const ENV_VARS_TO_REMOVE: &[&str] = &["DATABASE_URL", "DATABASE_QUERY", "OUTPUT_FILE", "NO_COLOR"];
+
+/// Build a `gold_digger` binary `Command` with all Clap-bound env vars
+/// stripped. Use this in every test in this file instead of constructing
+/// `cargo_bin_cmd!("gold_digger")` directly.
+fn fresh_cmd() -> Command {
+    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("gold_digger");
+    for var in ENV_VARS_TO_REMOVE {
+        cmd.env_remove(var);
+    }
+    cmd
+}
+
 mod database_url_compatibility_tests {
     use super::*;
 
@@ -655,8 +670,7 @@ mod cli_flag_behavior_tests {
     #[test]
     fn test_tls_flags_always_available() {
         // Test that help includes TLS flags
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
+        let mut cmd = fresh_cmd();
         let output = cmd.arg("--help").output().unwrap();
 
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -697,8 +711,7 @@ mod cli_flag_behavior_tests {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
         // Test nonexistent CA file error
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
+        let mut cmd = fresh_cmd();
         let output = cmd
             .args([
                 "--tls-ca-file",
@@ -792,8 +805,7 @@ mod security_warnings_tests {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
         // Test CLI command with skip hostname verification
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
+        let mut cmd = fresh_cmd();
         let output = cmd
             .args([
                 "--insecure-skip-hostname-verify",
@@ -833,8 +845,7 @@ mod security_warnings_tests {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
         // Test CLI command with accept invalid certificate
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
+        let mut cmd = fresh_cmd();
         let output = cmd
             .args([
                 "--allow-invalid-certificate",
@@ -1048,8 +1059,7 @@ mod integration_compatibility_tests {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
         // Test basic command without TLS flags (should work as before)
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
+        let mut cmd = fresh_cmd();
         let output = cmd
             .args([
                 "--db-url",
@@ -1080,8 +1090,7 @@ mod integration_compatibility_tests {
     /// Requirement: 7.4 - Help documentation preserved
     #[test]
     fn test_cli_help_includes_tls_options() {
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
+        let mut cmd = fresh_cmd();
         let output = cmd.arg("--help").output().unwrap();
 
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -1123,8 +1132,7 @@ mod integration_compatibility_tests {
     /// Requirement: 7.4 - Help documentation preserved with stable contract
     #[test]
     fn test_cli_help_snapshot() {
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
+        let mut cmd = fresh_cmd();
 
         // Clear env vars so clap does not embed their values in help output,
         // which would make snapshots environment-dependent
@@ -1146,8 +1154,7 @@ mod integration_compatibility_tests {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
         // Test configuration dump with TLS flags
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
+        let mut cmd = fresh_cmd();
         let output = cmd
             .args([
                 "--db-url",
