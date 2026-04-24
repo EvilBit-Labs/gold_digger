@@ -243,7 +243,7 @@ The exit code mapping includes intelligent error detection based on error messag
 
 ## Testing
 
-Gold Digger includes comprehensive test suites to ensure reliability and correctness across multiple database systems and configurations:
+Gold Digger includes comprehensive test suites to ensure reliability and correctness across multiple database systems and configurations. For the layout of test files, helper macros, and snapshot conventions, see [`tests/README.md`](tests/README.md). For the benchmark suite (criterion-based, including the memory-ceiling benchmark that motivated F007 streaming), see [`benches/README.md`](benches/README.md).
 
 ### Unit Tests
 

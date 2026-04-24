@@ -92,19 +92,10 @@ impl TlsConfig {
 
     /// Displays security warnings for insecure TLS modes.
     ///
-    /// For [`TlsValidationMode::AcceptInvalid`] the warning is followed by
-    /// a 3-second deliberate delay (todo #022). The companion flag gate
-    /// (`--i-understand-this-is-insecure`) already blocks accidental
-    /// activation, but the delay gives a chance to `Ctrl+C` and makes the
-    /// `[DANGER]` line unmissable in interactive terminals. The delay is
-    /// skipped in test builds to keep unit tests fast.
+    /// Routed through `tracing` so credential redaction / level filtering
+    /// applies and `--quiet` is honoured. Colouring respects `NO_COLOR`
+    /// and TTY detection via `logging::warn_banner` / `danger_banner`.
     pub fn display_security_warnings(&self) {
-        // Route through tracing so credential redaction / level filtering
-        // still applies (todo #163). Colouring is applied via the
-        // `logging::warn_banner` / `logging::danger_banner` helpers, which
-        // respect `NO_COLOR` and TTY detection (todo #161). Using
-        // `tracing::warn!` / `tracing::error!` rather than `eprintln!` also
-        // means these warnings now obey `--quiet` (error-level) filtering.
         use crate::logging::{danger_banner, warn_banner};
 
         match &self.validation_mode {
@@ -139,17 +130,6 @@ impl TlsConfig {
                         "   Only use this for testing with self-signed certificates in secure environments."
                     )
                 );
-                // Deliberate pause so the banner cannot be missed and the
-                // user has a chance to Ctrl+C (todo #022). Skipped under
-                // `cfg(test)` so unit tests don't sleep.
-                #[cfg(not(test))]
-                {
-                    tracing::error!(
-                        "{}",
-                        danger_banner("   Proceeding in 3 seconds (press Ctrl+C to abort)...")
-                    );
-                    std::thread::sleep(std::time::Duration::from_secs(3));
-                }
             }
             TlsValidationMode::Platform | TlsValidationMode::CustomCa { .. } => {
                 // No warnings for secure modes

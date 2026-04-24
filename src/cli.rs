@@ -111,15 +111,37 @@ pub enum Shell {
     PowerShell,
 }
 
-/// TLS configuration options (mutually exclusive validation modes, plus a
-/// second-confirmation flag for `--allow-invalid-certificate`).
+/// TLS configuration options. The three validation-mode flags
+/// (`--tls-ca-file`, `--insecure-skip-hostname-verify`,
+/// `--allow-invalid-certificate`) are mutually exclusive.
 #[derive(Args, Debug, Clone)]
 pub struct TlsOptions {
-    /// Path to CA certificate file for trust anchor pinning
+    /// Path to CA certificate file for trust anchor pinning.
+    ///
+    /// Gold Digger validates the server certificate against this CA
+    /// instead of the platform trust store. Safe for self-signed or
+    /// private-CA infrastructure; chain, hostname, and time checks all
+    /// still run.
+    ///
+    /// **Residual attack surface:** compromise of the specified CA's
+    /// private key lets an attacker present a forged certificate that
+    /// this binary will trust. Protect the CA key with the same care as
+    /// a production signing key.
     #[arg(long, group = "tls_mode")]
     pub tls_ca_file: Option<PathBuf>,
 
-    /// Skip hostname verification (keeps chain and time validation)
+    /// Skip hostname verification (keeps chain and time validation).
+    ///
+    /// Certificate chain still has to be signed by a trusted CA and
+    /// fall within its validity window. Use when the server presents a
+    /// certificate for a different name than the one you connect to
+    /// (e.g., connecting to an IP when the cert is for a hostname).
+    ///
+    /// **Residual attack surface (CWE-297):** an attacker who obtains
+    /// any certificate signed by a CA you trust — for any domain — can
+    /// MITM the connection. This flag removes the "certificate must
+    /// match this host" binding. Do not enable against
+    /// internet-reachable databases.
     #[arg(long, group = "tls_mode")]
     pub insecure_skip_hostname_verify: bool,
 
@@ -133,26 +155,8 @@ pub struct TlsOptions {
     /// `--tls-ca-file <path>` for self-signed CAs (full validation
     /// against an explicit anchor) or `--insecure-skip-hostname-verify`
     /// for hostname-only mismatches. See SECURITY.md.
-    ///
-    /// **Requires a second confirmation flag:** pass
-    /// `--i-understand-this-is-insecure` (or set
-    /// `GOLD_DIGGER_ALLOW_INVALID=1`) to actually activate the mode. This
-    /// is a guard against the flag being accidentally left in a script;
-    /// stderr-only `[DANGER]` warnings are swallowed by `2>/dev/null` in
-    /// CI and cron (todo #022, CWE-295 / CWE-296).
     #[arg(long, group = "tls_mode")]
     pub allow_invalid_certificate: bool,
-
-    /// Second-confirmation flag required alongside `--allow-invalid-certificate`.
-    ///
-    /// Acts as an explicit opt-in that the user understands they are
-    /// disabling all TLS certificate validation and accepting full MITM
-    /// exposure. Alternatively set the `GOLD_DIGGER_ALLOW_INVALID=1`
-    /// environment variable (for ops-managed deployments). Without one of
-    /// these, `--allow-invalid-certificate` is treated as a configuration
-    /// error (exit 2) rather than silently downgrading security.
-    #[arg(long, env = "GOLD_DIGGER_ALLOW_INVALID")]
-    pub i_understand_this_is_insecure: bool,
 }
 
 impl TlsOptions {
@@ -165,26 +169,7 @@ impl TlsOptions {
     /// [`TlsOptions`] → [`crate::tls::TlsConfig`] lives here so the `tls`
     /// module depends only on primitive types (bool + `Option<PathBuf>`),
     /// enabling a future extraction into a sibling crate.
-    ///
-    /// # Fail-closed second confirmation (#022)
-    ///
-    /// If `--allow-invalid-certificate` is set WITHOUT either
-    /// `--i-understand-this-is-insecure` or
-    /// `GOLD_DIGGER_ALLOW_INVALID=1`, this function returns a
-    /// [`crate::tls::TlsError::MutuallyExclusiveFlags`] variant (which
-    /// maps to exit 2 / config error). The call site is expected to
-    /// surface this error verbatim — stderr `[DANGER]` warnings are
-    /// swallowed by `2>/dev/null` in CI / cron, so structural
-    /// enforcement is the only reliable signal.
     pub fn to_tls_config(&self) -> Result<crate::tls::TlsConfig, crate::tls::TlsError> {
-        if self.allow_invalid_certificate && !self.i_understand_this_is_insecure {
-            return Err(crate::tls::TlsError::MutuallyExclusiveFlags {
-                flags:
-                    "--allow-invalid-certificate requires the companion flag --i-understand-this-is-insecure (or env GOLD_DIGGER_ALLOW_INVALID=1).                      Refusing to disable certificate validation without explicit confirmation. See SECURITY.md (todo #022)."
-                        .to_string(),
-            });
-        }
-
         crate::tls::TlsConfig::from_cli_args(
             self.tls_ca_file.as_ref(),
             self.insecure_skip_hostname_verify,

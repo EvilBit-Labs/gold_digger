@@ -184,7 +184,6 @@ mod database_url_compatibility_tests {
                     tls_ca_file: None,
                     insecure_skip_hostname_verify: false,
                     allow_invalid_certificate: true,
-                    i_understand_this_is_insecure: true,
                 },
                 TlsValidationMode::AcceptInvalid,
             ),
@@ -195,7 +194,6 @@ mod database_url_compatibility_tests {
                     tls_ca_file: None,
                     insecure_skip_hostname_verify: true,
                     allow_invalid_certificate: false,
-                    i_understand_this_is_insecure: false,
                 },
                 TlsValidationMode::SkipHostnameVerification,
             ),
@@ -206,7 +204,6 @@ mod database_url_compatibility_tests {
                     tls_ca_file: Some(cert_path.clone()),
                     insecure_skip_hostname_verify: false,
                     allow_invalid_certificate: false,
-                    i_understand_this_is_insecure: false,
                 },
                 TlsValidationMode::CustomCa {
                     ca_file_path: cert_path.clone(),
@@ -219,7 +216,6 @@ mod database_url_compatibility_tests {
                     tls_ca_file: None,
                     insecure_skip_hostname_verify: false,
                     allow_invalid_certificate: false,
-                    i_understand_this_is_insecure: false,
                 },
                 TlsValidationMode::Platform,
             ),
@@ -472,7 +468,6 @@ mod tls_connection_compatibility_tests {
             tls_ca_file: None,
             insecure_skip_hostname_verify: false,
             allow_invalid_certificate: false,
-            i_understand_this_is_insecure: false,
         };
 
         let config = default_tls_options.to_tls_config()?;
@@ -488,7 +483,6 @@ mod tls_connection_compatibility_tests {
             tls_ca_file: Some(cert_path.clone()),
             insecure_skip_hostname_verify: false,
             allow_invalid_certificate: false,
-            i_understand_this_is_insecure: false,
         };
 
         let config = ca_tls_options.to_tls_config()?;
@@ -503,7 +497,6 @@ mod tls_connection_compatibility_tests {
             tls_ca_file: None,
             insecure_skip_hostname_verify: true,
             allow_invalid_certificate: false,
-            i_understand_this_is_insecure: false,
         };
 
         let config = skip_hostname_options.to_tls_config()?;
@@ -517,7 +510,6 @@ mod tls_connection_compatibility_tests {
             tls_ca_file: None,
             insecure_skip_hostname_verify: false,
             allow_invalid_certificate: true,
-            i_understand_this_is_insecure: true,
         };
 
         let config = accept_invalid_options.to_tls_config()?;
@@ -1004,7 +996,6 @@ mod tls_always_available_tests {
             tls_ca_file: None,
             insecure_skip_hostname_verify: false,
             allow_invalid_certificate: false,
-            i_understand_this_is_insecure: false,
         };
         let _config = tls_options.to_tls_config()?;
 

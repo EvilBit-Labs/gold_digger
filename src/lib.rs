@@ -22,7 +22,26 @@ use mysql::Row;
 
 static INIT: Once = Once::new();
 
-/// Initialize crypto provider for rustls
+/// Install the ring crypto provider as rustls's process-wide default.
+///
+/// Must be called exactly once, before any `Pool::new`, `Opts::from_url`,
+/// or other code path that constructs a rustls `ClientConfig`. The
+/// [`Once`] guard makes repeated calls safe — only the first call does
+/// anything, later calls are no-ops.
+///
+/// # Silent error swallowing
+///
+/// The inner `install_default()` returns an error if another provider
+/// was already installed (e.g., tests or library consumers that set
+/// their own). That error is intentionally discarded via `let _ = …`:
+/// repeated initialisation is the expected failure mode, not a bug, and
+/// we don't want a panic cascade across the test suite. The trade-off
+/// is that a malformed provider (on a future rustls release) would also
+/// fail silently here — if that becomes a problem, log the result
+/// through `tracing::warn!` rather than swallowing.
+///
+/// See todo #P3 `init-crypto-provider-must-surface-or-panic-on-install-error`
+/// for a stricter alternative.
 pub fn init_crypto_provider() {
     INIT.call_once(|| {
         let _ = rustls::crypto::ring::default_provider().install_default();
@@ -128,18 +147,36 @@ pub fn rows_to_strings(mut rows: Vec<Row>) -> anyhow::Result<Vec<Vec<String>>> {
 
 /// Extracts the file extension from a filename, if present.
 ///
+/// # Case sensitivity
+///
+/// Returns the extension exactly as it appears on disk — `"FOO.CSV"`
+/// yields `Some("CSV")`, not `Some("csv")`. Callers that need a
+/// case-insensitive dispatch (e.g., [`crate::cli::OutputFormat::from_extension`])
+/// must lowercase the returned string themselves. See todo
+/// `explicit-error-for-non-utf-8-extension-paths` for the planned
+/// handling of paths whose extension is not valid UTF-8.
+///
 /// # Arguments
 ///
 /// * `filename` - The filename as a string slice.
 ///
 /// # Returns
 ///
-/// An Option containing the extension as a string slice, or None if not found.
+/// An Option containing the extension as a string slice, or None if
+/// the path has no extension or the extension is not valid UTF-8.
 pub fn get_extension_from_filename(filename: &str) -> Option<&str> {
     Path::new(filename).extension().and_then(OsStr::to_str)
 }
 
 /// Gets a required environment variable with contextual error information.
+///
+/// This is the low-level helper that underpins the CLI config resolvers
+/// ([`crate::config::resolve_database_url`],
+/// [`crate::config::resolve_database_query`],
+/// [`crate::config::resolve_output_file`]). Those resolvers prefer CLI
+/// flags and only call into this function as a fallback, so most callers
+/// should go through them rather than invoking `get_required_env`
+/// directly.
 ///
 /// # Arguments
 ///
@@ -147,7 +184,23 @@ pub fn get_extension_from_filename(filename: &str) -> Option<&str> {
 ///
 /// # Returns
 ///
-/// A Result containing the environment variable value as a String, or an error with context.
+/// A `Result` containing the environment variable value as a `String`,
+/// or an `anyhow::Error` with a `"Missing required environment variable: NAME"`
+/// context message when the variable is unset or not valid Unicode.
+///
+/// # Example
+///
+/// ```
+/// use gold_digger::get_required_env;
+///
+/// // SAFETY: test is single-threaded; no other code reads this var.
+/// unsafe { std::env::set_var("GD_EXAMPLE_VAR", "hello"); }
+/// let value = get_required_env("GD_EXAMPLE_VAR").unwrap();
+/// assert_eq!(value, "hello");
+///
+/// let missing = get_required_env("GD_DEFINITELY_UNSET_VAR_XYZ");
+/// assert!(missing.is_err());
+/// ```
 pub fn get_required_env(var_name: &str) -> Result<String> {
     env::var(var_name)
         .with_context(|| format!("Missing required environment variable: {}", var_name))

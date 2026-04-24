@@ -281,20 +281,16 @@ cargo run --release
 
 ## Requirements Gap Analysis
 
-The project has detailed requirements in `project_spec/requirements.md` but significant gaps exist:
+The project has detailed requirements in `project_spec/requirements.md`. The major gaps previously flagged in this section are closed; see below for the current status. Open work lives in the GitHub issue tracker.
 
-### High Priority Missing Features
+### Closed gaps (previously flagged)
 
-- **F001-F003:** CLI interface exists (clap-based); finalize CLI flag precedence and documented flags
-- **F005:** Non-standard exit codes (should be 0=success, 1=no rows, 2=config error, etc.)
-- **F014:** Type conversion panics on NULL/non-string values
-- **Extension dispatch bug fix**
-
-### Medium Priority
-
-- **F007:** Streaming output (currently loads all rows into memory)
-- **F008:** Structured logging with credential redaction
-- **F010:** JSON output uses BTreeMap for deterministic ordering, pretty-print option
+- **F001-F003 (CLI-first config):** Resolved. Clap-derive `Cli` with `DATABASE_URL` / `DATABASE_QUERY` / `OUTPUT_FILE` env fallbacks; precedence is CLI > env > error.
+- **F005 (exit codes):** Resolved. Typed `GoldDiggerError` enum in `src/exit.rs` maps to stable codes 0-5 via a downcast-based classifier (substring fallback retained for the few un-migrated anyhow paths).
+- **F014 (type-conversion panics):** Resolved. `TypeTransformer` handles every `mysql::Value` variant including NULL without panicking.
+- **F007 (streaming output):** Resolved. `RowSink` trait in `src/sink.rs` plus `conn.query_iter` in `src/run.rs` streams rows through the writer without materialising the full result set. Output lands in a `<path>.tmp` sibling that is renamed on success (or cleaned up on error) so a mid-stream failure never leaves a partial output file.
+- **F008 (structured logging):** Resolved. `tracing` + `tracing-subscriber` in `src/logging.rs`; every error string is routed through `utils::redact_sql_error` before reaching the subscriber.
+- **F010 (deterministic JSON):** Resolved long before this branch; `BTreeMap<String, serde_json::Value>` in `src/type_transformer.rs`.
 
 ## Project File Organization
 

@@ -1,12 +1,7 @@
 //! Database connection pool construction with rustls-only TLS.
 //!
-//! The `TlsOptions` → `TlsConfig` adapter lives in [`crate::cli`] (todo
-//! #045) so the `tls` module has zero dependency on CLI types. The
-//! second-confirmation gate for `--allow-invalid-certificate` is enforced
-//! by [`crate::cli::TlsOptions::to_tls_config`] (todo #022); bare
-//! `--allow-invalid-certificate` without `--i-understand-this-is-insecure`
-//! (or the `GOLD_DIGGER_ALLOW_INVALID=1` env var) returns a config error
-//! from this module.
+//! The `TlsOptions` → `TlsConfig` adapter lives in [`crate::cli`] so the
+//! `tls` module has zero dependency on CLI types.
 
 use anyhow::Result;
 use mysql::Pool;
@@ -15,13 +10,6 @@ use crate::cli::Cli;
 use crate::tls::create_tls_connection;
 
 /// Creates a database connection pool with rustls-only TLS configuration from CLI.
-///
-/// The `TlsOptions` → `TlsConfig` adapter now lives in [`crate::cli`]
-/// (todo #045) so the `tls` module has zero dependency on CLI types. The
-/// second-confirmation gate for `--allow-invalid-certificate` is enforced by
-/// [`crate::cli::TlsOptions::to_tls_config`] (todo #022); bare
-/// `--allow-invalid-certificate` without `--i-understand-this-is-insecure`
-/// (or the `GOLD_DIGGER_ALLOW_INVALID=1` env var) returns a config error here.
 pub fn create_database_connection(database_url: &str, cli: &Cli) -> Result<Pool> {
     // Create TLS configuration from CLI options
     let tls_config = if cli.tls_options.tls_ca_file.is_some()

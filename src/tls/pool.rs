@@ -20,7 +20,52 @@ use super::config::{TlsConfig, TlsValidationMode};
 use super::error::TlsError;
 use mysql::{Pool, SslOpts};
 
-/// Creates a MySQL connection pool with rustls-only TLS configuration
+/// Creates a [`mysql::Pool`] with rustls-only TLS configuration.
+///
+/// This is the single entry point `src/connection.rs` uses to build a
+/// pool. It parses the URL, applies the `TlsConfig` (if provided), then
+/// hands off to `Pool::new` with a typed error classifier that maps
+/// every `mysql::Error` variant into a specific [`TlsError`] so the
+/// caller can present actionable guidance.
+///
+/// # Arguments
+///
+/// * `database_url` - MySQL connection URL in standard format
+///   (`mysql://user:pass@host:port/db`). Passwords are redacted via
+///   [`crate::utils::redact_url`] before appearing in any error message.
+/// * `tls_config` - Optional [`TlsConfig`] controlling the four
+///   validation modes (strict, skip-hostname, accept-invalid, custom-CA).
+///   `None` uses platform defaults with strict validation.
+/// * `verbose` - When true, logs TLS decisions to stderr via
+///   `tracing::info!`.
+///
+/// # Returns
+///
+/// * `Ok(Pool)` - a ready-to-use connection pool.
+/// * `Err(TlsError)` - typed error carrying actionable user guidance;
+///   routes to exit code 2 (config) for `CaFileNotFound` / `InvalidCaFormat`
+///   / `MutuallyExclusiveFlags`, and exit 3 (DB auth) for everything else.
+///
+/// # Errors
+///
+/// Returns `TlsError::ConnectionFailed` when the URL is malformed,
+/// `TlsError::CaFileNotFound` / `InvalidCaFormat` when a supplied CA
+/// file can't be read or parsed, `TlsError::HandshakeFailed` /
+/// `CertificateValidationFailed` / `HostnameVerificationFailed` for
+/// the corresponding TLS failure modes, and `TlsError::ConnectionFailed`
+/// for generic network or authentication errors.
+///
+/// # Example
+///
+/// ```no_run
+/// # use gold_digger::tls::create_tls_connection;
+/// let pool = create_tls_connection(
+///     "mysql://user:pass@db.example.com:3306/mydb",
+///     None,  // use platform defaults
+///     false, // quiet
+/// )?;
+/// # Ok::<(), gold_digger::tls::TlsError>(())
+/// ```
 pub fn create_tls_connection(
     database_url: &str,
     tls_config: Option<TlsConfig>,

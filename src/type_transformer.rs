@@ -24,6 +24,24 @@ const MAX_TIME_TOTAL_HOURS: u32 = 838;
 /// functions (no `self`) on this zero-sized struct, keeping the API stateless and
 /// easy to call from any context.
 ///
+/// # Per-format usage
+///
+/// Pick the pair that matches the output format. The value-level and row-
+/// level helpers are interchangeable; choose value-level when feeding a
+/// streaming sink one field at a time, row-level for the legacy
+/// materialise-then-write path.
+///
+/// | Output | Single value                        | Full row                             |
+/// | ------ | ----------------------------------- | ------------------------------------ |
+/// | CSV    | [`TypeTransformer::value_to_string`] | [`TypeTransformer::row_to_strings`]  |
+/// | TSV    | [`TypeTransformer::value_to_string`] | [`TypeTransformer::row_to_strings`]  |
+/// | JSON   | [`TypeTransformer::value_to_json`]   | [`TypeTransformer::row_to_json`]     |
+///
+/// CSV/TSV output flattens everything to `String`; NULL becomes the empty
+/// string. JSON output preserves `null`, integers, floats (except NaN /
+/// infinity, which become strings so the result is still valid JSON),
+/// and ISO-8601 datetimes with a `T` separator.
+///
 /// # Safety guarantees
 ///
 /// - NULL values are handled gracefully (empty string for CSV/TSV, `Null` for JSON).

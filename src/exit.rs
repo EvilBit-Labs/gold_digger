@@ -129,7 +129,22 @@ pub fn exit_with_error(error: Error, context: Option<&str>) -> ! {
     process::exit(exit_code);
 }
 
-/// Maps an error to the appropriate exit code without exiting
+/// Maps an error to the appropriate exit code without exiting.
+///
+/// # WARNING: error-message text is part of the public API
+///
+/// The substring-fallback path (reached only when no typed
+/// [`GoldDiggerError`], [`TlsError`], or [`std::io::Error`] can be
+/// downcast from the error chain) classifies by keyword match on
+/// `error.to_string().to_lowercase()`. That makes the **exact text** of
+/// un-migrated `anyhow!(...)` call sites a versioned contract — rewording
+/// a `bail!("Missing database URL")` message can silently shift the exit
+/// code from 2 to 4, breaking CI/automation that switches on exit codes.
+///
+/// New error-origin sites SHOULD construct a [`GoldDiggerError`] variant
+/// so the typed downcast path handles classification. Once all sites are
+/// typed the substring matcher can be deleted (tracked under todos
+/// #017, #031, #165).
 ///
 /// # Arguments
 ///

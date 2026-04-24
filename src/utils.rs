@@ -112,10 +112,23 @@ fn get_redaction_patterns() -> &'static Vec<(Regex, &'static str)> {
 /// ```
 /// use gold_digger::utils::redact_sql_error;
 ///
+/// // `password: YES` is replaced with the exact placeholder used across
+/// // the codebase; callers can grep for it to audit redaction coverage.
 /// let error = "Error: Access denied for user 'test' (using password: YES)";
 /// let redacted = redact_sql_error(error);
-/// assert!(redacted.contains("***REDACTED***"));
-/// assert!(!redacted.contains("password: YES"));
+/// assert!(redacted.contains("***REDACTED***"), "placeholder must appear");
+/// assert!(!redacted.contains("password: YES"), "original text must be gone");
+///
+/// // URL userinfo is replaced structurally (different placeholder) so
+/// // failure output distinguishes "URL was parseable" from "generic key=value match".
+/// let url_error = "Failed to connect to mysql://alice:secret@db:3306/prod";
+/// let redacted = redact_sql_error(url_error);
+/// assert!(redacted.contains("://***:***@"), "URL userinfo replaced");
+/// assert!(!redacted.contains("alice:secret"), "credentials must be gone");
+///
+/// // Redaction is idempotent — running on an already-redacted string is a no-op.
+/// let twice = redact_sql_error(&redacted);
+/// assert_eq!(twice, redacted, "redaction must be idempotent");
 /// ```
 pub fn redact_sql_error(message: &str) -> String {
     let mut redacted = message.to_string();
