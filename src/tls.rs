@@ -510,11 +510,19 @@ pub fn create_tls_connection(
         }
     }
 
-    // Create the connection pool with enhanced error handling
+    // Create the connection pool with enhanced error handling.
+    //
+    // CRITICAL: every interpolation of `mysql_error` below MUST go through
+    // `redact_sql_error` first. The mysql crate's error strings frequently
+    // embed the raw connection URL, the username, the source IP, and
+    // `(using password: YES)` markers; un-redacted, those reach the user
+    // via stderr (CWE-532/CWE-209). The substring-classification below
+    // looks at `error_lower` only for routing — the user-facing string is
+    // built from `redacted_error`.
     Pool::new(opts_builder).map_err(|mysql_error| {
-        // Classify MySQL errors and provide appropriate TLS error with guidance
         let error_string = mysql_error.to_string();
         let error_lower = error_string.to_lowercase();
+        let redacted_error = crate::utils::redact_sql_error(&error_string);
 
         // Check for TLS/SSL related errors and provide specific guidance
         if error_lower.contains("ssl") || error_lower.contains("tls") {
@@ -522,99 +530,87 @@ pub fn create_tls_connection(
                 if error_lower.contains("expired") || error_lower.contains("not yet valid") {
                     TlsError::certificate_time_invalid(format!(
                         "Certificate validity period error: {}. Use --allow-invalid-certificate to bypass",
-                        mysql_error
+                        redacted_error
                     ))
                 } else if error_lower.contains("hostname") || error_lower.contains("name") || error_lower.contains("san") {
                     TlsError::hostname_verification_failed(
                         "server".to_string(),
                         format!(
                             "Hostname verification failed: {}. Use --insecure-skip-hostname-verify to bypass",
-                            mysql_error
+                            redacted_error
                         )
                     )
                 } else if error_lower.contains("unknown") || error_lower.contains("untrusted") || error_lower.contains("issuer") {
                     TlsError::unknown_certificate_authority(format!(
                         "Certificate authority not trusted: {}. Use --tls-ca-file <path> for custom CA or --allow-invalid-certificate for testing",
-                        mysql_error
+                        redacted_error
                     ))
                 } else if error_lower.contains("signature") || error_lower.contains("invalid") {
                     TlsError::invalid_signature(format!(
                         "Certificate signature validation failed: {}. Use --allow-invalid-certificate to bypass",
-                        mysql_error
+                        redacted_error
                     ))
                 } else {
                     TlsError::certificate_validation_failed(format!(
                         "Certificate validation failed: {}. Try --allow-invalid-certificate for testing",
-                        mysql_error
+                        redacted_error
                     ))
                 }
             } else if error_lower.contains("handshake") {
                 TlsError::handshake_failed(format!(
                     "TLS handshake failed: {}. Check server TLS configuration and supported protocols",
-                    mysql_error
+                    redacted_error
                 ))
             } else if error_lower.contains("protocol") || error_lower.contains("version") {
                 TlsError::protocol_version_mismatch(format!(
                     "TLS protocol version mismatch: {}. Server may not support TLS 1.2/1.3",
-                    mysql_error
+                    redacted_error
                 ))
             } else if error_lower.contains("cipher") {
                 TlsError::cipher_suite_negotiation_failed(format!(
                     "TLS cipher suite negotiation failed: {}. Server and client have no compatible cipher suites",
-                    mysql_error
+                    redacted_error
                 ))
             } else {
                 TlsError::connection_failed(format!(
                     "TLS connection failed: {}. Check server TLS configuration",
-                    mysql_error
+                    redacted_error
                 ))
             }
         } else if error_lower.contains("connection") || error_lower.contains("connect") {
             TlsError::connection_failed(format!(
                 "Database connection failed: {}. Check server availability and network connectivity",
-                mysql_error
+                redacted_error
             ))
         } else if error_lower.contains("auth") || error_lower.contains("access denied") || error_lower.contains("password") {
             TlsError::connection_failed(format!(
                 "Database authentication failed: {}. Check username and password",
-                mysql_error
+                redacted_error
             ))
         } else if error_lower.contains("timeout") {
             TlsError::connection_failed(format!(
                 "Database connection timeout: {}. Check network connectivity and server responsiveness",
-                mysql_error
+                redacted_error
             ))
         } else {
             // Generic connection error
             TlsError::connection_failed(format!(
                 "Database connection failed: {}",
-                mysql_error
+                redacted_error
             ))
         }
     })
 }
 
-/// Helper function to redact sensitive information from URLs for safe error logging
+/// Helper function to redact sensitive information from URLs for safe error logging.
+///
+/// **Deprecated re-export.** Prefer [`crate::utils::redact_url`] in new code;
+/// this thin wrapper exists only so external callers (and the snapshot of
+/// existing test harnesses) keep compiling. All the redaction logic now
+/// lives in [`crate::utils`] so the three previously-divergent redactors
+/// share one pattern set and one placeholder.
 pub fn redact_url(url: &str) -> String {
-    if let Ok(parsed) = url::Url::parse(url) {
-        let mut redacted = parsed.clone();
-
-        // Redact password if present
-        if parsed.password().is_some() {
-            let _ = redacted.set_password(Some("***REDACTED***"));
-        }
-
-        // Redact username if it looks like it might contain sensitive info
-        let username = parsed.username();
-        if !username.is_empty() {
-            let _ = redacted.set_username("***REDACTED***");
-        }
-
-        redacted.to_string()
-    } else {
-        // If URL parsing fails, just redact the whole thing to be safe
-        "***REDACTED_URL***".to_string()
-    }
+    crate::utils::redact_url(url)
 }
 
 /// TLS validation modes for different security requirements
@@ -1377,7 +1373,9 @@ mod tests {
         let url = "mysql://user@localhost:3306/db";
         let redacted = redact_url(url);
         assert!(redacted.contains("***REDACTED***"));
-        assert!(!redacted.contains("user"));
+        // Username substring "user" must not appear in its un-redacted
+        // userinfo position. (The placeholder itself contains no "user".)
+        assert!(!redacted.contains("user@"));
 
         // Test URL without credentials - intentionally left unchanged for debugging/traceability
         let url = "mysql://localhost:3306/db";

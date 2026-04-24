@@ -16,7 +16,7 @@ use mysql::prelude::Queryable;
 use gold_digger::cli::{Cli, Commands, OutputFormat, Shell};
 use gold_digger::exit::{GoldDiggerError, exit_no_rows, exit_success, exit_with_error};
 use gold_digger::rows_to_strings;
-use gold_digger::utils::redact_sql_error;
+use gold_digger::utils::{redact_dump_query, redact_sql_error};
 
 use gold_digger::tls::{TlsConfig, create_tls_connection};
 
@@ -361,24 +361,30 @@ fn generate_completion(shell: Shell) {
     }
 }
 
-/// Dumps current configuration as JSON with proper credential redaction
+/// Dumps current configuration as JSON with proper credential redaction.
+///
+/// The query (whether from `--query` or `DATABASE_QUERY`) is routed
+/// through [`redact_dump_query`], which delegates to the same regex set
+/// that scrubs MySQL error messages. There is exactly one redactor in
+/// the codebase ([`gold_digger::utils`]) so a fix to a missed pattern
+/// (e.g. `passwd=`, `pwd=`, `Kennwort=`, `mot_de_passe=`) lands in every
+/// surface at once.
 fn dump_configuration(cli: &Cli) -> Result<()> {
     use serde_json::json;
 
-    // Safely redact query content that might contain sensitive data
+    // Route the query through the canonical redactor. The previous
+    // implementation used a substring check for "password" / "identified
+    // by" and replaced the entire query with a sentinel — that missed
+    // `pwd=`, `passwd=`, GRANT/SET PASSWORD, base64/JWT/hex blobs,
+    // non-English labels, and erased the legitimate query when it
+    // matched. The shared regex set in `utils::redact_sql_error` covers
+    // all of those and only redacts the offending substrings.
     let query_from_env = env::var("DATABASE_QUERY").ok();
     let redacted_query = cli
         .query
         .as_ref()
         .or(query_from_env.as_ref())
-        .map(|q| {
-            // Redact potential passwords in SQL queries
-            if q.to_lowercase().contains("password") || q.to_lowercase().contains("identified by") {
-                "***QUERY_WITH_CREDENTIALS_REDACTED***".to_string()
-            } else {
-                q.clone()
-            }
-        })
+        .map(|q| redact_dump_query(q))
         .unwrap_or_default();
 
     let config = json!({

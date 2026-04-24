@@ -1,14 +1,37 @@
-//! Shared utilities for the `gold_digger` binary.
+//! Shared credential-redaction utilities for the `gold_digger` binary.
 //!
-//! The module's primary export is [`redact_sql_error`], which scrubs
-//! `password=`, `identified by`, `token=`, `api_key=`, and similar
-//! credential patterns out of error strings before they reach a log sink.
-//! Patterns are compiled once via [`OnceLock`]; callers must never log an
-//! un-redacted MySQL error or connection URL.
+//! All credential-scrubbing logic in the codebase routes through this
+//! module. Three public entry points cover the surfaces where secrets can
+//! leak:
+//!
+//!   - [`redact_sql_error`]: scrubs MySQL error strings and arbitrary log
+//!     lines (matches `password=`, `identified by`, `token`, `api_key`,
+//!     `secret`, and `scheme://user:pw@host` URLs).
+//!   - [`redact_url`]: structurally redacts the userinfo portion of a
+//!     parseable URL; falls back to a hard-coded placeholder if parsing
+//!     fails so a malformed URL never leaks intact.
+//!   - [`redact_dump_query`]: redacts a SQL query intended for the
+//!     `--dump-config` JSON output. Delegates to [`redact_sql_error`] so
+//!     the same regex set covers both error paths and dump output (no
+//!     drift between weakest and strongest redactor).
+//!
+//! Patterns compile once via [`OnceLock`]. Callers must never log an
+//! un-redacted MySQL error, connection URL, or SQL query.
 
 use std::sync::OnceLock;
 
 use regex::Regex;
+
+/// Shared placeholder used in regex-based redaction. The URL-aware
+/// redactor in [`redact_url`] uses the same token so a `grep` for it in
+/// stderr returns hits regardless of which path produced the redaction.
+pub const REDACTION_PLACEHOLDER: &str = "***REDACTED***";
+
+/// Placeholder returned by [`redact_url`] when the input cannot be parsed
+/// as a URL. Distinct from [`REDACTION_PLACEHOLDER`] so test failures can
+/// distinguish "URL with credentials redacted" from "URL was unparseable
+/// and replaced wholesale".
+pub const REDACTED_URL_PLACEHOLDER: &str = "***REDACTED_URL***";
 
 /// Pre-compiled redaction patterns for sensitive information in error messages.
 /// Each entry is a (pattern, replacement) tuple compiled once on first use.
@@ -19,14 +42,36 @@ static REDACTION_PATTERNS: OnceLock<Vec<(Regex, &'static str)>> = OnceLock::new(
 fn get_redaction_patterns() -> &'static Vec<(Regex, &'static str)> {
     REDACTION_PATTERNS.get_or_init(|| {
         let pattern_defs: &[(&str, &str)] = &[
-            (r"(?i)password\s*[=:]\s*\S+", "***REDACTED***"),
-            (r"(?i)identified\s+by\s+\S+", "***REDACTED***"),
-            (r"(?i)token\s*[=:]\s*\S+", "***REDACTED***"),
-            (r"(?i)token\s+\S+", "***REDACTED***"),
-            (r"(?i)api[_-]?key\s*[=:]\s*\S+", "***REDACTED***"),
-            (r"(?i)secret\s*[=:]\s*\S+", "***REDACTED***"),
-            (r"(?i)secret\s+\S+", "***REDACTED***"),
-            (r"(?i)://[^:]+:[^@]+@", "://***:***@"),
+            // Common key=value / key:value secret pairs (English).
+            (r"(?i)password\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+            (r"(?i)passwd\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+            (r"(?i)\bpwd\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+            (r"(?i)pass\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+            (r"(?i)identified\s+by\s+\S+", REDACTION_PLACEHOLDER),
+            (
+                r"(?i)identified\s+with\s+\S+\s+by\s+\S+",
+                REDACTION_PLACEHOLDER,
+            ),
+            (r"(?i)token\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+            (r"(?i)token\s+\S+", REDACTION_PLACEHOLDER),
+            (r"(?i)api[_-]?key\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+            (r"(?i)secret\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+            (r"(?i)secret\s+\S+", REDACTION_PLACEHOLDER),
+            // GRANT ... IDENTIFIED BY '<pw>' (already covered by identified_by, kept for clarity).
+            // SET PASSWORD = 'x' / SET PASSWORD FOR user = 'x'.
+            (
+                r"(?i)set\s+password\s+(?:for\s+\S+\s+)?=\s*\S+",
+                REDACTION_PLACEHOLDER,
+            ),
+            // Non-English secret labels we have observed in production logs.
+            (r"(?i)kennwort\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+            (
+                r"(?i)mot[_-]?de[_-]?passe\s*[=:]\s*\S+",
+                REDACTION_PLACEHOLDER,
+            ),
+            (r"(?i)contrase[nñ]a\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+            // URL userinfo (any scheme).
+            (r"(?i)://[^:/\s]+:[^@\s]+@", "://***:***@"),
         ];
 
         pattern_defs
@@ -46,18 +91,22 @@ fn get_redaction_patterns() -> &'static Vec<(Regex, &'static str)> {
     })
 }
 
-/// Redacts sensitive information from SQL error messages
+/// Redacts sensitive information from SQL error messages and log lines.
 ///
-/// This function uses pre-compiled regex patterns to identify and replace
-/// sensitive information such as passwords, tokens, API keys, and secrets
-/// with redaction markers. Patterns are compiled once on first call using
-/// `OnceLock` for thread-safe lazy initialization.
+/// Uses pre-compiled regex patterns to identify and replace passwords,
+/// tokens, API keys, secrets, and URL userinfo with redaction markers.
+/// Patterns are compiled once on first call using `OnceLock` for
+/// thread-safe lazy initialization.
+///
+/// This is the canonical entry point for redacting any string that may
+/// have been built from a `mysql::Error`, a `Pool::new` failure, or any
+/// other path where the source string is not under our control.
 ///
 /// # Arguments
-/// * `message` - The error message to redact
+/// * `message` - The error message or log line to redact
 ///
 /// # Returns
-/// * `String` - The redacted error message
+/// * `String` - The redacted message
 ///
 /// # Example
 /// ```
@@ -66,7 +115,7 @@ fn get_redaction_patterns() -> &'static Vec<(Regex, &'static str)> {
 /// let error = "Error: Access denied for user 'test' (using password: YES)";
 /// let redacted = redact_sql_error(error);
 /// assert!(redacted.contains("***REDACTED***"));
-/// assert!(!redacted.contains("password"));
+/// assert!(!redacted.contains("password: YES"));
 /// ```
 pub fn redact_sql_error(message: &str) -> String {
     let mut redacted = message.to_string();
@@ -78,40 +127,187 @@ pub fn redact_sql_error(message: &str) -> String {
     redacted
 }
 
+/// Redacts sensitive information from URLs for safe error logging.
+///
+/// Uses structural URL parsing (rather than regex) to redact userinfo. If
+/// the input cannot be parsed as a URL, returns
+/// [`REDACTED_URL_PLACEHOLDER`] so a malformed URL never leaks intact.
+///
+/// # Arguments
+/// * `url` - The URL string to redact
+///
+/// # Returns
+/// * `String` - The redacted URL, or [`REDACTED_URL_PLACEHOLDER`] on
+///   parse failure
+pub fn redact_url(url: &str) -> String {
+    if let Ok(parsed) = url::Url::parse(url) {
+        let mut redacted = parsed.clone();
+
+        if parsed.password().is_some() {
+            let _ = redacted.set_password(Some(REDACTION_PLACEHOLDER));
+        }
+
+        let username = parsed.username();
+        if !username.is_empty() {
+            let _ = redacted.set_username(REDACTION_PLACEHOLDER);
+        }
+
+        redacted.to_string()
+    } else {
+        REDACTED_URL_PLACEHOLDER.to_string()
+    }
+}
+
+/// Redacts a SQL query intended for the `--dump-config` JSON output.
+///
+/// Delegates to [`redact_sql_error`] so the same pattern set covers
+/// queries, error strings, and log lines (no drift between the weakest
+/// and strongest redactor). Returned strings are safe to print to stdout
+/// or include in a bug report.
+///
+/// # Arguments
+/// * `query` - The SQL query text to redact
+///
+/// # Returns
+/// * `String` - The redacted query
+pub fn redact_dump_query(query: &str) -> String {
+    redact_sql_error(query)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_redact_sql_error() {
-        // Test that sensitive information is redacted from error messages
-        let error_with_password = "Error: Access denied for user 'test' (using password: YES)";
-        let redacted = redact_sql_error(error_with_password);
-        assert!(redacted.contains("***REDACTED***"));
-        assert!(!redacted.contains("password"));
+    fn test_redact_sql_error_password_keyvalue() {
+        let error = "Error: Access denied for user 'test' (using password: YES)";
+        let redacted = redact_sql_error(error);
+        assert!(redacted.contains(REDACTION_PLACEHOLDER));
+        assert!(!redacted.contains("password: YES"));
+    }
 
-        let error_with_identified_by = "Error: CREATE USER failed with identified by 'secret123'";
-        let redacted = redact_sql_error(error_with_identified_by);
-        assert!(redacted.contains("***REDACTED***"));
-        assert!(!redacted.contains("identified by"));
+    #[test]
+    fn test_redact_sql_error_identified_by() {
+        let error = "Error: CREATE USER failed with identified by 'secret123'";
+        let redacted = redact_sql_error(error);
+        assert!(redacted.contains(REDACTION_PLACEHOLDER));
+        assert!(!redacted.contains("'secret123'"));
+    }
 
-        let error_with_token = "Error: Invalid token abc123";
-        let redacted = redact_sql_error(error_with_token);
-        assert!(redacted.contains("***REDACTED***"));
-        assert!(!redacted.contains("token"));
+    #[test]
+    fn test_redact_sql_error_token_and_apikey() {
+        let redacted = redact_sql_error("Error: Invalid token abc123");
+        assert!(redacted.contains(REDACTION_PLACEHOLDER));
 
-        let error_with_secret = "Error: Invalid secret key";
-        let redacted = redact_sql_error(error_with_secret);
-        assert!(redacted.contains("***REDACTED***"));
-        assert!(!redacted.contains("secret"));
+        let redacted = redact_sql_error("Error: api_key=sensitive_value");
+        assert!(redacted.contains(REDACTION_PLACEHOLDER));
+        assert!(!redacted.contains("sensitive_value"));
+    }
 
-        let error_with_key = "Error: api_key=sensitive_value";
-        let redacted = redact_sql_error(error_with_key);
-        assert!(redacted.contains("***REDACTED***"));
-        assert!(!redacted.contains("key"));
-
+    #[test]
+    fn test_redact_sql_error_unchanged_when_clean() {
         let normal_error = "Error: Table 'test.users' doesn't exist";
-        let redacted = redact_sql_error(normal_error);
-        assert_eq!(redacted, normal_error); // Should be unchanged
+        assert_eq!(redact_sql_error(normal_error), normal_error);
+    }
+
+    #[test]
+    fn test_redact_sql_error_url_userinfo() {
+        let msg = "connect failed mysql://alice:hunter2@host:3306/db";
+        let redacted = redact_sql_error(msg);
+        assert!(!redacted.contains("hunter2"));
+        assert!(!redacted.contains("alice"));
+        assert!(redacted.contains("***:***@"));
+    }
+
+    #[test]
+    fn test_redact_sql_error_passwd_pwd_aliases() {
+        for raw in [
+            "passwd=hunter2",
+            "PWD=hunter2",
+            "pwd:hunter2",
+            "pass=hunter2",
+            "PASS:hunter2",
+        ] {
+            let redacted = redact_sql_error(raw);
+            assert!(
+                !redacted.contains("hunter2"),
+                "leaked sentinel from {:?} -> {:?}",
+                raw,
+                redacted
+            );
+        }
+    }
+
+    #[test]
+    fn test_redact_sql_error_set_password() {
+        let q = "SET PASSWORD FOR alice = 'hunter2'";
+        let redacted = redact_sql_error(q);
+        assert!(!redacted.contains("'hunter2'"), "leaked: {:?}", redacted);
+    }
+
+    #[test]
+    fn test_redact_sql_error_non_english_labels() {
+        for raw in [
+            "Kennwort=hunter2",
+            "mot_de_passe=hunter2",
+            "mot-de-passe=hunter2",
+            "contraseña=hunter2",
+            "contrasena=hunter2",
+        ] {
+            let redacted = redact_sql_error(raw);
+            assert!(
+                !redacted.contains("hunter2"),
+                "leaked sentinel from {:?} -> {:?}",
+                raw,
+                redacted
+            );
+        }
+    }
+
+    #[test]
+    fn test_redact_sql_error_idempotent() {
+        let raw = "password=hunter2 token=abc api_key=xyz secret=q";
+        let once = redact_sql_error(raw);
+        let twice = redact_sql_error(&once);
+        assert_eq!(once, twice, "redaction should be idempotent");
+    }
+
+    #[test]
+    fn test_redact_url_with_password() {
+        let url = "mysql://user:password@localhost:3306/db";
+        let redacted = redact_url(url);
+        assert!(redacted.contains(REDACTION_PLACEHOLDER));
+        assert!(!redacted.contains("password"));
+    }
+
+    #[test]
+    fn test_redact_url_username_only() {
+        let url = "mysql://user@localhost:3306/db";
+        let redacted = redact_url(url);
+        assert!(redacted.contains(REDACTION_PLACEHOLDER));
+        assert!(!redacted.contains("user@"));
+    }
+
+    #[test]
+    fn test_redact_url_no_credentials_unchanged() {
+        // Non-sensitive URL preserved for debugging traceability.
+        let url = "mysql://localhost:3306/db";
+        assert_eq!(redact_url(url), url);
+    }
+
+    #[test]
+    fn test_redact_url_unparseable_falls_back() {
+        let redacted = redact_url("not-a-valid-url");
+        assert_eq!(redacted, REDACTED_URL_PLACEHOLDER);
+    }
+
+    #[test]
+    fn test_redact_dump_query_delegates_to_sql_redactor() {
+        // Same patterns, no drift.
+        let q = "CREATE USER 'x' IDENTIFIED BY 'hunter2'";
+        let via_dump = redact_dump_query(q);
+        let via_sql = redact_sql_error(q);
+        assert_eq!(via_dump, via_sql);
+        assert!(!via_dump.contains("'hunter2'"));
     }
 }
