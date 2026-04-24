@@ -7,9 +7,17 @@ use testcontainers_modules::{
     testcontainers::{Container, runners::SyncRunner},
 };
 
-/// Check if running in CI environment
-fn is_ci() -> bool {
-    std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok()
+/// Check if Docker is available by invoking `docker version`.
+///
+/// Container-backed tests require Docker. On Linux GitHub Actions runners
+/// Docker is available by default. On macOS/Windows runners (and developer
+/// machines without Docker) these tests are skipped gracefully.
+fn is_docker_available() -> bool {
+    std::process::Command::new("docker")
+        .arg("version")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
 }
 
 /// Test database setup that keeps container alive
@@ -24,21 +32,27 @@ impl TestDatabase {
     }
 }
 
-/// Fixture for MariaDB container setup
+/// Fixture for MariaDB container setup.
+///
+/// Panics if Docker is unavailable rather than silently skipping. Platforms
+/// without Docker should be filtered at the runner-matrix level (see
+/// `.github/workflows/ci.yml`), not inside the test body.
 #[fixture]
 fn mariadb_container() -> Container<Mariadb> {
-    if is_ci() {
-        panic!("SKIP: Container tests require Docker, which is not available in CI");
-    }
     Mariadb::default()
         .start()
-        .expect("Failed to start MariaDB container")
+        .expect("Failed to start MariaDB container (Docker must be available)")
 }
 
-/// Conditional fixture for CI environments that skips container tests
+/// Conditional fixture that returns `None` only when Docker is unavailable.
+///
+/// Tests relying on this fixture skip at the call site by matching on
+/// `Option<TestDatabase>`. Previously this skipped unconditionally in any CI
+/// environment which hid real failures on Linux GitHub Actions runners where
+/// Docker is available.
 #[fixture]
 fn optional_mariadb_container() -> Option<Container<Mariadb>> {
-    if is_ci() {
+    if !is_docker_available() {
         return None;
     }
     Some(
@@ -76,11 +90,7 @@ fn db_pool(#[from(mariadb_container)] container: Container<Mariadb>) -> TestData
 fn optional_db_pool(
     #[from(optional_mariadb_container)] container: Option<Container<Mariadb>>,
 ) -> Option<TestDatabase> {
-    if is_ci() {
-        return None;
-    }
-
-    let container = container.expect("Container should be available in non-CI environments");
+    let container = container?;
     let host_port = container
         .get_host_port_ipv4(3306)
         .expect("Failed to get host port");

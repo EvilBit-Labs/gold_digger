@@ -1,0 +1,62 @@
+name: CodeQL
+
+on:
+    push:
+        branches: [ main ]
+    pull_request:
+        branches: [ main ]
+    schedule:
+        # Weekly Monday 08:00 UTC rotation to pick up new queries.
+        - cron: "0 8 * * 1"
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+defaults:
+    run:
+        shell: bash
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    analyze:
+        name: Analyze (rust)
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        permissions:
+            actions: read
+            contents: read
+            security-events: write
+
+        strategy:
+            fail-fast: false
+            matrix:
+                language: [ rust ]
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+            - name: Install mise (for pinned toolchain)
+              uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+              with:
+                  install: true
+                  cache: true
+                  github_token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Initialize CodeQL
+              uses: github/codeql-action/init@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4.35.2
+              with:
+                  languages: ${{ matrix.language }}
+                  queries: security-and-quality
+
+            - name: Build Rust crate
+              run: cargo build --locked --all-targets
+
+            - name: Perform CodeQL Analysis
+              uses: github/codeql-action/analyze@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4.35.2
+              with:
+                  category: "/language:${{ matrix.language }}"

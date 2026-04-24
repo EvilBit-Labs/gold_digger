@@ -255,11 +255,6 @@ fn test_tls_container_config_methods() -> Result<()> {
 fn test_complete_tls_vs_plain_workflow() -> Result<()> {
     skip_if_no_docker()?;
 
-    if is_ci_environment() {
-        eprintln!("Skipping complete workflow test in CI environment");
-        return Ok(());
-    }
-
     eprintln!("Testing complete TLS vs plain workflow...");
 
     // Create both TLS and plain containers

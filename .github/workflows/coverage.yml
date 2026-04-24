@@ -1,0 +1,67 @@
+name: Coverage
+
+on:
+    push:
+        branches: [ main ]
+    pull_request:
+        branches: [ main ]
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+defaults:
+    run:
+        shell: bash
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+env:
+    CARGO_TERM_COLOR: always
+    CI: true
+
+jobs:
+    coverage:
+        name: Enforce 80% line coverage
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+            - name: Install mise-managed tooling
+              uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+              with:
+                  install: true
+                  cache: true
+                  github_token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Ensure llvm-tools component
+              run: rustup component add llvm-tools
+
+            # Hard gate: cargo-llvm-cov exits non-zero if total line coverage
+            # drops below the threshold. Keep in sync with codecov config and
+            # the target documented in AGENTS.md.
+            - name: Generate coverage with 80% floor
+              run: cargo llvm-cov --workspace --lcov --output-path lcov.info
+                  --fail-under-lines 80
+
+            - name: Upload lcov.info artifact
+              if: always()
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              with:
+                  name: coverage-lcov
+                  path: lcov.info
+                  if-no-files-found: warn
+
+            - name: Upload to Codecov
+              if: github.event_name != 'pull_request' ||
+                  github.event.pull_request.head.repo.full_name == github.repository
+              uses: codecov/codecov-action@3f20e214133d0983f9a10f3d63b0faf9241a3daa # v6.0.0
+              with:
+                  files: lcov.info
+                  fail_ci_if_error: true
+                  token: ${{ secrets.CODECOV_TOKEN }}
+                  slug: EvilBit-Labs/gold_digger

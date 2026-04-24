@@ -36,11 +36,6 @@ fn generate_test_certificate() -> Result<String> {
     Ok(cert_pem)
 }
 
-/// Check if we're running in CI environment to avoid testcontainers
-fn is_ci() -> bool {
-    std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok()
-}
-
 mod platform_certificate_tests {
     use super::*;
     use gold_digger::tls::TlsValidationMode;
@@ -49,11 +44,6 @@ mod platform_certificate_tests {
     /// Requirement: 10.1 - Platform certificate validation
     #[test]
     fn test_platform_certificate_store_integration() -> Result<()> {
-        if is_ci() {
-            println!("Skipping platform certificate test in CI environment");
-            return Ok(());
-        }
-
         let config = TlsConfig::new(); // Uses platform certificate store
 
         assert!(matches!(
@@ -75,11 +65,6 @@ mod platform_certificate_tests {
     /// Requirement: 10.1 - Platform certificate validation with real certificates
     #[test]
     fn test_platform_certificate_validation() -> Result<()> {
-        if is_ci() {
-            println!("Skipping platform certificate validation test in CI environment");
-            return Ok(());
-        }
-
         let config = TlsConfig::new();
         let ssl_opts = config.to_ssl_opts()?;
 

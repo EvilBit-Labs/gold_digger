@@ -1,0 +1,108 @@
+name: Benchmarks
+
+# On PRs: compile benches (no-run) to catch regressions without DB.
+# On main: full bench run with a containerized MySQL service so
+#   rows_processing and value_conversion benches can execute. Results are
+#   uploaded as artifacts for trend inspection.
+
+on:
+    pull_request:
+        branches: [ main ]
+    push:
+        branches: [ main ]
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+defaults:
+    run:
+        shell: bash
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+env:
+    CARGO_TERM_COLOR: always
+    CI: true
+
+jobs:
+    bench-compile:
+        name: Compile benches (PR gate)
+        if: github.event_name == 'pull_request'
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+            - name: Install mise-managed tooling
+              uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+              with:
+                  install: true
+                  cache: true
+                  github_token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Compile all Criterion benches
+              run: cargo bench --no-run --locked
+
+    bench-run:
+        name: Run benches (main push)
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        runs-on: ubuntu-latest
+        timeout-minutes: 45
+
+        services:
+            mysql:
+                image: mysql:8.4
+                env:
+                    MYSQL_ROOT_PASSWORD: bench_root
+                    MYSQL_DATABASE: bench
+                    MYSQL_USER: bench
+                    MYSQL_PASSWORD: bench_pw
+                ports:
+                    - 3306:3306
+                options: >-
+                    --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -pbench_root"
+                    --health-interval=10s
+                    --health-timeout=5s
+                    --health-retries=10
+
+        env:
+            # DB-backed benches read this connection string.
+            BENCH_DATABASE_URL: "mysql://bench:bench_pw@127.0.0.1:3306/bench"
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+            - name: Install mise-managed tooling
+              uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+              with:
+                  install: true
+                  cache: true
+                  github_token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Wait for MySQL readiness
+              run: |
+                  for _ in $(seq 1 30); do
+                    if mysqladmin ping -h 127.0.0.1 -u root -pbench_root --silent; then
+                      echo "MySQL is up"
+                      break
+                    fi
+                    sleep 2
+                  done
+                  mysqladmin ping -h 127.0.0.1 -u root -pbench_root
+
+            - name: Run Criterion benches
+              run: cargo bench --locked -- --save-baseline main-${{ github.sha }}
+
+            - name: Upload Criterion results
+              if: always()
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              with:
+                  name: criterion-results-${{ github.sha }}
+                  path: target/criterion/
+                  if-no-files-found: warn
+                  retention-days: 30

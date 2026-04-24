@@ -3,10 +3,17 @@ updates:
     - package-ecosystem: github-actions
       directory: "/"
       schedule:
-          interval: daily
-      open-pull-requests-limit: 10
+          interval: weekly
+          day: monday
+      open-pull-requests-limit: 5
       commit-message:
           prefix: "chore(deps)"
+      groups:
+          # Batch all minor/patch action bumps into a single PR to reduce noise.
+          # Major bumps still come through as individual PRs for review.
+          github-actions:
+              patterns: [ "*" ]
+              update-types: [ "minor", "patch" ]
     - package-ecosystem: "devcontainers"
       directory: "/"
       schedule:
@@ -19,3 +26,25 @@ updates:
           interval: weekly
       commit-message:
           prefix: "chore(deps)"
+      groups:
+          # Security-sensitive crates ship as individual PRs so each can be
+          # reviewed in isolation and held back if needed.
+          security-sensitive:
+              patterns:
+                  - "mysql*"
+                  - "rustls*"
+                  - "clap*"
+                  - "tokio*"
+                  - "serde*"
+              update-types: [ "patch" ]
+          # Everything else (non-security-sensitive) groups together for a
+          # single weekly PR — cuts the 4-of-5 individual-bump commit noise.
+          rust-deps:
+              patterns: [ "*" ]
+              exclude-patterns:
+                  - "mysql*"
+                  - "rustls*"
+                  - "clap*"
+                  - "tokio*"
+                  - "serde*"
+              update-types: [ "minor", "patch" ]
