@@ -308,3 +308,43 @@ fn test_mutually_exclusive_options(
 
     Ok(())
 }
+
+/// Snapshot-pin the exact clap error wording for `--verbose` + `--quiet`
+/// (todo #078). The substring assertion in
+/// [`test_mutually_exclusive_options`] is too loose to catch a regression
+/// where clap silently drops the conflict marker — the error would still
+/// mention "cannot be used with" for some unrelated flag pair. This test
+/// captures the verbatim stderr (with `NO_COLOR=1` to keep the snapshot
+/// plain ASCII) and pins the exit code separately so a future clap upgrade
+/// that changes the wording surfaces as a snapshot diff for review.
+#[test]
+fn verbose_quiet_mutex_error_snapshot() {
+    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("gold_digger");
+    for var in ENV_VARS_TO_REMOVE {
+        cmd.env_remove(var);
+    }
+    let output = cmd
+        .env("NO_COLOR", "1")
+        .args([
+            "--db-url",
+            "mysql://test:test@localhost/test",
+            "--query",
+            "SELECT 1",
+            "--output",
+            "/tmp/gd_verbose_quiet_mutex.csv",
+            "--verbose",
+            "--quiet",
+        ])
+        .output()
+        .expect("spawn gold_digger");
+
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "clap mutex must exit 2 (EXIT_CONFIG_ERROR); stderr was: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    insta::assert_snapshot!("verbose_quiet_mutex_error", stderr);
+}

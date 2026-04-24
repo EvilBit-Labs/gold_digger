@@ -10,7 +10,7 @@ use mysql::Value;
 fn snapshot_value_to_string_null() {
     let result = TypeTransformer::value_to_string(&Value::NULL).expect("NULL should succeed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_string_null", result);
@@ -21,7 +21,7 @@ fn snapshot_value_to_string_null() {
 fn snapshot_value_to_string_int() {
     let result = TypeTransformer::value_to_string(&Value::Int(42)).expect("Int should succeed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_string_int", result);
@@ -33,7 +33,7 @@ fn snapshot_value_to_string_uint() {
     let result =
         TypeTransformer::value_to_string(&Value::UInt(u64::MAX)).expect("UInt should succeed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_string_uint", result);
@@ -45,7 +45,7 @@ fn snapshot_value_to_string_float() {
     let result =
         TypeTransformer::value_to_string(&Value::Float(3.15)).expect("Float should succeed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_string_float", result);
@@ -57,7 +57,7 @@ fn snapshot_value_to_string_double() {
     let result = TypeTransformer::value_to_string(&Value::Double(2.719_281_828))
         .expect("Double should succeed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_string_double", result);
@@ -69,7 +69,7 @@ fn snapshot_value_to_string_nan() {
     let result =
         TypeTransformer::value_to_string(&Value::Float(f32::NAN)).expect("NaN should succeed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_string_nan", result);
@@ -81,7 +81,7 @@ fn snapshot_value_to_string_infinity() {
     let result = TypeTransformer::value_to_string(&Value::Float(f32::INFINITY))
         .expect("Infinity should succeed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_string_infinity", result);
@@ -93,7 +93,7 @@ fn snapshot_value_to_string_neg_infinity() {
     let result = TypeTransformer::value_to_string(&Value::Double(f64::NEG_INFINITY))
         .expect("-Infinity should succeed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_string_neg_infinity", result);
@@ -105,7 +105,7 @@ fn snapshot_value_to_string_utf8_bytes() {
     let result = TypeTransformer::value_to_string(&Value::Bytes(b"hello world".to_vec()))
         .expect("valid UTF-8 should succeed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_string_utf8_bytes", result);
@@ -117,7 +117,7 @@ fn snapshot_value_to_string_invalid_utf8() {
     let result = TypeTransformer::value_to_string(&Value::Bytes(vec![0xFF, 0xFE, 0xFD]))
         .expect("hex fallback should succeed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_string_invalid_utf8", result);
@@ -129,7 +129,7 @@ fn snapshot_value_to_string_large_binary() {
     let result = TypeTransformer::value_to_string(&Value::Bytes(vec![0xAB; 2000]))
         .expect("large binary should succeed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_string_large_binary", result);
@@ -141,7 +141,7 @@ fn snapshot_value_to_string_date() {
     let result = TypeTransformer::value_to_string(&Value::Date(2023, 12, 25, 0, 0, 0, 0))
         .expect("date should succeed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_string_date", result);
@@ -153,7 +153,7 @@ fn snapshot_value_to_string_datetime() {
     let result = TypeTransformer::value_to_string(&Value::Date(2023, 12, 25, 14, 30, 45, 123456))
         .expect("datetime should succeed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_string_datetime", result);
@@ -165,7 +165,7 @@ fn snapshot_value_to_string_time() {
     let result = TypeTransformer::value_to_string(&Value::Time(false, 0, 14, 30, 45, 0))
         .expect("time should succeed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_string_time", result);
@@ -177,7 +177,7 @@ fn snapshot_value_to_string_time_with_days() {
     let result = TypeTransformer::value_to_string(&Value::Time(true, 1, 2, 30, 45, 0))
         .expect("time with days should succeed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_string_time_with_days", result);
@@ -193,7 +193,7 @@ fn snapshot_value_to_json_null() {
     let result = TypeTransformer::value_to_json(&Value::NULL).expect("NULL should succeed");
     let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_json_null", serialized);
@@ -205,7 +205,7 @@ fn snapshot_value_to_json_int() {
     let result = TypeTransformer::value_to_json(&Value::Int(42)).expect("Int should succeed");
     let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_json_int", serialized);
@@ -218,7 +218,7 @@ fn snapshot_value_to_json_uint_max() {
         TypeTransformer::value_to_json(&Value::UInt(u64::MAX)).expect("UInt should succeed");
     let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_json_uint_max", serialized);
@@ -231,7 +231,7 @@ fn snapshot_value_to_json_float_nan() {
         TypeTransformer::value_to_json(&Value::Float(f32::NAN)).expect("Float NaN should succeed");
     let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_json_float_nan", serialized);
@@ -244,7 +244,7 @@ fn snapshot_value_to_json_float_infinity() {
         .expect("Float Infinity should succeed");
     let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_json_float_infinity", serialized);
@@ -257,7 +257,7 @@ fn snapshot_value_to_json_double() {
         TypeTransformer::value_to_json(&Value::Double(2.5)).expect("Double should succeed");
     let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_json_double", serialized);
@@ -270,7 +270,7 @@ fn snapshot_value_to_json_bytes_valid_utf8() {
         .expect("Bytes should succeed");
     let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_json_bytes_valid_utf8", serialized);
@@ -283,7 +283,7 @@ fn snapshot_value_to_json_large_binary() {
         .expect("large binary should succeed");
     let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_json_large_binary", serialized);
@@ -296,7 +296,7 @@ fn snapshot_value_to_json_date() {
         .expect("date should succeed");
     let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_json_date", serialized);
@@ -309,7 +309,7 @@ fn snapshot_value_to_json_datetime_with_microseconds() {
         .expect("datetime should succeed");
     let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_json_datetime_with_microseconds", serialized);
@@ -323,7 +323,7 @@ fn snapshot_value_to_json_invalid_date_returns_error() {
         .expect_err("invalid date should return Err")
         .to_string();
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_json_invalid_date_error", error_msg);
@@ -336,7 +336,7 @@ fn snapshot_value_to_json_time() {
         .expect("time should succeed");
     let serialized = serde_json::to_string_pretty(&result).expect("JSON serialization failed");
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("value_to_json_time", serialized);

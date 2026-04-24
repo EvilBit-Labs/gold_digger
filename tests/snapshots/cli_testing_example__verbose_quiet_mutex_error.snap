@@ -1,0 +1,9 @@
+---
+source: tests/cli_testing_example.rs
+expression: stderr
+---
+error: the argument '--verbose...' cannot be used with '--quiet'
+
+Usage: gold_digger --db-url <URL> --query <SQL> --output <FILE> --verbose...
+
+For more information, try '--help'.

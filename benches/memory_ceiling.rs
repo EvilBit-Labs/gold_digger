@@ -161,5 +161,72 @@ fn benchmark_memory_ceiling(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, benchmark_memory_ceiling);
+/// Heavy memory-ceiling sweep at 1M / 2M / 3M synthetic rows (todo #083).
+///
+/// Skipped by default — `cargo bench --bench memory_ceiling` will not run
+/// these size classes because Criterion respects the `IGNORE_BENCHES`
+/// gate below. Run explicitly with `IGNORE_BENCHES=0` to opt in:
+///
+/// ```text
+/// IGNORE_BENCHES=0 cargo bench --bench memory_ceiling -- memory_ceiling_heavy
+/// ```
+///
+/// Each iteration allocates roughly `num_rows * 10 cols * 32 B = ~960 MB`
+/// of synthetic `Value::Bytes` payload PLUS the resulting `Vec<Vec<String>>`,
+/// so the 3M-row case needs ~6 GB of headroom. The benchmark records both
+/// the estimated result-set size and the process RSS delta so the legacy
+/// `rows_to_strings` path is comparable to the new streaming sink (todo
+/// #005, F007) — the streaming sink's RSS should stay flat while this
+/// curve scales linearly with `num_rows`.
+fn benchmark_memory_ceiling_heavy(c: &mut Criterion) {
+    // Default skip: respect the `#[ignore]`-equivalent gate so CI doesn't
+    // OOM on shared runners. Set `IGNORE_BENCHES=0` to opt in locally.
+    let opt_in = std::env::var("IGNORE_BENCHES")
+        .map(|v| v == "0")
+        .unwrap_or(false);
+    if !opt_in {
+        eprintln!(
+            "[memory_ceiling] skipping heavy 1M/2M/3M sweep \
+             (set IGNORE_BENCHES=0 to enable; needs ~6 GB RAM)"
+        );
+        return;
+    }
+
+    let mut group = c.benchmark_group("memory_ceiling_heavy");
+    // One sample per size class — the heavy sweep is for trend tracking,
+    // not statistical comparison, and each iteration is expensive.
+    group.sample_size(10);
+
+    for &num_rows in &[1_000_000_usize, 2_000_000, 3_000_000] {
+        let rows = build_synthetic_rows(num_rows);
+        group.throughput(Throughput::Elements(num_rows as u64));
+
+        let rss_before = current_rss_bytes();
+        let baseline = rows_to_strings(rows.clone()).expect("baseline conversion failed");
+        let result_bytes = estimate_result_bytes(&baseline);
+        let rss_after = current_rss_bytes();
+        drop(baseline);
+        report(num_rows, result_bytes, rss_before, rss_after);
+
+        group.bench_with_input(
+            BenchmarkId::new("rows_to_strings", num_rows),
+            &rows,
+            |b, rows| {
+                b.iter(|| {
+                    let out = rows_to_strings(black_box(rows.clone()))
+                        .expect("rows_to_strings failed during bench iteration");
+                    black_box(out)
+                });
+            },
+        );
+    }
+
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    benchmark_memory_ceiling,
+    benchmark_memory_ceiling_heavy
+);
 criterion_main!(benches);

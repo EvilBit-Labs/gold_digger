@@ -123,7 +123,7 @@ fn test_csv_standard_data() {
     csv::write(data.clone(), &mut output).unwrap();
     let result = String::from_utf8(output.into_inner()).unwrap();
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("csv_standard_data", result);
@@ -137,7 +137,7 @@ fn test_csv_escaping_quotes_and_commas() {
     csv::write(data.clone(), &mut output).unwrap();
     let result = String::from_utf8(output.into_inner()).unwrap();
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("csv_escaping_quotes_and_commas", result);
@@ -151,7 +151,7 @@ fn test_csv_newlines() {
     csv::write(data.clone(), &mut output).unwrap();
     let result = String::from_utf8(output.into_inner()).unwrap();
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("csv_newlines", result);
@@ -165,7 +165,7 @@ fn test_csv_null_values() {
     csv::write(data.clone(), &mut output).unwrap();
     let result = String::from_utf8(output.into_inner()).unwrap();
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("csv_null_values", result);
@@ -179,7 +179,7 @@ fn test_csv_empty_result_set() {
     csv::write(data.clone(), &mut output).unwrap();
     let result = String::from_utf8(output.into_inner()).unwrap();
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("csv_empty_result_set", result);
@@ -193,7 +193,7 @@ fn test_json_standard_data() {
     json::write(data, &mut output, false).unwrap();
     let result = String::from_utf8(output.into_inner()).unwrap();
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("json_standard_data", result);
@@ -207,7 +207,7 @@ fn test_json_pretty_printed() {
     json::write(data, &mut output, true).unwrap();
     let result = String::from_utf8(output.into_inner()).unwrap();
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("json_pretty_printed", result);
@@ -220,7 +220,7 @@ fn test_json_empty_result_set() {
     json::write(Vec::new(), &mut output, false).unwrap();
     let result = String::from_utf8(output.into_inner()).unwrap();
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("json_empty_result_set", result);
@@ -234,7 +234,7 @@ fn test_json_null_handling() {
     json::write(data, &mut output, false).unwrap();
     let result = String::from_utf8(output.into_inner()).unwrap();
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("json_null_handling", result);
@@ -248,7 +248,7 @@ fn test_json_large_integers() {
     json::write(data, &mut output, false).unwrap();
     let result = String::from_utf8(output.into_inner()).unwrap();
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("json_large_integers", result);
@@ -262,7 +262,7 @@ fn test_tsv_standard_data() {
     tab::write(data.clone(), &mut output).unwrap();
     let result = String::from_utf8(output.into_inner()).unwrap();
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("tsv_standard_data", result);
@@ -276,7 +276,7 @@ fn test_tsv_special_characters() {
     tab::write(data.clone(), &mut output).unwrap();
     let result = String::from_utf8(output.into_inner()).unwrap();
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("tsv_special_characters", result);
@@ -290,7 +290,7 @@ fn test_tsv_null_conversion() {
     tab::write(data.clone(), &mut output).unwrap();
     let result = String::from_utf8(output.into_inner()).unwrap();
     insta::with_settings!({
-        snapshot_path => "tests/snapshots",
+        snapshot_path => "snapshots",
         prepend_module_to_snapshot => false,
     }, {
         assert_snapshot!("tsv_null_conversion", result);
