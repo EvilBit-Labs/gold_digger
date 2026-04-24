@@ -219,6 +219,10 @@ harness = false
 name = "memory_usage"
 harness = false
 
+[[bench]]
+name = "memory_ceiling"
+harness = false
+
 [profile.release]
 strip = true
 codegen-units = 1

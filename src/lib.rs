@@ -78,15 +78,17 @@ pub trait FormatWriter {
 /// This function replaces the dangerous pattern of using `row[column.name_str().as_ref()]`
 /// which can panic on NULL values or type mismatches. Instead, it uses safe iteration
 /// over `row.as_ref()` to handle all value types gracefully.
-pub fn rows_to_strings(rows: Vec<Row>) -> anyhow::Result<Vec<Vec<String>>> {
+pub fn rows_to_strings(mut rows: Vec<Row>) -> anyhow::Result<Vec<Vec<String>>> {
     if rows.is_empty() {
         return Ok(Vec::new());
     }
 
-    // Pre-allocate with known capacity for better performance
-    let mut result_rows = Vec::with_capacity(rows.len() + 1);
+    // Pre-allocate with known capacity for better performance.
+    // +1 accounts for the header row prepended below.
+    let mut result_rows = Vec::with_capacity(rows.len().saturating_add(1));
 
-    // Extract headers from the first row
+    // Extract headers from the first row before draining so we retain access
+    // to column metadata while the row values are still owned by `rows`.
     let header_row: Vec<String> = rows[0]
         .columns_ref()
         .iter()
@@ -94,8 +96,11 @@ pub fn rows_to_strings(rows: Vec<Row>) -> anyhow::Result<Vec<Vec<String>>> {
         .collect();
     result_rows.push(header_row);
 
-    // Process each row using safe iteration
-    for (row_index, row) in rows.iter().enumerate() {
+    // Drain each row by value so the `Row` is dropped as soon as its string
+    // representation has been extracted. This halves peak memory during
+    // conversion compared to `rows.iter()` which kept every source row live
+    // alongside the fully-materialised result set.
+    for (row_index, row) in rows.drain(..).enumerate() {
         let mut data_row = Vec::with_capacity(row.len());
         for i in 0..row.len() {
             match row.as_ref(i) {
