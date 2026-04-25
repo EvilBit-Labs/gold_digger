@@ -129,15 +129,15 @@ jobs:
 
             - name: Run tests (minimal features)
               if: matrix.features == 'minimal'
-              run: cargo nextest run --no-default-features --features "json csv
-                  additional_mysql_types verbose"
+              run: cargo nextest run --no-default-features --features
+                  "additional_mysql_types verbose"
 
             - name: Build release
               run: |
                   if [ "${{ matrix.features }}" = "default" ]; then
                     cargo build --release
                   else
-                    cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
+                    cargo build --release --no-default-features --features "additional_mysql_types verbose"
                   fi
 
     # Test cross-platform TLS functionality (always available)
@@ -230,7 +230,7 @@ jobs:
             - name: Generate coverage (minimal features with TLS)
               run: |
                   cargo llvm-cov --workspace --no-report --no-default-features \
-                  --features "json csv additional_mysql_types"
+                  --features "additional_mysql_types"
 
             - name: Combine coverage reports
               run: |

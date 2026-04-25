@@ -651,16 +651,17 @@ mod tests {
 
     #[test]
     fn test_resolve_database_query_from_env() {
-        let cli = Cli::parse_from([
-            "gold_digger",
-            "--db-url",
-            "mysql://test",
-            "--output",
-            "test.json",
-        ]);
-
-        // Set environment variable using temp_env
+        // Parse inside temp_env so clap's `#[arg(env = "DATABASE_QUERY")]`
+        // reads the temp value rather than racing with sibling tests that
+        // mutate the same env var.
         temp_env::with_var("DATABASE_QUERY", Some("SELECT * FROM env_table"), || {
+            let cli = Cli::parse_from([
+                "gold_digger",
+                "--db-url",
+                "mysql://test",
+                "--output",
+                "test.json",
+            ]);
             let result = resolve_database_query(&cli);
             assert!(result.is_ok());
             assert_eq!(result.unwrap(), "SELECT * FROM env_table");
@@ -669,16 +670,16 @@ mod tests {
 
     #[test]
     fn test_resolve_database_query_missing() {
-        let cli = Cli::parse_from([
-            "gold_digger",
-            "--db-url",
-            "mysql://test",
-            "--output",
-            "test.json",
-        ]);
-
-        // Ensure env var is not set using temp_env
+        // Parse inside temp_env so clap does not pick up a sibling test's
+        // DATABASE_QUERY value before this test gets to clear it.
         temp_env::with_var("DATABASE_QUERY", None::<&str>, || {
+            let cli = Cli::parse_from([
+                "gold_digger",
+                "--db-url",
+                "mysql://test",
+                "--output",
+                "test.json",
+            ]);
             let result = resolve_database_query(&cli);
             assert!(result.is_err());
             assert!(
@@ -725,16 +726,17 @@ mod tests {
 
     #[test]
     fn test_resolve_output_file_from_env() {
-        let cli = Cli::parse_from([
-            "gold_digger",
-            "--db-url",
-            "mysql://test",
-            "--query",
-            "SELECT 1",
-        ]);
-
-        // Set environment variable using temp_env
+        // Parse inside temp_env so clap's `#[arg(env = "OUTPUT_FILE")]` reads
+        // the temp value rather than racing with sibling tests that mutate
+        // the same env var.
         temp_env::with_var("OUTPUT_FILE", Some("/tmp/env_output.csv"), || {
+            let cli = Cli::parse_from([
+                "gold_digger",
+                "--db-url",
+                "mysql://test",
+                "--query",
+                "SELECT 1",
+            ]);
             let result = resolve_output_file(&cli);
             assert!(result.is_ok());
             assert_eq!(result.unwrap(), PathBuf::from("/tmp/env_output.csv"));
@@ -743,16 +745,16 @@ mod tests {
 
     #[test]
     fn test_resolve_output_file_missing() {
-        let cli = Cli::parse_from([
-            "gold_digger",
-            "--db-url",
-            "mysql://test",
-            "--query",
-            "SELECT 1",
-        ]);
-
-        // Ensure env var is not set using temp_env
+        // Parse inside temp_env so clap does not pick up a sibling test's
+        // OUTPUT_FILE value before this test gets to clear it.
         temp_env::with_var("OUTPUT_FILE", None::<&str>, || {
+            let cli = Cli::parse_from([
+                "gold_digger",
+                "--db-url",
+                "mysql://test",
+                "--query",
+                "SELECT 1",
+            ]);
             let result = resolve_output_file(&cli);
             assert!(result.is_err());
             assert!(

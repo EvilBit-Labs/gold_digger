@@ -84,7 +84,7 @@ just deny-check               # cargo deny check
 # Build variants
 cargo build                   # Debug build
 cargo build --release         # Release build
-cargo build --no-default-features --features "json csv additional_mysql_types verbose"  # Minimal build
+cargo build --no-default-features --features "additional_mysql_types verbose"  # Minimal build
 ```
 
 ## Code Style Guidelines

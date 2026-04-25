@@ -77,7 +77,7 @@ cargo install --path .
 cargo build --release
 
 # Minimal build (fewer features)
-cargo build --release --no-default-features --features "json csv"
+cargo build --release --no-default-features --features "additional_mysql_types verbose"
 ```
 
 ### TLS Support
