@@ -27,7 +27,7 @@ use crate::config::{
     resolve_output_file_with_env,
 };
 use crate::connection::create_database_connection;
-use crate::exit::{exit_no_rows, exit_success, exit_with_error};
+use crate::exit::GoldDiggerError;
 use crate::logging::make_progress;
 use crate::mysql_errors::{
     CR_CONN_HOST_ERROR, CR_CONNECTION_ERROR, CR_SERVER_GONE_ERROR, CR_SERVER_LOST,
@@ -37,13 +37,35 @@ use crate::mysql_errors::{
 use crate::output::build_sink;
 use crate::utils::redact_sql_error;
 
+/// Outcome of the main query pipeline. `RowsWritten` corresponds to a
+/// stream that produced one or more rows; `EmptyResult` corresponds to a
+/// stream where the query parsed and ran but matched zero rows AND
+/// `--allow-empty` was NOT supplied (the disposition that maps to exit 1
+/// in the binary). Successful empty results with `--allow-empty` are
+/// folded into `RowsWritten { count: 0 }` because they commit a valid
+/// envelope to disk and exit successfully.
+#[derive(Debug)]
+pub enum RunOutcome {
+    /// The pipeline streamed `count` data rows and finalized the output.
+    /// Maps to `EXIT_SUCCESS` at the binary boundary.
+    RowsWritten { count: u64 },
+    /// The query returned no rows and `--allow-empty` was NOT set. The
+    /// sink was dropped without committing, so no `<output>` file was
+    /// produced. Maps to `EXIT_NO_ROWS` at the binary boundary.
+    EmptyResult,
+}
+
 /// Executes the main query pipeline: resolve config → create pool → run
 /// streaming query → feed sink.
 ///
-/// Never returns to the caller: every termination path goes through the
-/// [`crate::exit`] helpers so the binary always exits with a stable,
-/// documented code (0 success, 1 no rows, 2 config, 3 auth, 4 query, 5 I/O).
-pub fn run(cli: Cli) -> ! {
+/// Returns `Result<RunOutcome, anyhow::Error>` rather than calling
+/// `process::exit` directly so the binary entry point in `src/main.rs`
+/// can perform the `process::exit` once, AFTER stack unwinding has run
+/// every `Drop` impl on the path. In particular, the streaming sink's
+/// `Drop` impl removes the `<output>.tmp` sibling file on error — calling
+/// `process::exit` mid-pipeline (the previous behaviour) skipped that
+/// cleanup and orphaned the `.tmp` file (CRITICAL #3).
+pub fn run(cli: &Cli) -> anyhow::Result<RunOutcome> {
     // Read every env-var fallback exactly once into an immutable
     // snapshot (todo #068, S15). Downstream resolvers consume the
     // snapshot rather than calling `std::env::var` again, so a hostile
@@ -52,46 +74,39 @@ pub fn run(cli: Cli) -> ! {
     let env_snapshot = EnvSnapshot::from_process_env();
 
     // Resolve configuration with precedence: CLI flags > snapshot env > error.
-    let database_url = match resolve_database_url_with_env(&cli, &env_snapshot) {
-        Ok(url) => url,
-        Err(e) => exit_with_error(e, Some("Database URL resolution failed")),
-    };
-    let database_query = match resolve_database_query_with_env(&cli, &env_snapshot) {
-        Ok(query) => query,
-        Err(e) => exit_with_error(e, Some("Database query resolution failed")),
-    };
-    let output_file = match resolve_output_file_with_env(&cli, &env_snapshot) {
-        Ok(file) => file,
-        Err(e) => exit_with_error(e, Some("Output file resolution failed")),
-    };
+    let database_url = resolve_database_url_with_env(cli, &env_snapshot)?;
+    let database_query = resolve_database_query_with_env(cli, &env_snapshot)?;
+    let output_file = resolve_output_file_with_env(cli, &env_snapshot)?;
 
     // Connect phase: spinner (indeterminate duration). Hidden when
     // `--quiet` or stderr is not a TTY (todo #162).
     let connect_progress = make_progress(cli.quiet, None, "Connecting to database...");
     tracing::info!("Connecting to database...");
 
-    let pool = match create_database_connection(&database_url, &cli) {
+    // Connection-pool construction failures already carry typed errors
+    // (`anyhow::Error::from(TlsError).context(...)` from `connection.rs`
+    // after CRITICAL #5); propagate verbatim so the downcast classifier
+    // in `crate::exit::map_error_to_exit_code` can read the variant.
+    let pool = match create_database_connection(&database_url, cli) {
         Ok(pool) => pool,
         Err(e) => {
             connect_progress.finish_and_clear();
-            exit_with_error(
-                anyhow::anyhow!("Database connection pool creation failed: {}", e),
-                None,
-            )
+            return Err(e);
         }
     };
     let mut conn = match pool.get_conn() {
         Ok(conn) => conn,
         Err(e) => {
             connect_progress.finish_and_clear();
-            exit_with_error(anyhow::anyhow!("Database connection failed: {}", e), None)
+            return Err(anyhow::Error::from(GoldDiggerError::DbAuth(format!(
+                "Database connection failed: {}",
+                redact_sql_error(&e.to_string())
+            ))));
         }
     };
     connect_progress.finish_and_clear();
 
-    stream_query(&cli, &mut conn, &database_query, output_file.as_path());
-
-    exit_success(None);
+    stream_query(cli, &mut conn, &database_query, output_file.as_path())
 }
 
 /// Streams the query result into the appropriate sink.
@@ -101,12 +116,16 @@ pub fn run(cli: Cli) -> ! {
 /// message is updated with the running count. On empty results the
 /// branch defers to [`handle_empty_result`] which still honours
 /// `--allow-empty`.
+///
+/// All errors return via `Err(...)?` so the sink's `Drop` impl runs
+/// during stack unwinding and cleans up the `<output>.tmp` sibling
+/// file (CRITICAL #3).
 fn stream_query(
     cli: &Cli,
     conn: &mut mysql::PooledConn,
     database_query: &str,
     output_file: &std::path::Path,
-) {
+) -> anyhow::Result<RunOutcome> {
     // Query phase: spinner (indeterminate duration).
     let progress = make_progress(cli.quiet, None, "Executing query...");
 
@@ -116,7 +135,7 @@ fn stream_query(
         Ok(r) => r,
         Err(e) => {
             progress.finish_and_clear();
-            exit_with_error(map_query_error(&e), None);
+            return Err(map_query_error(&e));
         }
     };
 
@@ -137,13 +156,14 @@ fn stream_query(
         Ok(s) => s,
         Err(e) => {
             progress.finish_and_clear();
-            exit_with_error(e, Some("Output sink creation failed"));
+            return Err(e.context("Output sink creation failed"));
         }
     };
 
     if let Err(e) = sink.on_headers(&columns) {
         progress.finish_and_clear();
-        exit_with_error(e, Some("Failed to write output headers"));
+        // Sink dropped on `?`-unwind -> .tmp removed.
+        return Err(e.context("Failed to write output headers"));
     }
 
     let mut rows_seen: u64 = 0;
@@ -157,13 +177,15 @@ fn stream_query(
                 // Any mysql::Error from row fetch flows through the same
                 // credential-redacting classifier as the initial query
                 // error so streaming failures don't leak creds.
-                exit_with_error(map_query_error(&e), None);
+                // Sink dropped on `?`-unwind -> .tmp removed.
+                return Err(map_query_error(&e));
             }
         };
 
         if let Err(e) = sink.on_row(&row) {
             progress.finish_and_clear();
-            exit_with_error(e, Some("Row processing failed"));
+            // Sink dropped on `?`-unwind -> .tmp removed.
+            return Err(e.context("Row processing failed"));
         }
 
         rows_seen = rows_seen.saturating_add(1);
@@ -182,16 +204,14 @@ fn stream_query(
         // Empty result: we already wrote `on_headers`, so the sink holds
         // a `.tmp` file with an empty envelope / header row. For
         // `--allow-empty` we finalize (commit the empty file); otherwise
-        // we drop the sink (the tmp gets cleaned up) and exit with 1.
+        // we drop the sink (the tmp gets cleaned up) and signal
+        // `EmptyResult` so the binary exits with 1.
         progress.finish_and_clear();
-        handle_empty_result(cli, sink);
-        return;
+        return handle_empty_result(cli, sink);
     }
 
-    if let Err(e) = sink.finalize() {
-        progress.finish_and_clear();
-        exit_with_error(e, Some("Output finalisation failed"));
-    }
+    sink.finalize()
+        .map_err(|e| e.context("Output finalisation failed"))?;
 
     progress.finish_and_clear();
     tracing::info!(
@@ -201,28 +221,29 @@ fn stream_query(
         rows_seen,
         output_file.display()
     );
+    Ok(RunOutcome::RowsWritten { count: rows_seen })
 }
 
 /// Handles an empty result set. If `--allow-empty` is set, finalizes the
-/// sink (committing an empty `{"data":[]}` or header-only CSV/TSV file);
-/// otherwise drops the sink (which cleans up its `.tmp`) and exits with
-/// [`exit_no_rows`].
-fn handle_empty_result(cli: &Cli, sink: Box<dyn crate::sink::RowSink>) {
+/// sink (committing an empty `{"data":[]}` or header-only CSV/TSV file)
+/// and returns `RowsWritten { count: 0 }`; otherwise drops the sink
+/// (which cleans up its `.tmp`) and returns `EmptyResult` so the binary
+/// can exit with [`crate::exit::EXIT_NO_ROWS`].
+fn handle_empty_result(
+    cli: &Cli,
+    sink: Box<dyn crate::sink::RowSink>,
+) -> anyhow::Result<RunOutcome> {
     if cli.allow_empty {
         tracing::info!("No records found in database, but --allow-empty is set.");
-        if let Err(e) = sink.finalize() {
-            exit_with_error(e, Some("Output writing failed"));
-        }
+        sink.finalize()
+            .map_err(|e| e.context("Output writing failed"))?;
+        Ok(RunOutcome::RowsWritten { count: 0 })
     } else {
         // Drop the streaming sink; its `Drop` impl removes the `.tmp`
         // file so the filesystem shows no partial output.
         drop(sink);
         tracing::info!("No records found in database.");
-        if cli.quiet {
-            exit_no_rows(None);
-        } else {
-            exit_no_rows(Some("No records found in database"));
-        }
+        Ok(RunOutcome::EmptyResult)
     }
 }
 

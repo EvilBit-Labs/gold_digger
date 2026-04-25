@@ -11,9 +11,9 @@ use clap::Parser;
 use gold_digger::cli::{Cli, Commands};
 use gold_digger::completion::generate_completion;
 use gold_digger::config::{EnvSnapshot, build_configuration_dump};
-use gold_digger::exit::exit_with_error;
+use gold_digger::exit::{exit_no_rows, exit_success, exit_with_error};
 use gold_digger::logging::init_tracing;
-use gold_digger::run::run;
+use gold_digger::run::{RunOutcome, run};
 
 /// Main entry point for the gold_digger CLI tool.
 ///
@@ -71,6 +71,22 @@ fn main() {
         return;
     }
 
-    // Hand off to the query-execution pipeline. Never returns.
-    run(cli);
+    // Hand off to the query-execution pipeline. `run` returns a Result
+    // (post-CRITICAL #3) rather than calling `process::exit` itself —
+    // doing the exit here means the streaming sink's `Drop` impl runs on
+    // every error path (cleaning up the `<output>.tmp` sibling) before
+    // the process actually terminates. The single point of `process::exit`
+    // is also the single source of error logging via
+    // `tracing::error!` inside `exit_with_error`.
+    match run(&cli) {
+        Ok(RunOutcome::RowsWritten { .. }) => exit_success(None),
+        Ok(RunOutcome::EmptyResult) => {
+            if cli.quiet {
+                exit_no_rows(None);
+            } else {
+                exit_no_rows(Some("No records found in database"));
+            }
+        }
+        Err(e) => exit_with_error(e, None),
+    }
 }

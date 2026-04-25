@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 
 use crate::cli::Cli;
-use crate::exit::GoldDiggerError;
+use crate::exit::{ConfigError, GoldDiggerError};
 use crate::utils::redact_dump_query;
 
 /// Frozen view of the three legacy environment-variable fallbacks
@@ -57,11 +57,11 @@ impl EnvSnapshot {
 /// resolvers below (todo #101).
 ///
 /// Returns the CLI value when present; otherwise the env value;
-/// otherwise a [`GoldDiggerError::Config`] with `missing_msg`.
+/// otherwise a typed [`ConfigError`] (wrapped via [`GoldDiggerError::Config`]).
 fn resolve_or_missing<T: Clone>(
     cli_value: Option<&T>,
     env_value: Option<&T>,
-    missing_msg: &str,
+    missing: ConfigError,
 ) -> Result<T> {
     if let Some(v) = cli_value {
         return Ok(v.clone());
@@ -69,7 +69,7 @@ fn resolve_or_missing<T: Clone>(
     if let Some(v) = env_value {
         return Ok(v.clone());
     }
-    Err(GoldDiggerError::Config(missing_msg.into()).into())
+    Err(GoldDiggerError::Config(missing).into())
 }
 
 /// Maximum accepted size for a `--query-file` payload, in bytes. A query
@@ -110,7 +110,7 @@ pub fn resolve_database_url_with_env(cli: &Cli, env: &EnvSnapshot) -> Result<Str
     resolve_or_missing(
         cli.db_url.as_ref(),
         env.database_url.as_ref(),
-        "Missing database URL. Provide --db-url or set DATABASE_URL environment variable",
+        ConfigError::MissingDbUrl,
     )
 }
 
@@ -150,12 +150,14 @@ pub fn validate_query_file_path(path: &Path) -> Result<PathBuf> {
     if let Some(ext) = canonical.extension().and_then(|s| s.to_str()) {
         let lower = ext.to_ascii_lowercase();
         if REFUSED_QUERY_FILE_EXTENSIONS.iter().any(|r| *r == lower) {
-            return Err(GoldDiggerError::Config(format!(
-                "Refusing to read query file with disallowed extension '.{}': {}. \
-                 Use --query-file with .sql, .txt, or no extension.",
-                lower,
-                canonical.display()
-            ))
+            return Err(GoldDiggerError::Config(ConfigError::InvalidQueryFile {
+                path: canonical.clone(),
+                reason: format!(
+                    "Refusing to read query file with disallowed extension '.{}'. \
+                     Use --query-file with .sql, .txt, or no extension.",
+                    lower,
+                ),
+            })
             .into());
         }
     }
@@ -166,13 +168,15 @@ pub fn validate_query_file_path(path: &Path) -> Result<PathBuf> {
             .context(format!("Failed to stat query file {}", canonical.display()))
     })?;
     if metadata.len() > MAX_QUERY_FILE_SIZE_BYTES {
-        return Err(GoldDiggerError::Config(format!(
-            "Query file {} is {} bytes; maximum allowed is {} bytes (10 MiB). \
-             Split the query or raise MAX_QUERY_FILE_SIZE_BYTES.",
-            canonical.display(),
-            metadata.len(),
-            MAX_QUERY_FILE_SIZE_BYTES
-        ))
+        return Err(GoldDiggerError::Config(ConfigError::InvalidQueryFile {
+            path: canonical.clone(),
+            reason: format!(
+                "Query file is {} bytes; maximum allowed is {} bytes (10 MiB). \
+                 Split the query or raise MAX_QUERY_FILE_SIZE_BYTES.",
+                metadata.len(),
+                MAX_QUERY_FILE_SIZE_BYTES
+            ),
+        })
         .into());
     }
 
@@ -213,9 +217,7 @@ pub fn resolve_database_query_with_env(cli: &Cli, env: &EnvSnapshot) -> Result<S
     }
     env.database_query
         .clone()
-        .ok_or_else(|| GoldDiggerError::Config(
-            "Missing database query. Provide --query, --query-file, or set DATABASE_QUERY environment variable".into(),
-        ).into())
+        .ok_or_else(|| GoldDiggerError::Config(ConfigError::MissingQuery).into())
 }
 
 /// Resolves the output file path from CLI arguments or environment variables.
@@ -232,12 +234,10 @@ pub fn resolve_output_file_with_env(cli: &Cli, env: &EnvSnapshot) -> Result<Path
     if let Some(output) = &cli.output {
         return Ok(output.clone());
     }
-    env.output_file.as_ref().map(PathBuf::from).ok_or_else(|| {
-        GoldDiggerError::Config(
-            "Missing output file. Provide --output or set OUTPUT_FILE environment variable".into(),
-        )
-        .into()
-    })
+    env.output_file
+        .as_ref()
+        .map(PathBuf::from)
+        .ok_or_else(|| GoldDiggerError::Config(ConfigError::MissingOutputFile).into())
 }
 
 /// Builds the configuration-dump JSON value for `--dump-config`.

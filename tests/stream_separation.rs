@@ -108,7 +108,11 @@ fn missing_config_error_routes_to_stderr_only() {
         .assert()
         .code(2)
         .stdout(predicate::str::is_empty())
-        .stderr(predicate::str::contains("Database URL resolution failed"));
+        // Post-CRITICAL #3 the typed `ConfigError::MissingDbUrl` Display
+        // string is what reaches stderr; the previous "Database URL
+        // resolution failed" prefix came from `exit_with_error(_, Some(...))`
+        // which the new `?`-returning pipeline no longer adds.
+        .stderr(predicate::str::contains("Missing database URL"));
 }
 
 /// Connection failure (unreachable host) routes the error message to

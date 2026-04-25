@@ -23,7 +23,11 @@ pub fn create_database_connection(database_url: &str, cli: &Cli) -> Result<Pool>
     // safe — only the first does any work.
     crate::init_crypto_provider();
 
-    // Create TLS configuration from CLI options
+    // Create TLS configuration from CLI options. CRITICAL #5: build the
+    // anyhow error from the typed `TlsError` so the downcast classifier
+    // in `crate::exit::map_error_to_exit_code` can read the variant.
+    // Stringifying the typed error (`anyhow!("{}", tls_error)`) flattens
+    // it into a plain message and forces the substring fallback.
     let tls_config = if cli.tls_options.tls_ca_file.is_some()
         || cli.tls_options.insecure_skip_hostname_verify
         || cli.tls_options.allow_invalid_certificate
@@ -31,7 +35,7 @@ pub fn create_database_connection(database_url: &str, cli: &Cli) -> Result<Pool>
         let config = cli
             .tls_options
             .to_tls_config()
-            .map_err(|e| anyhow::anyhow!("TLS configuration error: {}", e))?;
+            .map_err(|e| anyhow::Error::from(e).context("TLS configuration error"))?;
 
         // Display security warnings for insecure modes (includes the
         // mandatory DANGER delay for AcceptInvalid — see #022).
@@ -44,10 +48,22 @@ pub fn create_database_connection(database_url: &str, cli: &Cli) -> Result<Pool>
         None
     };
 
-    // Use rustls-only TLS connection creation with enhanced error handling
+    // Use rustls-only TLS connection creation with enhanced error handling.
+    //
+    // CRITICAL #5 fix: the previous implementation interpolated the typed
+    // `TlsError` into `anyhow::anyhow!("{}", tls_error)` which flattened
+    // it into a plain string — defeating the downcast in
+    // `crate::exit::map_error_to_exit_code` and forcing every TLS error
+    // through the substring fallback. We now build the anyhow value from
+    // the typed error (`anyhow::Error::from(tls_error)`) so the variant
+    // survives chain-walking. Suggestion text (where applicable) is
+    // emitted as a separate `tracing::error!` BEFORE returning so the
+    // user-actionable hint still surfaces without burying the typed value.
     create_tls_connection(database_url, tls_config, cli.verbose > 0).map_err(|tls_error| {
-        // Convert TLS errors to anyhow errors with appropriate context
-        match &tls_error {
+        // Emit suggestion-augmented branches as a separate log line; the
+        // returned anyhow value carries the typed `TlsError` for the
+        // downcast classifier.
+        let context_prefix: &str = match &tls_error {
             crate::tls::TlsError::CertificateValidationFailed { .. }
             | crate::tls::TlsError::CertificateTimeInvalid { .. }
             | crate::tls::TlsError::InvalidSignature { .. }
@@ -55,34 +71,34 @@ pub fn create_database_connection(database_url: &str, cli: &Cli) -> Result<Pool>
             | crate::tls::TlsError::InvalidCertificatePurpose { .. }
             | crate::tls::TlsError::CertificateChainInvalid { .. }
             | crate::tls::TlsError::CertificateRevoked { .. } => {
-                // Certificate validation errors - suggest appropriate CLI flag
                 if let Some(suggestion) = tls_error.suggest_cli_flag() {
-                    anyhow::anyhow!("{}. Suggestion: {}", tls_error, suggestion)
-                } else {
-                    anyhow::anyhow!("{}", tls_error)
+                    tracing::error!(
+                        "TLS certificate validation failed: {}. Suggestion: {}",
+                        tls_error,
+                        suggestion
+                    );
                 }
+                "TLS certificate validation failed"
             }
             crate::tls::TlsError::HostnameVerificationFailed { .. } => {
-                // Hostname verification errors - suggest skip hostname flag
-                anyhow::anyhow!(
-                    "{}. Suggestion: {}",
+                let suggestion = tls_error
+                    .suggest_cli_flag()
+                    .unwrap_or("--insecure-skip-hostname-verify");
+                tracing::error!(
+                    "TLS hostname verification failed: {}. Suggestion: {}",
                     tls_error,
-                    tls_error
-                        .suggest_cli_flag()
-                        .unwrap_or("--insecure-skip-hostname-verify")
-                )
+                    suggestion
+                );
+                "TLS hostname verification failed"
             }
             crate::tls::TlsError::CaFileNotFound { .. }
             | crate::tls::TlsError::InvalidCaFormat { .. }
             | crate::tls::TlsError::MutuallyExclusiveFlags { .. } => {
-                // Client configuration errors - no additional context needed
-                anyhow::anyhow!("{}", tls_error)
+                "TLS client configuration error"
             }
-            _ => {
-                // Other TLS errors (handshake, connection, server issues)
-                anyhow::anyhow!("Database connection failed: {}", tls_error)
-            }
-        }
+            _ => "Database connection failed",
+        };
+        anyhow::Error::from(tls_error).context(context_prefix)
     })
 }
 

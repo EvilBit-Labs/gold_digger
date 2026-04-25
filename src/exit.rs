@@ -16,6 +16,7 @@
 //!      use [`GoldDiggerError`], the substring path will be deleted.
 
 use anyhow::Error;
+use std::path::PathBuf;
 use std::process;
 use thiserror::Error as ThisError;
 
@@ -29,15 +30,69 @@ pub const EXIT_DB_AUTH_ERROR: i32 = 3;
 pub const EXIT_QUERY_ERROR: i32 = 4;
 pub const EXIT_IO_ERROR: i32 = 5;
 
+/// Typed configuration error sub-enum (todo: type-design #3).
+///
+/// Splits the previously-unstructured `Config(String)` payload into
+/// named variants so error-origin sites can construct typed values
+/// instead of free-form strings, and tests can pattern-match the
+/// variant rather than asserting on substrings of the rendered message.
+///
+/// `Display` strings are stable: existing tests that assert
+/// `error.to_string().contains("Missing database URL")` continue to pass
+/// because each variant emits the same human-readable text the
+/// previous `Config(String)` carried.
+#[derive(ThisError, Debug)]
+pub enum ConfigError {
+    /// Neither `--db-url` CLI flag nor `DATABASE_URL` env var was supplied.
+    #[error("Missing database URL. Provide --db-url or set DATABASE_URL environment variable")]
+    MissingDbUrl,
+
+    /// Neither `--query` / `--query-file` flag nor `DATABASE_QUERY` env
+    /// var was supplied.
+    #[error(
+        "Missing database query. Provide --query, --query-file, or set DATABASE_QUERY environment variable"
+    )]
+    MissingQuery,
+
+    /// Neither `--output` flag nor `OUTPUT_FILE` env var was supplied.
+    #[error("Missing output file. Provide --output or set OUTPUT_FILE environment variable")]
+    MissingOutputFile,
+
+    /// `--query-file` rejected by a path-safety guard (extension
+    /// deny-list, size cap, format-detection).
+    #[error("Invalid query file {path}: {reason}")]
+    InvalidQueryFile { path: PathBuf, reason: String },
+
+    /// Two or more mutually-exclusive CLI flags were supplied at once.
+    /// Migrated from `TlsError::MutuallyExclusiveFlags` so the routing
+    /// is config-class (exit 2), not TLS-class.
+    #[error("Mutually exclusive flags provided: {flags}. Use only one option")]
+    MutuallyExclusiveFlags { flags: String },
+
+    /// Output target already exists and `--force` was not supplied.
+    #[error("Output file already exists: {path}. Pass --force to overwrite.")]
+    OutputExists { path: PathBuf },
+
+    /// Format-resolution rejection (unknown extension and no `--format`).
+    #[error("{0}")]
+    UnresolvableFormat(String),
+
+    /// Catch-all escape hatch for one-off config errors that don't yet
+    /// warrant a dedicated variant.
+    #[error("{0}")]
+    Other(String),
+}
+
 /// Typed application error with a stable mapping to the binary's exit-code
 /// contract. Constructors at error origin sites (config resolvers, query
 /// execution, output writes) should prefer this enum over `anyhow!(...)` so
 /// the exit code does not depend on error-message text.
 ///
-/// `From` impls wrap common foreign error types into the `Io` and `Tls`
-/// variants so the `?` operator works without manual mapping. `anyhow::Error`
-/// preserves the underlying type, so [`map_error_to_exit_code`] can downcast
-/// even when the error has been chained with `.context(...)`.
+/// `From` impls wrap common foreign error types into the `Io`, `Tls`, and
+/// `Config` variants so the `?` operator works without manual mapping.
+/// `anyhow::Error` preserves the underlying type, so
+/// [`map_error_to_exit_code`] can downcast even when the error has been
+/// chained with `.context(...)`.
 #[derive(ThisError, Debug)]
 pub enum GoldDiggerError {
     /// Query executed successfully but returned no rows. Maps to exit 1
@@ -47,8 +102,13 @@ pub enum GoldDiggerError {
 
     /// Configuration error — missing required argument, mutually exclusive
     /// flags, malformed value. Maps to exit 2.
+    ///
+    /// Wraps a typed [`ConfigError`]; see that enum for the per-cause
+    /// variants. Use [`ConfigError`] constructors directly at error sites
+    /// so the message text becomes a function of the variant rather than
+    /// a free-form string passed in by the caller.
     #[error("configuration error: {0}")]
-    Config(String),
+    Config(#[from] ConfigError),
 
     /// Database authentication or connection-establishment failure (wrong
     /// credentials, unreachable host, TLS handshake failure when the
@@ -93,6 +153,13 @@ impl GoldDiggerError {
 /// Maps a [`TlsError`] variant to the public exit-code contract. CA-file
 /// problems are config errors (the user supplied a bad path / bad PEM);
 /// everything else surfaces as a connection/auth failure.
+///
+/// `MutuallyExclusiveFlags` is also routed to `EXIT_CONFIG_ERROR` for
+/// backward compatibility with the legacy [`TlsError`] variant; new code
+/// SHOULD construct [`ConfigError::MutuallyExclusiveFlags`] (which routes
+/// through [`GoldDiggerError::Config`] → [`EXIT_CONFIG_ERROR`]) so the
+/// exit code is established by the typed `ConfigError` enum rather than
+/// a TLS-specific special case.
 fn tls_exit_code(error: &TlsError) -> i32 {
     match error {
         TlsError::CaFileNotFound { .. }
@@ -112,7 +179,20 @@ fn tls_exit_code(error: &TlsError) -> i32 {
 /// This function never returns as it calls `process::exit`
 pub fn exit_with_error(error: Error, context: Option<&str>) -> ! {
     let exit_code = map_error_to_exit_code(&error);
-    let error_msg = error.to_string();
+
+    // Render the full anyhow chain so context layers (e.g. the
+    // `.context("TLS configuration error")` wrapping a typed `TlsError`
+    // payload added in connection.rs after CRITICAL #5) surface to the
+    // user — `to_string()` alone shows only the topmost message and
+    // hides the underlying typed error's Display text.
+    //
+    // Format: `outer: middle: inner` (joined with `: `), matching the
+    // convention `anyhow` itself uses for chain rendering.
+    let error_msg = error
+        .chain()
+        .map(|cause| cause.to_string())
+        .collect::<Vec<_>>()
+        .join(": ");
 
     // Log the error with context if provided. Routed through
     // `tracing::error!` so the subscriber (installed by `main()` before
@@ -393,7 +473,7 @@ mod tests {
     fn test_typed_error_exit_codes_direct() {
         assert_eq!(GoldDiggerError::NoRows.exit_code(), EXIT_NO_ROWS);
         assert_eq!(
-            GoldDiggerError::Config("anything".into()).exit_code(),
+            GoldDiggerError::Config(ConfigError::Other("anything".into())).exit_code(),
             EXIT_CONFIG_ERROR
         );
         assert_eq!(
@@ -412,12 +492,75 @@ mod tests {
     fn test_typed_error_through_anyhow_chain() {
         // Construct a GoldDiggerError, wrap it in anyhow, add layers of
         // context — the classifier should still find the typed variant.
-        let typed = GoldDiggerError::Config("missing --db-url".into());
+        let typed = GoldDiggerError::Config(ConfigError::MissingDbUrl);
         let anyhow_err: Error = typed.into();
         assert_eq!(map_error_to_exit_code(&anyhow_err), EXIT_CONFIG_ERROR);
 
         let with_context = anyhow_err.context("while resolving CLI arguments");
         assert_eq!(map_error_to_exit_code(&with_context), EXIT_CONFIG_ERROR);
+    }
+
+    #[test]
+    fn test_config_error_display_text_unchanged() {
+        // Each variant's Display string must remain the same as the
+        // legacy `Config(String)` payload it replaces — historical tests
+        // assert on the rendered message text.
+        assert!(
+            ConfigError::MissingDbUrl
+                .to_string()
+                .contains("Missing database URL")
+        );
+        assert!(
+            ConfigError::MissingQuery
+                .to_string()
+                .contains("Missing database query")
+        );
+        assert!(
+            ConfigError::MissingOutputFile
+                .to_string()
+                .contains("Missing output file")
+        );
+        let path: PathBuf = "/tmp/out.csv".into();
+        assert!(
+            ConfigError::OutputExists { path: path.clone() }
+                .to_string()
+                .contains("Output file already exists")
+        );
+        assert!(
+            ConfigError::OutputExists { path }
+                .to_string()
+                .contains("--force to overwrite")
+        );
+        assert!(
+            ConfigError::MutuallyExclusiveFlags {
+                flags: "--a, --b".into()
+            }
+            .to_string()
+            .contains("Mutually exclusive flags")
+        );
+    }
+
+    #[test]
+    fn test_config_error_routes_to_config_exit_code() {
+        // Every ConfigError variant must route through GoldDiggerError::Config
+        // to EXIT_CONFIG_ERROR (2), regardless of the variant's payload.
+        for variant in [
+            GoldDiggerError::Config(ConfigError::MissingDbUrl),
+            GoldDiggerError::Config(ConfigError::MissingQuery),
+            GoldDiggerError::Config(ConfigError::MissingOutputFile),
+            GoldDiggerError::Config(ConfigError::InvalidQueryFile {
+                path: "/x".into(),
+                reason: "bad".into(),
+            }),
+            GoldDiggerError::Config(ConfigError::MutuallyExclusiveFlags {
+                flags: "--a, --b".into(),
+            }),
+            GoldDiggerError::Config(ConfigError::OutputExists { path: "/x".into() }),
+            GoldDiggerError::Config(ConfigError::UnresolvableFormat("x".into())),
+            GoldDiggerError::Config(ConfigError::Other("anything".into())),
+        ] {
+            assert_eq!(variant.exit_code(), EXIT_CONFIG_ERROR);
+        }
     }
 
     #[test]
@@ -490,7 +633,7 @@ mod tests {
         /// payloads — the typed path is defined to ignore message text.
         #[test]
         fn proptest_typed_config_is_stable(s in any::<String>()) {
-            let typed = GoldDiggerError::Config(s);
+            let typed = GoldDiggerError::Config(ConfigError::Other(s));
             prop_assert_eq!(typed.exit_code(), EXIT_CONFIG_ERROR);
         }
 
@@ -515,7 +658,7 @@ mod tests {
         /// without `.context(..)` layers) must preserve the typed exit code.
         #[test]
         fn proptest_typed_through_anyhow_chain(s in any::<String>(), ctx in any::<String>()) {
-            let typed = GoldDiggerError::Config(s);
+            let typed = GoldDiggerError::Config(ConfigError::Other(s));
             let anyhow_err: Error = anyhow::Error::from(typed).context(ctx);
             prop_assert_eq!(map_error_to_exit_code(&anyhow_err), EXIT_CONFIG_ERROR);
         }

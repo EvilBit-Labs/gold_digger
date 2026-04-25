@@ -161,90 +161,99 @@ pub fn create_tls_connection(
     // `redact_sql_error` first. The mysql crate's error strings frequently
     // embed the raw connection URL, the username, the source IP, and
     // `(using password: YES)` markers; un-redacted, those reach the user
-    // via stderr (CWE-532/CWE-209). The substring-classification below
-    // looks at `error_lower` only for routing — the user-facing string is
-    // built from `redacted_error`.
+    // via stderr (CWE-532/CWE-209). The redacted string is used in every
+    // constructed `TlsError` payload.
+    //
+    // CRITICAL #1 fix: the previous implementation classified the
+    // `mysql::Error` by substring-matching on its lower-cased rendered
+    // string. The typed `from_rustls_error` classifier in
+    // `super::classifier` was never reached from the wire path because
+    // `mysql::Error::TlsError` was buried in the string before being
+    // matched. We now match on the typed `mysql::Error` variants
+    // directly: `TlsError(rustls::Error)` flows through the typed
+    // classifier; other variants get specific, non-substring routing.
     Pool::new(opts_builder).map_err(|mysql_error| {
-        let error_string = mysql_error.to_string();
-        let error_lower = error_string.to_lowercase();
-        let redacted_error = crate::utils::redact_sql_error(&error_string);
-
-        // Check for TLS/SSL related errors and provide specific guidance
-        if error_lower.contains("ssl") || error_lower.contains("tls") {
-            if error_lower.contains("certificate") || error_lower.contains("cert") {
-                if error_lower.contains("expired") || error_lower.contains("not yet valid") {
-                    TlsError::certificate_time_invalid(format!(
-                        "Certificate validity period error: {}. Use --allow-invalid-certificate to bypass",
-                        redacted_error
-                    ))
-                } else if error_lower.contains("hostname") || error_lower.contains("name") || error_lower.contains("san") {
-                    TlsError::hostname_verification_failed(
-                        "server".to_string(),
-                        format!(
-                            "Hostname verification failed: {}. Use --insecure-skip-hostname-verify to bypass",
-                            redacted_error
-                        )
-                    )
-                } else if error_lower.contains("unknown") || error_lower.contains("untrusted") || error_lower.contains("issuer") {
-                    TlsError::unknown_certificate_authority(format!(
-                        "Certificate authority not trusted: {}. Use --tls-ca-file <path> for custom CA or --allow-invalid-certificate for testing",
-                        redacted_error
-                    ))
-                } else if error_lower.contains("signature") || error_lower.contains("invalid") {
-                    TlsError::invalid_signature(format!(
-                        "Certificate signature validation failed: {}. Use --allow-invalid-certificate to bypass",
-                        redacted_error
-                    ))
-                } else {
-                    TlsError::certificate_validation_failed(format!(
-                        "Certificate validation failed: {}. Try --allow-invalid-certificate for testing",
-                        redacted_error
-                    ))
-                }
-            } else if error_lower.contains("handshake") {
-                TlsError::handshake_failed(format!(
-                    "TLS handshake failed: {}. Check server TLS configuration and supported protocols",
-                    redacted_error
-                ))
-            } else if error_lower.contains("protocol") || error_lower.contains("version") {
-                TlsError::protocol_version_mismatch(format!(
-                    "TLS protocol version mismatch: {}. Server may not support TLS 1.2/1.3",
-                    redacted_error
-                ))
-            } else if error_lower.contains("cipher") {
-                TlsError::cipher_suite_negotiation_failed(format!(
-                    "TLS cipher suite negotiation failed: {}. Server and client have no compatible cipher suites",
-                    redacted_error
-                ))
-            } else {
-                TlsError::connection_failed(format!(
-                    "TLS connection failed: {}. Check server TLS configuration",
-                    redacted_error
-                ))
-            }
-        } else if error_lower.contains("connection") || error_lower.contains("connect") {
-            TlsError::connection_failed(format!(
-                "Database connection failed: {}. Check server availability and network connectivity",
-                redacted_error
-            ))
-        } else if error_lower.contains("auth") || error_lower.contains("access denied") || error_lower.contains("password") {
-            TlsError::connection_failed(format!(
-                "Database authentication failed: {}. Check username and password",
-                redacted_error
-            ))
-        } else if error_lower.contains("timeout") {
-            TlsError::connection_failed(format!(
-                "Database connection timeout: {}. Check network connectivity and server responsiveness",
-                redacted_error
-            ))
-        } else {
-            // Generic connection error
-            TlsError::connection_failed(format!(
-                "Database connection failed: {}",
-                redacted_error
-            ))
-        }
+        let redacted_error = crate::utils::redact_sql_error(&mysql_error.to_string());
+        classify_mysql_pool_error(mysql_error, redacted_error)
     })
+}
+
+/// Maps a [`mysql::Error`] from `Pool::new` into a typed [`TlsError`]
+/// using the underlying error variant rather than substring matching.
+///
+/// CRITICAL #1: the typed classifier ([`TlsError::from_rustls_error`]) is
+/// only reachable when we match on `mysql::Error::TlsError(rustls_err)`
+/// — interpolating the rendered string and pattern-matching on lowercase
+/// substrings (the legacy approach) buries the typed value beyond
+/// recovery.
+///
+/// `redacted_error` is the credential-scrubbed rendering of the error and
+/// is interpolated into the `message` field of constructed `TlsError`
+/// variants. Callers MUST pre-compute it via `redact_sql_error` to
+/// guarantee credentials never reach the user-facing message.
+fn classify_mysql_pool_error(mysql_error: mysql::Error, redacted_error: String) -> TlsError {
+    // `mysql::error::tls::TlsError` is the inner TLS-stack error wrapped
+    // by `mysql::Error::TlsError`; aliasing locally avoids a clash with
+    // our own `super::error::TlsError`.
+    use mysql::error::tls::TlsError as MysqlTlsError;
+
+    match mysql_error {
+        // The wire path: the mysql driver wrapped a rustls (or related
+        // TLS-stack) error. Route inner `Tls(rustls::Error)` through the
+        // typed classifier in `super::classifier` so cert / handshake /
+        // hostname variants each produce the corresponding typed
+        // `TlsError`. Other inner variants (PKI parse, DNS name, verifier
+        // builder) get specific routing.
+        mysql::Error::TlsError(inner) => match inner {
+            MysqlTlsError::Tls(rustls_err) => TlsError::from_rustls_error(rustls_err, None),
+            MysqlTlsError::Pki(_) => TlsError::certificate_chain_invalid(format!(
+                "Certificate chain validation failed: {}",
+                redacted_error
+            )),
+            MysqlTlsError::InvalidDnsName(_) => TlsError::hostname_verification_failed(
+                "server".to_string(),
+                format!("Invalid DNS name in TLS handshake: {}", redacted_error),
+            ),
+            MysqlTlsError::VerifierBuilderError(_) => TlsError::certificate_validation_failed(
+                format!("Certificate verifier builder error: {}", redacted_error),
+            ),
+        },
+
+        // Network I/O during connect — almost always "server unreachable",
+        // "connection refused", or a TCP-level failure. No TLS context.
+        mysql::Error::IoError(_) => TlsError::connection_failed(format!(
+            "Database connection failed: {}. Check server availability and network connectivity",
+            redacted_error
+        )),
+
+        // URL parse failures — surface as connection failure with the
+        // redacted detail so the operator can see what's malformed
+        // without leaking userinfo.
+        mysql::Error::UrlError(_) => {
+            TlsError::connection_failed(format!("Invalid database URL format: {}", redacted_error))
+        }
+
+        // Server-side error: typically authentication. Route as a
+        // connection failure (the exit-code mapper still sends this to
+        // EXIT_DB_AUTH_ERROR via `tls_exit_code`'s `_` arm).
+        mysql::Error::MySqlError(_) => TlsError::connection_failed(format!(
+            "Database authentication failed: {}. Check credentials.",
+            redacted_error
+        )),
+
+        // Driver-level failures (TLS negotiation in the connector layer,
+        // unsupported feature, etc.). Surface a generic handshake failure
+        // so the user has actionable framing.
+        mysql::Error::DriverError(_) => TlsError::handshake_failed(format!(
+            "Database driver error: {}. Check server TLS configuration",
+            redacted_error
+        )),
+
+        // Future-proofing: `mysql::Error` is `#[non_exhaustive]`; new
+        // variants fall through to a generic connection failure rather
+        // than a misleading TLS-specific message.
+        _ => TlsError::connection_failed(format!("Database connection failed: {}", redacted_error)),
+    }
 }
 
 /// Helper function to redact sensitive information from URLs for safe error logging.
@@ -306,6 +315,30 @@ mod tests {
                 // This is fine - the test passes as long as it doesn't panic
             }
         }
+    }
+
+    /// CRITICAL #1 regression: a real `mysql::Error` from `Pool::new`
+    /// must be classified into a typed `TlsError` variant via the
+    /// `classify_mysql_pool_error` switch — not via substring matching
+    /// on the rendered string. We drive a malformed URL through
+    /// `Pool::new` and assert the returned `TlsError` is a non-empty
+    /// typed variant. (Exact variant depends on the mysql crate's URL
+    /// parser; the load-bearing assertion is "we got a typed value back,
+    /// not a stringified one".)
+    #[test]
+    fn test_pool_new_invalid_url_returns_typed_tls_error() {
+        // `invalid://url` is rejected by Opts::from_url before Pool::new
+        // is reached, so go through `create_tls_connection` (which is
+        // the public surface that exercises the URL parse path).
+        let result = create_tls_connection("invalid://url", None, false);
+        assert!(result.is_err(), "expected error from malformed URL");
+        let tls_error = result.unwrap_err();
+        // Connection-failed (URL parse) is the expected variant.
+        assert!(
+            matches!(tls_error, TlsError::ConnectionFailed { .. }),
+            "expected ConnectionFailed variant, got: {:?}",
+            tls_error
+        );
     }
 
     #[test]

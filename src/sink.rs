@@ -32,7 +32,7 @@ use anyhow::{Context, Result};
 use csv::{QuoteStyle, WriterBuilder};
 
 use crate::OUTPUT_BUFFER_CAPACITY;
-use crate::exit::GoldDiggerError;
+use crate::exit::{ConfigError, GoldDiggerError};
 use crate::output::create_output_file;
 
 /// 64 KiB write buffer — same size the non-streaming writers used so per-row
@@ -106,10 +106,9 @@ fn open_tmp_for(output: &Path, force: bool) -> Result<(PathBuf, BufWriter<File>)
     // now — otherwise a successful `.tmp` write followed by `fs::rename`
     // would clobber the existing file.
     if !force && output.exists() {
-        return Err(GoldDiggerError::Config(format!(
-            "Output file already exists: {}. Pass --force to overwrite.",
-            output.display()
-        ))
+        return Err(GoldDiggerError::Config(ConfigError::OutputExists {
+            path: output.to_path_buf(),
+        })
         .into());
     }
 

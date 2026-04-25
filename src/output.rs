@@ -20,7 +20,7 @@ use std::path::Path;
 use anyhow::Result;
 
 use crate::cli::{Cli, OutputFormat};
-use crate::exit::GoldDiggerError;
+use crate::exit::{ConfigError, GoldDiggerError};
 use crate::sink::{RowSink, csv_sink, json_sink, tsv_sink};
 
 /// Resolves the output format from `--format` or the file extension,
@@ -36,10 +36,10 @@ pub fn resolve_output_format(output_file: &Path, cli: &Cli) -> Result<OutputForm
         Ok(format)
     } else {
         OutputFormat::from_extension(output_file).ok_or_else(|| {
-            GoldDiggerError::Config(format!(
+            GoldDiggerError::Config(ConfigError::UnresolvableFormat(format!(
                 "Cannot infer output format from '{}'. Recognised extensions: .csv, .json, .tsv, .tab, .txt. Pass --format <csv|json|tsv> to select explicitly.",
                 output_file.display()
-            ))
+            )))
             .into()
         })
     }
@@ -174,10 +174,9 @@ pub fn create_output_file(output_file: &Path, force: bool) -> Result<File> {
 /// to `EXIT_IO_ERROR` (5).
 fn classify_output_open_error(e: std::io::Error, output_file: &Path, force: bool) -> anyhow::Error {
     if e.kind() == std::io::ErrorKind::AlreadyExists && !force {
-        return GoldDiggerError::Config(format!(
-            "Output file already exists: {}. Pass --force to overwrite.",
-            output_file.display()
-        ))
+        return GoldDiggerError::Config(ConfigError::OutputExists {
+            path: output_file.to_path_buf(),
+        })
         .into();
     }
     anyhow::Error::from(GoldDiggerError::Io(e)).context(format!(

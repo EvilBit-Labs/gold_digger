@@ -193,32 +193,40 @@ pub fn redact_sql_error(message: &str) -> String {
 /// Redacts sensitive information from URLs for safe error logging.
 ///
 /// Uses structural URL parsing (rather than regex) to redact userinfo. If
-/// the input cannot be parsed as a URL, returns
-/// [`REDACTED_URL_PLACEHOLDER`] so a malformed URL never leaks intact.
+/// the input cannot be parsed as a URL OR a userinfo-mutation call
+/// fails (cannot-be-a-base URL, no-authority URL, etc.), returns
+/// [`REDACTED_URL_PLACEHOLDER`] so a URL whose credentials cannot be
+/// scrubbed never leaks intact.
+///
+/// # CRITICAL #6 fix
+///
+/// The previous implementation discarded the `Result<(), ()>` from
+/// `Url::set_password` / `Url::set_username` via `let _ =`. URLs that
+/// parse but reject userinfo modification (e.g. `data:text/plain,user:pass@host`)
+/// flowed through the redactor unchanged, leaking the original
+/// credentials. We now fail closed: any mutation failure replaces the
+/// whole string with [`REDACTED_URL_PLACEHOLDER`].
 ///
 /// # Arguments
 /// * `url` - The URL string to redact
 ///
 /// # Returns
 /// * `String` - The redacted URL, or [`REDACTED_URL_PLACEHOLDER`] on
-///   parse failure
+///   parse failure or userinfo-mutation failure
 pub fn redact_url(url: &str) -> String {
-    if let Ok(parsed) = url::Url::parse(url) {
-        let mut redacted = parsed.clone();
+    let Ok(parsed) = url::Url::parse(url) else {
+        return REDACTED_URL_PLACEHOLDER.to_string();
+    };
+    let mut redacted = parsed.clone();
 
-        if parsed.password().is_some() {
-            let _ = redacted.set_password(Some(REDACTION_PLACEHOLDER));
-        }
-
-        let username = parsed.username();
-        if !username.is_empty() {
-            let _ = redacted.set_username(REDACTION_PLACEHOLDER);
-        }
-
-        redacted.to_string()
-    } else {
-        REDACTED_URL_PLACEHOLDER.to_string()
+    if parsed.password().is_some() && redacted.set_password(Some(REDACTION_PLACEHOLDER)).is_err() {
+        return REDACTED_URL_PLACEHOLDER.to_string();
     }
+    let username = parsed.username();
+    if !username.is_empty() && redacted.set_username(REDACTION_PLACEHOLDER).is_err() {
+        return REDACTED_URL_PLACEHOLDER.to_string();
+    }
+    redacted.to_string()
 }
 
 /// Redacts a SQL query intended for the `--dump-config` JSON output.
@@ -378,6 +386,52 @@ mod tests {
     fn test_redact_url_unparseable_falls_back() {
         let redacted = redact_url("not-a-valid-url");
         assert_eq!(redacted, REDACTED_URL_PLACEHOLDER);
+    }
+
+    /// CRITICAL #6 regression: URLs where the url crate exposes
+    /// userinfo (`user`/`password`) MUST have those fields redacted.
+    /// This battery iterates schemes where userinfo is well-defined and
+    /// asserts the redactor never lets the raw `user:secret@` substring
+    /// through. Together with the fail-closed `set_password`/`set_username`
+    /// error handling in `redact_url`, this pins the invariant: even if a
+    /// future url-crate release introduces a userinfo-mutation rejection
+    /// for a scheme we already handle, the redactor falls back to
+    /// [`REDACTED_URL_PLACEHOLDER`] rather than leaking credentials.
+    #[test]
+    fn test_redact_url_with_special_schemes_never_contains_raw_userinfo() {
+        let inputs = [
+            "ftp://user:secret123@host.example/path",
+            "ssh://user:secret123@host.example",
+            "http://user:secret123@host.example/x",
+            "https://user:secret123@host.example",
+            "mysql://user:secret123@host.example:3306/db",
+        ];
+        for url in inputs {
+            let redacted = redact_url(url);
+            assert!(
+                !redacted.contains("secret123"),
+                "leaked secret from {url:?} -> {redacted:?}"
+            );
+            assert!(
+                !redacted.contains("user:secret123@"),
+                "leaked userinfo substring from {url:?} -> {redacted:?}"
+            );
+        }
+    }
+
+    /// CRITICAL #6 fail-closed assertion: synthetic URL inputs that the
+    /// `url::Url` parser rejects must always return the placeholder
+    /// rather than the original string. Pre-CRITICAL #6 the function
+    /// already did this on parse failure; the new contract additionally
+    /// covers `set_password` / `set_username` mutation failure on
+    /// successfully-parsed URLs. Either failure mode produces the same
+    /// observable output (the placeholder), so we assert that downstream.
+    #[test]
+    fn test_redact_url_returns_placeholder_for_unparseable() {
+        for raw in &["", "not-a-url", "://no-scheme", " "] {
+            let redacted = redact_url(raw);
+            assert_eq!(redacted, REDACTED_URL_PLACEHOLDER, "input was {raw:?}");
+        }
     }
 
     #[test]
