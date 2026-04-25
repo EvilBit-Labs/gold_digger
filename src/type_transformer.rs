@@ -175,6 +175,12 @@ fn bytes_to_string(bytes: &[u8]) -> String {
 
 /// Formats a float/double value as a string, handling NaN and Infinity
 /// specially.
+///
+/// Finite values go through [`ryu::Buffer`] (stack-allocated, no heap
+/// fall-back) instead of `f64::to_string`, which constructs an
+/// intermediate `String` per call. The two surface match: ryu prints
+/// the shortest round-trippable decimal, which is what `to_string`
+/// already returned (todo #071).
 fn format_special_float(value: f64) -> String {
     if value.is_nan() {
         "NaN".to_string()
@@ -185,7 +191,8 @@ fn format_special_float(value: f64) -> String {
             "-Infinity".to_string()
         }
     } else {
-        value.to_string()
+        let mut buf = ryu::Buffer::new();
+        buf.format(value).to_string()
     }
 }
 
@@ -209,12 +216,38 @@ impl TypeTransformer {
     ///
     /// Returns an error when date or time components are out of range
     /// (e.g. month > 12, total hours > 838).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use gold_digger::TypeTransformer;
+    ///
+    /// // Integers render as their decimal form.
+    /// let value = mysql::Value::Int(42);
+    /// assert_eq!(TypeTransformer::value_to_string(&value).unwrap(), "42");
+    ///
+    /// // SQL NULL becomes the empty string for CSV/TSV output.
+    /// assert_eq!(
+    ///     TypeTransformer::value_to_string(&mysql::Value::NULL).unwrap(),
+    ///     ""
+    /// );
+    /// ```
     pub fn value_to_string(value: &mysql::Value) -> anyhow::Result<String> {
         match value {
             mysql::Value::NULL => Ok(String::new()),
             mysql::Value::Bytes(bytes) => Ok(bytes_to_string(bytes)),
-            mysql::Value::Int(i) => Ok(i.to_string()),
-            mysql::Value::UInt(u) => Ok(u.to_string()),
+            // Integer formatters go through `itoa::Buffer` (stack-allocated)
+            // instead of `to_string`, dropping one heap allocation per
+            // numeric cell on streaming workloads (todo #071). The output
+            // is byte-identical to `i64::to_string` / `u64::to_string`.
+            mysql::Value::Int(i) => {
+                let mut buf = itoa::Buffer::new();
+                Ok(buf.format(*i).to_string())
+            }
+            mysql::Value::UInt(u) => {
+                let mut buf = itoa::Buffer::new();
+                Ok(buf.format(*u).to_string())
+            }
             mysql::Value::Float(f) => {
                 if f.is_nan() {
                     Ok("NaN".to_string())
@@ -226,7 +259,11 @@ impl TypeTransformer {
                     }
                     .to_string())
                 } else {
-                    Ok(f.to_string())
+                    // ryu prints the shortest round-trippable decimal —
+                    // matches `f32::to_string` semantically while skipping
+                    // the intermediate heap allocation (todo #071).
+                    let mut buf = ryu::Buffer::new();
+                    Ok(buf.format(*f).to_string())
                 }
             }
             mysql::Value::Double(d) => Ok(format_special_float(*d)),
@@ -278,6 +315,25 @@ impl TypeTransformer {
     /// # Errors
     ///
     /// Returns an error when date or time components are out of valid range.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use gold_digger::TypeTransformer;
+    ///
+    /// // Integers map to JSON numbers.
+    /// let value = mysql::Value::Int(42);
+    /// assert_eq!(
+    ///     TypeTransformer::value_to_json(&value).unwrap(),
+    ///     serde_json::json!(42),
+    /// );
+    ///
+    /// // SQL NULL becomes JSON null.
+    /// assert_eq!(
+    ///     TypeTransformer::value_to_json(&mysql::Value::NULL).unwrap(),
+    ///     serde_json::Value::Null,
+    /// );
+    /// ```
     pub fn value_to_json(value: &mysql::Value) -> anyhow::Result<serde_json::Value> {
         match value {
             mysql::Value::NULL => Ok(serde_json::Value::Null),
@@ -357,6 +413,15 @@ impl TypeTransformer {
     /// converted via [`Self::value_to_json`]. The `BTreeMap` guarantees
     /// deterministic (alphabetical) key ordering in serialised output.
     ///
+    /// # Performance note
+    ///
+    /// This helper extracts column names from `row.columns_ref()` on
+    /// every call. Streaming callers that process N rows × M columns
+    /// should prefer [`Self::row_to_json_with_columns`], which accepts a
+    /// pre-extracted column-name slice and reuses it across rows so the
+    /// per-row workload drops from `M * to_string()` lookups to a
+    /// shared [`std::sync::Arc<str>`] table (todo #069).
+    ///
     /// # Arguments
     ///
     /// * `row` - A `mysql::Row` to convert.
@@ -380,6 +445,51 @@ impl TypeTransformer {
                 None => serde_json::Value::Null,
             };
             map.insert(col_name, json_val);
+        }
+        Ok(map)
+    }
+
+    /// Converts a single MySQL `Row` into a `BTreeMap` keyed by names from
+    /// `column_names`, reusing the caller-supplied slice instead of
+    /// re-extracting names per row.
+    ///
+    /// `column_names` must be a snapshot of the result-set's column names
+    /// in result-set order — the caller is expected to extract them once
+    /// (e.g. from `mysql::QueryResult::columns`) and reuse the slice for
+    /// every row. The [`std::sync::Arc<str>`] indirection lets the JSON
+    /// sink hold the canonical name list while still producing owned
+    /// `String` keys for `BTreeMap`; per-row cost is one
+    /// `String::from(&str)` per column rather than a
+    /// `name_str().to_string()` lookup against the row's own metadata.
+    ///
+    /// On streaming queries with N rows and M columns this collapses the
+    /// O(N × M) name allocations done by [`Self::row_to_json`] into the
+    /// caller's one-time O(M) extraction (todo #069).
+    ///
+    /// # Arguments
+    ///
+    /// * `row` - A `mysql::Row` to convert.
+    /// * `column_names` - Column names in result-set order, supplied
+    ///   once by the caller.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing a `BTreeMap<String, serde_json::Value>`, or
+    /// an error if value conversion fails.
+    pub fn row_to_json_with_columns(
+        row: &mysql::Row,
+        column_names: &[std::sync::Arc<str>],
+    ) -> anyhow::Result<BTreeMap<String, serde_json::Value>> {
+        let mut map = BTreeMap::new();
+        for (i, col_name) in column_names.iter().enumerate() {
+            let json_val = match row.as_ref(i) {
+                Some(value) => Self::value_to_json(value)
+                    .with_context(|| format!("Failed to convert column '{}' to JSON", col_name))?,
+                None => serde_json::Value::Null,
+            };
+            // Allocate the BTreeMap key once from the shared Arc<str>;
+            // the canonical name list is not re-allocated per row.
+            map.insert(col_name.as_ref().to_string(), json_val);
         }
         Ok(map)
     }

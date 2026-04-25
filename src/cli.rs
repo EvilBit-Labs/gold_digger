@@ -10,10 +10,29 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 /// MySQL/MariaDB query tool with structured output
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 #[command(name = "gold_digger")]
-#[command(about = "A MySQL/MariaDB query tool that exports results to structured data files")]
+#[command(author)]
 #[command(version)]
+#[command(about = "A MySQL/MariaDB query tool that exports results to structured data files")]
+#[command(
+    long_about = "Gold Digger connects to MySQL/MariaDB databases, executes queries, and exports \
+results to CSV, JSON, or TSV files. It supports rustls-only TLS, environment-variable \
+fallbacks, structured exit codes, and shell completion generation."
+)]
+#[command(after_help = "EXAMPLES:
+  # CLI interface (preferred)
+  gold_digger --db-url mysql://user:pass@host:3306/db \\
+              --query 'SELECT id, name FROM users' \\
+              --output results.json --pretty
+
+  # Environment variable fallback
+  export DATABASE_URL='mysql://user:pass@host:3306/db'
+  gold_digger --query 'SELECT * FROM logs' --output /tmp/logs.csv
+
+  # Generate shell completion
+  gold_digger completion bash > ~/.local/share/bash-completion/completions/gold_digger
+")]
 pub struct Cli {
     /// Database connection URL (mysql://user:pass@host:port/db)
     #[arg(long, env = "DATABASE_URL", value_name = "URL")]
@@ -94,7 +113,8 @@ pub struct Cli {
     pub command: Option<Commands>,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Debug)]
+#[non_exhaustive]
 pub enum Commands {
     /// Generate shell completion scripts
     Completion {
@@ -103,7 +123,8 @@ pub enum Commands {
     },
 }
 
-#[derive(ValueEnum, Clone, Debug)]
+#[derive(ValueEnum, Copy, Clone, Debug)]
+#[non_exhaustive]
 pub enum Shell {
     Bash,
     Zsh,
@@ -178,7 +199,8 @@ impl TlsOptions {
     }
 }
 
-#[derive(ValueEnum, Clone, Debug)]
+#[derive(ValueEnum, Copy, Clone, Debug)]
+#[non_exhaustive]
 pub enum OutputFormat {
     Csv,
     Json,

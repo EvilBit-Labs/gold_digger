@@ -32,8 +32,8 @@ use crate::sink::{RowSink, csv_sink, json_sink, tsv_sink};
 /// "silent format selection" hazard — an `.xml` or `.yaml` output path would
 /// quietly emit tab-separated data with no signal to the caller.
 pub fn resolve_output_format(output_file: &Path, cli: &Cli) -> Result<OutputFormat> {
-    if let Some(format) = &cli.format {
-        Ok(format.clone())
+    if let Some(format) = cli.format {
+        Ok(format)
     } else {
         OutputFormat::from_extension(output_file).ok_or_else(|| {
             GoldDiggerError::Config(format!(

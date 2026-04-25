@@ -2,7 +2,7 @@
 source: tests/cli_testing_example.rs
 expression: stdout
 ---
-A MySQL/MariaDB query tool that exports results to structured data files
+Gold Digger connects to MySQL/MariaDB databases, executes queries, and exports results to CSV, JSON, or TSV files. It supports rustls-only TLS, environment-variable fallbacks, structured exit codes, and shell completion generation.
 
 Usage: gold_digger [OPTIONS] [COMMAND]
 
@@ -80,3 +80,16 @@ Options:
 
   -V, --version
           Print version
+
+EXAMPLES:
+  # CLI interface (preferred)
+  gold_digger --db-url mysql://user:pass@host:3306/db \
+              --query 'SELECT id, name FROM users' \
+              --output results.json --pretty
+
+  # Environment variable fallback
+  export DATABASE_URL='mysql://user:pass@host:3306/db'
+  gold_digger --query 'SELECT * FROM logs' --output /tmp/logs.csv
+
+  # Generate shell completion
+  gold_digger completion bash > ~/.local/share/bash-completion/completions/gold_digger
