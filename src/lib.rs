@@ -40,22 +40,31 @@ static INIT: OnceLock<()> = OnceLock::new();
 /// the initialiser is consistent with the [`OnceLock`] used by
 /// [`crate::utils`] (todo #106).
 ///
-/// # Silent error swallowing
+/// # Provider detection (#4 medium fix)
 ///
-/// The inner `install_default()` returns an error if another provider
-/// was already installed (e.g., tests or library consumers that set
-/// their own). That error is intentionally discarded via `let _ = …`:
-/// repeated initialisation is the expected failure mode, not a bug, and
-/// we don't want a panic cascade across the test suite. The trade-off
-/// is that a malformed provider (on a future rustls release) would also
-/// fail silently here — if that becomes a problem, log the result
-/// through `tracing::warn!` rather than swallowing.
-///
-/// See todo #P3 `init-crypto-provider-must-surface-or-panic-on-install-error`
-/// for a stricter alternative.
+/// Before attempting installation, this function checks
+/// [`rustls::crypto::CryptoProvider::get_default`]. When another path
+/// (test harness, library consumer, embedding application) has already
+/// installed a provider, we defer to it rather than racing for the
+/// process-wide default. When no provider is installed, we install
+/// ring; an error from `install_default()` at that point is genuinely
+/// surprising — it means another path won the race between our check
+/// and our install — and we surface it via `tracing::warn!` instead of
+/// silently dropping it. The `OnceLock` guard still prevents repeated
+/// install attempts within this process.
 pub fn init_crypto_provider() {
     INIT.get_or_init(|| {
-        let _ = rustls::crypto::ring::default_provider().install_default();
+        if rustls::crypto::CryptoProvider::get_default().is_some() {
+            // Another path (test harness, library consumer) already
+            // installed a provider — defer to it.
+            return;
+        }
+        if let Err(_existing) = rustls::crypto::ring::default_provider().install_default() {
+            tracing::warn!(
+                "rustls crypto provider was installed by another path between our \
+                 check and our install; using the one already in place"
+            );
+        }
     });
 }
 
