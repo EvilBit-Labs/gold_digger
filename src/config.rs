@@ -141,7 +141,21 @@ pub fn resolve_database_url_with_env(cli: &Cli, env: &EnvSnapshot) -> Result<Str
 ///
 /// Failures use [`GoldDiggerError::Config`] (exit 2) for policy rejections
 /// and [`GoldDiggerError::Io`] (exit 5) for filesystem / stat failures.
+///
+/// Calls through to [`validate_query_file_path_with_limit`] using the
+/// default [`MAX_QUERY_FILE_SIZE_BYTES`] cap. New code should prefer the
+/// `_with_limit` variant so the user-supplied `--max-query-file-size`
+/// value is honoured.
 pub fn validate_query_file_path(path: &Path) -> Result<PathBuf> {
+    validate_query_file_path_with_limit(path, MAX_QUERY_FILE_SIZE_BYTES)
+}
+
+/// Like [`validate_query_file_path`] but accepts a custom size cap so the
+/// user-supplied `--max-query-file-size` flag has a recovery path. Error
+/// messages reference the exact configured limit and the CLI flag, not
+/// the internal const, so the operator can act on the failure without
+/// reading the source.
+pub fn validate_query_file_path_with_limit(path: &Path, max_bytes: u64) -> Result<PathBuf> {
     // 1. Size cap, pre-canonicalise. `symlink_metadata` does NOT follow
     //    symlinks, so a deeply-nested or attacker-controlled symlink
     //    chain cannot trick us into expensive traversal before we've
@@ -154,15 +168,10 @@ pub fn validate_query_file_path(path: &Path) -> Result<PathBuf> {
         anyhow::Error::from(GoldDiggerError::Io(e))
             .context(format!("Failed to stat query file {}", path.display()))
     })?;
-    if entry_metadata.is_file() && entry_metadata.len() > MAX_QUERY_FILE_SIZE_BYTES {
+    if entry_metadata.is_file() && entry_metadata.len() > max_bytes {
         return Err(GoldDiggerError::Config(ConfigError::InvalidQueryFile {
             path: path.to_path_buf(),
-            reason: format!(
-                "Query file is {} bytes; maximum allowed is {} bytes (10 MiB). \
-                 Split the query or raise MAX_QUERY_FILE_SIZE_BYTES.",
-                entry_metadata.len(),
-                MAX_QUERY_FILE_SIZE_BYTES
-            ),
+            reason: oversize_query_file_message(entry_metadata.len(), max_bytes),
         })
         .into());
     }
@@ -201,20 +210,25 @@ pub fn validate_query_file_path(path: &Path) -> Result<PathBuf> {
         anyhow::Error::from(GoldDiggerError::Io(e))
             .context(format!("Failed to stat query file {}", canonical.display()))
     })?;
-    if metadata.len() > MAX_QUERY_FILE_SIZE_BYTES {
+    if metadata.len() > max_bytes {
         return Err(GoldDiggerError::Config(ConfigError::InvalidQueryFile {
             path: canonical.clone(),
-            reason: format!(
-                "Query file is {} bytes; maximum allowed is {} bytes (10 MiB). \
-                 Split the query or raise MAX_QUERY_FILE_SIZE_BYTES.",
-                metadata.len(),
-                MAX_QUERY_FILE_SIZE_BYTES
-            ),
+            reason: oversize_query_file_message(metadata.len(), max_bytes),
         })
         .into());
     }
 
     Ok(canonical)
+}
+
+/// Builds the user-facing "oversize query file" error string. Centralised
+/// so the size cap and the CLI flag for raising it stay in one place.
+fn oversize_query_file_message(actual: u64, configured: u64) -> String {
+    format!(
+        "Query file is {} bytes; refused because the limit is {} bytes. \
+         Split the query, or raise the limit with --max-query-file-size <BYTES>.",
+        actual, configured
+    )
 }
 
 /// Resolves the database query from CLI arguments, an external file, or
@@ -235,11 +249,23 @@ pub fn resolve_database_query(cli: &Cli) -> Result<String> {
 /// than the process environment so the resolution is deterministic
 /// against env mutations (todo #068).
 pub fn resolve_database_query_with_env(cli: &Cli, env: &EnvSnapshot) -> Result<String> {
+    let max_bytes = cli.max_query_file_size.unwrap_or(MAX_QUERY_FILE_SIZE_BYTES);
+    resolve_database_query_with_env_and_limit(cli, env, max_bytes)
+}
+
+/// Like [`resolve_database_query_with_env`] but accepts an explicit max
+/// size for the query-file payload so callers can plumb the
+/// `--max-query-file-size` value through.
+pub fn resolve_database_query_with_env_and_limit(
+    cli: &Cli,
+    env: &EnvSnapshot,
+    max_bytes: u64,
+) -> Result<String> {
     if let Some(query) = &cli.query {
         return Ok(query.clone());
     }
     if let Some(query_file) = &cli.query_file {
-        let canonical = validate_query_file_path(query_file)?;
+        let canonical = validate_query_file_path_with_limit(query_file, max_bytes)?;
         return std::fs::read_to_string(&canonical).map_err(|e| {
             // Preserve both the typed I/O classification and the original
             // path context that previous integration tests assert on.
@@ -272,6 +298,174 @@ pub fn resolve_output_file_with_env(cli: &Cli, env: &EnvSnapshot) -> Result<Path
         .as_ref()
         .map(PathBuf::from)
         .ok_or_else(|| GoldDiggerError::Config(ConfigError::MissingOutputFile).into())
+}
+
+/// Fully-resolved query source. Either an inline `--query` / env-supplied
+/// string, or the contents of a `--query-file` that has been canonicalised
+/// and read at config-resolution time so IO failures surface up-front.
+#[derive(Debug, Clone)]
+pub enum ResolvedQuery {
+    /// Query supplied as a string (CLI `--query` or `DATABASE_QUERY`).
+    Inline(String),
+    /// Query loaded from a file. `path` is the canonical path; `contents`
+    /// is the file body, eagerly read so the run path never blocks on IO
+    /// after configuration is settled.
+    File { path: PathBuf, contents: String },
+}
+
+impl ResolvedQuery {
+    /// Returns the query body regardless of whether it came from `--query`
+    /// or `--query-file`.
+    pub fn body(&self) -> &str {
+        match self {
+            Self::Inline(s) => s.as_str(),
+            Self::File { contents, .. } => contents.as_str(),
+        }
+    }
+
+    /// Consumes the query and returns the body string.
+    pub fn into_body(self) -> String {
+        match self {
+            Self::Inline(s) => s,
+            Self::File { contents, .. } => contents,
+        }
+    }
+}
+
+/// Output target after resolving format + path together. The format is
+/// determined exactly once at config time (`--format` > extension > error)
+/// so no downstream code has to re-run the dispatch.
+#[derive(Debug, Clone)]
+pub struct OutputTarget {
+    /// Path the output sink will write to.
+    pub path: PathBuf,
+    /// Resolved output format (CSV, JSON, or TSV).
+    pub format: crate::cli::OutputFormat,
+}
+
+impl OutputTarget {
+    /// Builds an [`OutputTarget`] from the resolved output path and the
+    /// CLI-supplied `--format` flag. Fails when neither the extension nor
+    /// `--format` can determine the output format (typed
+    /// [`ConfigError::UnresolvableFormat`], exit 2).
+    pub fn from_path_and_format(
+        path: PathBuf,
+        format_override: Option<crate::cli::OutputFormat>,
+    ) -> Result<Self> {
+        let format = if let Some(format) = format_override {
+            format
+        } else {
+            crate::cli::OutputFormat::from_extension(&path).ok_or_else(|| {
+                GoldDiggerError::Config(ConfigError::UnresolvableFormat(format!(
+                    "Cannot infer output format from '{}'. Recognised extensions: .csv, .json, .tsv, .tab, .txt. Pass --format <csv|json|tsv> to select explicitly.",
+                    path.display()
+                )))
+            })?
+        };
+        Ok(Self { path, format })
+    }
+}
+
+/// Fully-resolved, validated configuration for a single `gold_digger` run.
+///
+/// Built once at the binary boundary by [`ResolvedConfig::from_cli`] (or
+/// [`ResolvedConfig::from_cli_with_env`] in tests). All resolution,
+/// validation, and IO that depend only on `(Cli, EnvSnapshot)` happens at
+/// construction time: the query file is read, the output format is
+/// determined, the TLS configuration is materialised. Downstream code
+/// (`run.rs`, `connection.rs`, `output.rs`) consumes a `&ResolvedConfig`
+/// rather than re-walking the parsed `Cli` and re-running validation.
+#[derive(Debug, Clone)]
+pub struct ResolvedConfig {
+    /// Resolved database connection URL (`--db-url` > `DATABASE_URL`).
+    pub database_url: String,
+    /// Resolved query source (inline string or canonical file + contents).
+    pub query: ResolvedQuery,
+    /// Resolved output target (path + format).
+    pub output: OutputTarget,
+    /// Resolved TLS configuration (defaults to platform-validation when
+    /// no TLS flags were supplied).
+    pub tls: crate::tls::TlsConfig,
+    /// Whether to exit successfully on empty result sets.
+    pub allow_empty: bool,
+    /// Whether to pretty-print JSON output.
+    pub pretty: bool,
+    /// Whether to overwrite an existing output file.
+    pub force: bool,
+    /// Verbosity counter from `-v` (0..).
+    pub verbose: u8,
+    /// Whether `--quiet` was supplied.
+    pub quiet: bool,
+}
+
+impl ResolvedConfig {
+    /// Builds a fully-validated [`ResolvedConfig`] from parsed CLI args
+    /// using the live process environment. Convenience wrapper around
+    /// [`Self::from_cli_with_env`] that snapshots
+    /// [`EnvSnapshot::from_process_env`] internally.
+    pub fn from_cli(cli: &Cli) -> Result<Self> {
+        Self::from_cli_with_env(cli, &EnvSnapshot::from_process_env())
+    }
+
+    /// Builds a fully-validated [`ResolvedConfig`] from parsed CLI args
+    /// and an explicit environment snapshot.
+    ///
+    /// Calls every resolver, validates each step, parses the query file,
+    /// determines the output format, and materialises the TLS
+    /// configuration. Returns a typed [`GoldDiggerError`] on any failure
+    /// so the exit-code classifier can route to the correct exit code
+    /// without inspecting message text.
+    pub fn from_cli_with_env(cli: &Cli, env: &EnvSnapshot) -> Result<Self> {
+        let database_url = resolve_database_url_with_env(cli, env)?;
+
+        let max_query_file_size = cli.max_query_file_size.unwrap_or(MAX_QUERY_FILE_SIZE_BYTES);
+        let query = resolve_query_source(cli, env, max_query_file_size)?;
+
+        let output_path = resolve_output_file_with_env(cli, env)?;
+        let output = OutputTarget::from_path_and_format(output_path, cli.format)?;
+
+        let tls = cli
+            .tls_options
+            .to_tls_config()
+            .map_err(|e| anyhow::Error::from(e).context("TLS configuration error"))?;
+
+        Ok(Self {
+            database_url,
+            query,
+            output,
+            tls,
+            allow_empty: cli.allow_empty,
+            pretty: cli.pretty,
+            force: cli.force,
+            verbose: cli.verbose,
+            quiet: cli.quiet,
+        })
+    }
+}
+
+/// Builds a [`ResolvedQuery`] from CLI args + env snapshot, with the
+/// `--max-query-file-size` cap honoured for `--query-file` reads.
+fn resolve_query_source(cli: &Cli, env: &EnvSnapshot, max_bytes: u64) -> Result<ResolvedQuery> {
+    if let Some(query) = &cli.query {
+        return Ok(ResolvedQuery::Inline(query.clone()));
+    }
+    if let Some(query_file) = &cli.query_file {
+        let canonical = validate_query_file_path_with_limit(query_file, max_bytes)?;
+        let contents = std::fs::read_to_string(&canonical).map_err(|e| {
+            anyhow::Error::from(GoldDiggerError::Io(e)).context(format!(
+                "Failed to read query file {}",
+                query_file.display()
+            ))
+        })?;
+        return Ok(ResolvedQuery::File {
+            path: canonical,
+            contents,
+        });
+    }
+    if let Some(query) = &env.database_query {
+        return Ok(ResolvedQuery::Inline(query.clone()));
+    }
+    Err(GoldDiggerError::Config(ConfigError::MissingQuery).into())
 }
 
 /// Builds the configuration-dump JSON value for `--dump-config`.

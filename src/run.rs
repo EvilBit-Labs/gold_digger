@@ -1,9 +1,11 @@
 //! Query-execution pipeline.
 //!
-//! Ties together config resolution, connection establishment, query
-//! execution, and output dispatch. The binary entry point (`src/main.rs`)
-//! handles CLI parsing, logging init, and subcommand / `--dump-config`
-//! dispatch; once those are out of the way it delegates to [`run`].
+//! Ties together connection establishment, query execution, and output
+//! dispatch. Configuration resolution happens before [`run`] is called,
+//! at the binary boundary in `src/main.rs`, where a [`ResolvedConfig`]
+//! is built once and threaded through. The binary entry point handles
+//! CLI parsing, logging init, and subcommand / `--dump-config` dispatch;
+//! once those are out of the way it delegates to [`run`].
 //!
 //! All failures are routed through [`crate::exit::exit_with_error`] so the
 //! binary always exits with a stable, documented code.
@@ -21,11 +23,7 @@
 
 use mysql::prelude::Queryable;
 
-use crate::cli::Cli;
-use crate::config::{
-    EnvSnapshot, resolve_database_query_with_env, resolve_database_url_with_env,
-    resolve_output_file_with_env,
-};
+use crate::config::ResolvedConfig;
 use crate::connection::create_database_connection;
 use crate::logging::make_progress;
 use crate::mysql_errors::{
@@ -33,8 +31,41 @@ use crate::mysql_errors::{
     ER_ACCESS_DENIED_ERROR, ER_BAD_DB_ERROR, ER_BAD_FIELD_ERROR, ER_COLUMNACCESS_DENIED_ERROR,
     ER_DBACCESS_DENIED_ERROR, ER_NO_SUCH_TABLE, ER_PARSE_ERROR, ER_TABLEACCESS_DENIED_ERROR,
 };
-use crate::output::build_sink;
+use crate::output::build_sink_for_format;
 use crate::utils::redact_sql_error;
+
+/// RAII wrapper for an `indicatif::ProgressBar` that calls
+/// `finish_and_clear` exactly once when the value goes out of scope.
+///
+/// Replaces a long string of manual `progress.finish_and_clear()` calls
+/// at every error branch in [`run`] / [`stream_query`]. With this guard
+/// in scope, every return path — `Ok`, `Err`, `?` unwind — automatically
+/// clears the progress bar via `Drop` on stack unwinding. This is
+/// possible because Wave 1 reworked `run()` to return `Result<...>`
+/// rather than calling `process::exit` directly: `process::exit` skips
+/// `Drop` impls, so the manual cleanup was the only correct option
+/// before the migration.
+struct ProgressGuard {
+    bar: indicatif::ProgressBar,
+}
+
+impl ProgressGuard {
+    fn new(bar: indicatif::ProgressBar) -> Self {
+        Self { bar }
+    }
+
+    /// Returns a borrow of the underlying progress bar so callers can
+    /// update its message (`set_message`) without owning it.
+    fn bar(&self) -> &indicatif::ProgressBar {
+        &self.bar
+    }
+}
+
+impl Drop for ProgressGuard {
+    fn drop(&mut self) {
+        self.bar.finish_and_clear();
+    }
+}
 
 /// Outcome of the main query pipeline. `RowsWritten` corresponds to a
 /// stream that produced one or more rows; `EmptyResult` corresponds to a
@@ -54,8 +85,8 @@ pub enum RunOutcome {
     EmptyResult,
 }
 
-/// Executes the main query pipeline: resolve config → create pool → run
-/// streaming query → feed sink.
+/// Executes the main query pipeline against an already-resolved
+/// configuration: create pool → run streaming query → feed sink.
 ///
 /// Returns `Result<RunOutcome, anyhow::Error>` rather than calling
 /// `process::exit` directly so the binary entry point in `src/main.rs`
@@ -64,35 +95,25 @@ pub enum RunOutcome {
 /// `Drop` impl removes the `<output>.tmp` sibling file on error — calling
 /// `process::exit` mid-pipeline (the previous behaviour) skipped that
 /// cleanup and orphaned the `.tmp` file (CRITICAL #3).
-pub fn run(cli: &Cli) -> anyhow::Result<RunOutcome> {
-    // Read every env-var fallback exactly once into an immutable
-    // snapshot (todo #068, S15). Downstream resolvers consume the
-    // snapshot rather than calling `std::env::var` again, so a hostile
-    // parent process that mutates the environment between resolution
-    // steps cannot influence the values gold_digger uses.
-    let env_snapshot = EnvSnapshot::from_process_env();
-
-    // Resolve configuration with precedence: CLI flags > snapshot env > error.
-    let database_url = resolve_database_url_with_env(cli, &env_snapshot)?;
-    let database_query = resolve_database_query_with_env(cli, &env_snapshot)?;
-    let output_file = resolve_output_file_with_env(cli, &env_snapshot)?;
-
+pub fn run(config: &ResolvedConfig) -> anyhow::Result<RunOutcome> {
     // Connect phase: spinner (indeterminate duration). Hidden when
-    // `--quiet` or stderr is not a TTY (todo #162).
-    let connect_progress = make_progress(cli.quiet, None, "Connecting to database...");
+    // `--quiet` or stderr is not a TTY (todo #162). The RAII
+    // `ProgressGuard` clears the spinner on EVERY return path (Ok, Err,
+    // ?) via Drop on stack unwinding — the manual `finish_and_clear`
+    // calls at each error branch are no longer needed.
+    let connect_progress = ProgressGuard::new(make_progress(
+        config.quiet,
+        None,
+        "Connecting to database...",
+    ));
     tracing::info!("Connecting to database...");
 
     // Connection-pool construction failures already carry typed errors
     // (`anyhow::Error::from(TlsError).context(...)` from `connection.rs`
     // after CRITICAL #5); propagate verbatim so the downcast classifier
     // in `crate::exit::map_error_to_exit_code` can read the variant.
-    let pool = match create_database_connection(&database_url, cli) {
-        Ok(pool) => pool,
-        Err(e) => {
-            connect_progress.finish_and_clear();
-            return Err(e);
-        }
-    };
+    let pool = create_database_connection(&config.database_url, &config.tls, config.verbose)?;
+
     // HIGH #10: route `pool.get_conn()` failures through the same
     // typed classifier `Pool::new` uses (`classify_mysql_pool_error`).
     // The previous path wrapped the raw `mysql::Error` into a
@@ -104,17 +125,13 @@ pub fn run(cli: &Cli) -> anyhow::Result<RunOutcome> {
     // bakes in for every variant. The classifier internally routes
     // through `redact_sql_error`, so the user-facing message can never
     // embed an un-scrubbed `mysql::Error::to_string()`.
-    let mut conn = match pool.get_conn() {
-        Ok(conn) => conn,
-        Err(e) => {
-            connect_progress.finish_and_clear();
-            let typed = crate::tls::pool::classify_mysql_pool_error(e);
-            return Err(anyhow::Error::from(typed).context("Database connection failed"));
-        }
-    };
-    connect_progress.finish_and_clear();
+    let mut conn = pool.get_conn().map_err(|e| {
+        let typed = crate::tls::pool::classify_mysql_pool_error(e);
+        anyhow::Error::from(typed).context("Database connection failed")
+    })?;
+    drop(connect_progress);
 
-    stream_query(cli, &mut conn, &database_query, output_file.as_path())
+    stream_query(config, &mut conn)
 }
 
 /// Streams the query result into the appropriate sink.
@@ -127,25 +144,23 @@ pub fn run(cli: &Cli) -> anyhow::Result<RunOutcome> {
 ///
 /// All errors return via `Err(...)?` so the sink's `Drop` impl runs
 /// during stack unwinding and cleans up the `<output>.tmp` sibling
-/// file (CRITICAL #3).
+/// file (CRITICAL #3). The [`ProgressGuard`] in scope clears the
+/// spinner on every exit path the same way.
 fn stream_query(
-    cli: &Cli,
+    config: &ResolvedConfig,
     conn: &mut mysql::PooledConn,
-    database_query: &str,
-    output_file: &std::path::Path,
 ) -> anyhow::Result<RunOutcome> {
-    // Query phase: spinner (indeterminate duration).
-    let progress = make_progress(cli.quiet, None, "Executing query...");
+    let database_query = config.query.body();
+    let output_file = config.output.path.as_path();
+
+    // Query phase: spinner (indeterminate duration). RAII-managed.
+    let progress = ProgressGuard::new(make_progress(config.quiet, None, "Executing query..."));
 
     // `query_iter` returns a streaming QueryResult that yields
     // `Result<Row, mysql::Error>` as rows arrive — no full materialisation.
-    let mut result = match conn.query_iter(database_query) {
-        Ok(r) => r,
-        Err(e) => {
-            progress.finish_and_clear();
-            return Err(map_query_error(&e));
-        }
-    };
+    let mut result = conn
+        .query_iter(database_query)
+        .map_err(|e| map_query_error(&e))?;
 
     // Columns are known up-front from the first result-set metadata. We
     // snapshot them once, *before* pulling any rows, so `on_headers` can
@@ -160,47 +175,37 @@ fn stream_query(
     // Build the sink lazily: only after we know the query parsed and we
     // have column metadata. This preserves the previous behaviour where
     // the output file was never created on a bad query.
-    let mut sink = match build_sink(output_file, cli) {
-        Ok(s) => s,
-        Err(e) => {
-            progress.finish_and_clear();
-            return Err(e.context("Output sink creation failed"));
-        }
-    };
+    let mut sink = build_sink_for_format(
+        output_file,
+        config.output.format,
+        config.force,
+        config.pretty,
+    )
+    .map_err(|e| e.context("Output sink creation failed"))?;
 
-    if let Err(e) = sink.on_headers(&columns) {
-        progress.finish_and_clear();
-        // Sink dropped on `?`-unwind -> .tmp removed.
-        return Err(e.context("Failed to write output headers"));
-    }
+    sink.on_headers(&columns)
+        .map_err(|e| e.context("Failed to write output headers"))?;
 
     let mut rows_seen: u64 = 0;
-    progress.set_message("Streaming rows...");
+    progress.bar().set_message("Streaming rows...");
 
     for row_result in result.by_ref() {
-        let row = match row_result {
-            Ok(row) => row,
-            Err(e) => {
-                progress.finish_and_clear();
-                // Any mysql::Error from row fetch flows through the same
-                // credential-redacting classifier as the initial query
-                // error so streaming failures don't leak creds.
-                // Sink dropped on `?`-unwind -> .tmp removed.
-                return Err(map_query_error(&e));
-            }
-        };
+        // Any mysql::Error from row fetch flows through the same
+        // credential-redacting classifier as the initial query
+        // error so streaming failures don't leak creds.
+        // Sink dropped on `?`-unwind -> .tmp removed.
+        let row = row_result.map_err(|e| map_query_error(&e))?;
 
-        if let Err(e) = sink.on_row(&row) {
-            progress.finish_and_clear();
-            // Sink dropped on `?`-unwind -> .tmp removed.
-            return Err(e.context("Row processing failed"));
-        }
+        sink.on_row(&row)
+            .map_err(|e| e.context("Row processing failed"))?;
 
         rows_seen = rows_seen.saturating_add(1);
         // Update the spinner message every 1000 rows to avoid redraw
         // pressure on huge result sets while still giving users feedback.
         if rows_seen.is_multiple_of(1000) {
-            progress.set_message(format!("Streaming rows... ({} so far)", rows_seen));
+            progress
+                .bar()
+                .set_message(format!("Streaming rows... ({} so far)", rows_seen));
         }
     }
 
@@ -214,14 +219,12 @@ fn stream_query(
         // `--allow-empty` we finalize (commit the empty file); otherwise
         // we drop the sink (the tmp gets cleaned up) and signal
         // `EmptyResult` so the binary exits with 1.
-        progress.finish_and_clear();
-        return handle_empty_result(cli, sink);
+        return handle_empty_result(config, sink);
     }
 
     sink.finalize()
         .map_err(|e| e.context("Output finalisation failed"))?;
 
-    progress.finish_and_clear();
     tracing::info!(
         rows = rows_seen,
         file = %output_file.display(),
@@ -238,10 +241,10 @@ fn stream_query(
 /// (which cleans up its `.tmp`) and returns `EmptyResult` so the binary
 /// can exit with [`crate::exit::EXIT_NO_ROWS`].
 fn handle_empty_result(
-    cli: &Cli,
+    config: &ResolvedConfig,
     sink: Box<dyn crate::sink::RowSink>,
 ) -> anyhow::Result<RunOutcome> {
-    if cli.allow_empty {
+    if config.allow_empty {
         tracing::info!("No records found in database, but --allow-empty is set.");
         sink.finalize()
             .map_err(|e| e.context("Output writing failed"))?;

@@ -2,4 +2,4 @@
 source: tests/tls_cli_integration.rs
 expression: normalized_stderr
 ---
-ERROR TLS configuration error: Invalid CA certificate format in /tmp/test_cert.pem: No valid certificates found in file. Ensure the file contains valid PEM certificates
+ERROR Configuration error: TLS configuration error: Invalid CA certificate format in /tmp/test_cert.pem: No valid certificates found in file. Ensure the file contains valid PEM certificates

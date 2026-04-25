@@ -2,4 +2,4 @@
 source: tests/tls_cli_integration.rs
 expression: stderr
 ---
-ERROR TLS configuration error: CA certificate file not found: /nonexistent/cert.pem. Ensure the file exists and is readable
+ERROR Configuration error: TLS configuration error: CA certificate file not found: /nonexistent/cert.pem. Ensure the file exists and is readable

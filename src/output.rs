@@ -52,10 +52,27 @@ pub fn resolve_output_format(output_file: &Path, cli: &Cli) -> Result<OutputForm
 /// successful completion, and the sink's `Drop` cleans up on failure.
 pub fn build_sink(output_file: &Path, cli: &Cli) -> Result<Box<dyn RowSink>> {
     let format = resolve_output_format(output_file, cli)?;
+    build_sink_for_format(output_file, format, cli.force, cli.pretty)
+}
+
+/// Builds a format-specific [`RowSink`] for streaming query results
+/// using already-resolved format / force / pretty values.
+///
+/// Preferred over [`build_sink`] on code paths that hold a
+/// [`crate::config::ResolvedConfig`] — the format has already been
+/// determined at resolution time, so re-deriving it would re-run the
+/// extension dispatch and reintroduce the chance of a "silent format"
+/// regression.
+pub fn build_sink_for_format(
+    output_file: &Path,
+    format: OutputFormat,
+    force: bool,
+    pretty: bool,
+) -> Result<Box<dyn RowSink>> {
     match format {
-        OutputFormat::Csv => csv_sink(output_file, cli.force),
-        OutputFormat::Json => json_sink(output_file, cli.force, cli.pretty),
-        OutputFormat::Tsv => tsv_sink(output_file, cli.force),
+        OutputFormat::Csv => csv_sink(output_file, force),
+        OutputFormat::Json => json_sink(output_file, force, pretty),
+        OutputFormat::Tsv => tsv_sink(output_file, force),
     }
 }
 

@@ -518,6 +518,68 @@ mod tests {
         assert!(!redacted.contains("hunter2"), "secret leaked: {redacted:?}");
     }
 
+    /// Corpus-based assertion that EVERY pattern in
+    /// [`REDACTION_PATTERN_DEFS`] actually fires on a representative
+    /// secret-bearing input. The pre-existing
+    /// [`redaction_pattern_count_matches_expected`] test only catches
+    /// the silent-drop case (a regex that fails to compile); this test
+    /// catches the bypass case (a regex that compiles but doesn't
+    /// match its target — e.g. a future maintainer mistypes the regex
+    /// in a way that still parses).
+    ///
+    /// Each case pairs a representative input with a label naming the
+    /// pattern it exercises. Adding a new pattern to
+    /// [`REDACTION_PATTERN_DEFS`] should be paired with adding a new
+    /// case here; otherwise the redaction surface grows without test
+    /// coverage and a regression in the new pattern goes undetected.
+    #[test]
+    fn each_pattern_actually_redacts_its_target() {
+        let cases: &[(&str, &str)] = &[
+            ("password=hunter2", "password"),
+            ("PASSWORD=hunter2", "password (case)"),
+            ("passwd=hunter2", "passwd"),
+            ("pwd=hunter2", "pwd"),
+            ("pass=hunter2", "pass"),
+            ("token=abc123", "token"),
+            ("api_key=k1", "api_key"),
+            ("api-key=k2", "api-key"),
+            ("secret=s1", "secret"),
+            ("identified by 'pw'", "identified by"),
+            (
+                "identified with mysql_native_password by 'pw'",
+                "identified with ... by",
+            ),
+            ("kennwort=pw", "kennwort"),
+            ("mot_de_passe=pw", "mot_de_passe"),
+            ("contrasena=pw", "contrasena"),
+            ("set password = 'pw'", "set password"),
+            ("set password for u@h = 'pw'", "set password for"),
+        ];
+        for (input, label) in cases {
+            let redacted = redact_sql_error(input);
+            assert!(
+                redacted.contains(REDACTION_PLACEHOLDER),
+                "pattern `{}` should have redacted: `{}` -> `{}`",
+                label,
+                input,
+                redacted
+            );
+        }
+
+        // URL userinfo case: the userinfo regex emits its own
+        // `://***REDACTED***:***REDACTED***@` substring rather than the
+        // bare placeholder, so check for the URL-shaped marker
+        // explicitly.
+        let url_input = "mysql://u:p@h/d";
+        let url_redacted = redact_sql_error(url_input);
+        assert!(
+            url_redacted.contains("://***REDACTED***:***REDACTED***@"),
+            "URL userinfo pattern should have redacted: `{}` -> `{}`",
+            url_input,
+            url_redacted,
+        );
+    }
+
     /// MEDIUM idempotence regression: `redact_url` rewrites a URL's
     /// userinfo to use [`REDACTION_PLACEHOLDER`]; `redact_sql_error`
     /// must then leave that output untouched (or, equivalently, produce

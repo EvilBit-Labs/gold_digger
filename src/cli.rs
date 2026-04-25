@@ -112,6 +112,17 @@ pub struct Cli {
     #[arg(long)]
     pub dump_config: bool,
 
+    /// Maximum accepted size for `--query-file`, in bytes.
+    ///
+    /// Caps the size of the file read for `--query-file` to bound DoS
+    /// risk from an attacker pointing the flag at a huge file on a
+    /// shared host (todo #023). Defaults to 10 MiB. Raise only if you
+    /// have a legitimate hand-written query that exceeds the default;
+    /// SQL much larger than this is almost always machine-generated and
+    /// should be loaded from a different surface.
+    #[arg(long, value_name = "BYTES")]
+    pub max_query_file_size: Option<u64>,
+
     /// TLS configuration options
     #[command(flatten)]
     pub tls_options: TlsOptions,

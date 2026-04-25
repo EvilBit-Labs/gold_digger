@@ -56,6 +56,11 @@ Options:
           
           Output uses a best-effort credential redactor (URL passwords, `password=`, `token=`, `api_key=`, `identified by`). It does NOT catch arbitrary base64/hex/JWT secrets or non-English secret labels. Review the JSON before sharing in bug reports or chat.
 
+      --max-query-file-size <BYTES>
+          Maximum accepted size for `--query-file`, in bytes.
+          
+          Caps the size of the file read for `--query-file` to bound DoS risk from an attacker pointing the flag at a huge file on a shared host (todo #023). Defaults to 10 MiB. Raise only if you have a legitimate hand-written query that exceeds the default; SQL much larger than this is almost always machine-generated and should be loaded from a different surface.
+
       --tls-ca-file <TLS_CA_FILE>
           Path to CA certificate file for trust anchor pinning.
           

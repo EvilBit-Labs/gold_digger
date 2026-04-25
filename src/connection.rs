@@ -1,15 +1,17 @@
 //! Database connection pool construction with rustls-only TLS.
 //!
 //! The `TlsOptions` → `TlsConfig` adapter lives in [`crate::cli`] so the
-//! `tls` module has zero dependency on CLI types.
+//! `tls` module has zero dependency on CLI types. This module accepts an
+//! already-resolved `database_url` and `TlsConfig` so it depends only on
+//! infrastructure primitives — no `Cli`-typed input survives past the
+//! `ResolvedConfig` boundary.
 
 use anyhow::Result;
 use mysql::Pool;
 
-use crate::cli::Cli;
-use crate::tls::create_tls_connection;
+use crate::tls::{TlsConfig, create_tls_connection};
 
-/// Creates a database connection pool with rustls-only TLS configuration from CLI.
+/// Creates a database connection pool with rustls-only TLS configuration.
 ///
 /// Installs the rustls default crypto provider on first call (todo #169).
 /// Previously this happened unconditionally at the top of `main()`, which
@@ -17,35 +19,41 @@ use crate::tls::create_tls_connection;
 /// `--help`, `--version`, `completion`, and `--dump-config`. Moving it
 /// here means only paths that actually open a database connection pay
 /// that cost.
-pub fn create_database_connection(database_url: &str, cli: &Cli) -> Result<Pool> {
+///
+/// # Arguments
+///
+/// * `database_url` — already-resolved MySQL connection URL (typically
+///   sourced from [`crate::config::ResolvedConfig::database_url`]).
+/// * `tls_config` — already-resolved TLS configuration (typically
+///   sourced from [`crate::config::ResolvedConfig::tls`]). The default
+///   value ([`TlsConfig::Platform`]) is treated as "no special TLS
+///   handling": platform certificate validation with rustls.
+/// * `verbose` — verbose-flag count, used to gate the TLS info log.
+pub fn create_database_connection(
+    database_url: &str,
+    tls_config: &TlsConfig,
+    verbose: u8,
+) -> Result<Pool> {
     // Lazy crypto-provider install. `init_crypto_provider` is idempotent
     // (guarded by an `OnceLock`) so repeated calls within a process are
     // safe — only the first does any work.
     crate::init_crypto_provider();
 
-    // Create TLS configuration from CLI options. CRITICAL #5: build the
-    // anyhow error from the typed `TlsError` so the downcast classifier
-    // in `crate::exit::map_error_to_exit_code` can read the variant.
-    // Stringifying the typed error (`anyhow!("{}", tls_error)`) flattens
-    // it into a plain message and forces the substring fallback.
-    let tls_config = if cli.tls_options.tls_ca_file.is_some()
-        || cli.tls_options.insecure_skip_hostname_verify
-        || cli.tls_options.allow_invalid_certificate
-    {
-        let config = cli
-            .tls_options
-            .to_tls_config()
-            .map_err(|e| anyhow::Error::from(e).context("TLS configuration error"))?;
-
-        // Display security warnings for insecure modes (includes the
-        // mandatory DANGER delay for AcceptInvalid — see #022).
-        config.display_security_warnings();
-
-        Some(config)
-    } else {
-        // Use default TLS behavior when no explicit TLS flags are provided
-        // This will use platform certificate store with rustls
+    // Decide whether the TLS configuration needs to be passed through to
+    // `create_tls_connection`. The default `Platform` value matches the
+    // historical "no flags supplied" behaviour where platform
+    // certificate validation kicks in via rustls; we still hand `None`
+    // to the underlying pool builder for that case so the existing
+    // OptsBuilder defaults apply.
+    let tls_config_for_pool: Option<TlsConfig> = if matches!(tls_config, TlsConfig::Platform) {
         None
+    } else {
+        // Display security warnings for insecure modes (includes the
+        // mandatory DANGER delay for AcceptInvalid — see #022). Cloning
+        // is cheap (the validated `TlsConfig` is a small enum) and lets
+        // the pool builder consume it by value.
+        tls_config.display_security_warnings();
+        Some(tls_config.clone())
     };
 
     // Use rustls-only TLS connection creation with enhanced error handling.
@@ -59,7 +67,7 @@ pub fn create_database_connection(database_url: &str, cli: &Cli) -> Result<Pool>
     // survives chain-walking. Suggestion text (where applicable) is
     // emitted as a separate `tracing::error!` BEFORE returning so the
     // user-actionable hint still surfaces without burying the typed value.
-    create_tls_connection(database_url, tls_config, cli.verbose > 0).map_err(|tls_error| {
+    create_tls_connection(database_url, tls_config_for_pool, verbose > 0).map_err(|tls_error| {
         // Emit suggestion-augmented branches as a separate log line; the
         // returned anyhow value carries the typed `TlsError` for the
         // downcast classifier.
@@ -105,49 +113,22 @@ pub fn create_database_connection(database_url: &str, cli: &Cli) -> Result<Pool>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clap::Parser;
-
-    /// Creates a CLI instance with common test arguments
-    fn build_test_cli() -> Cli {
-        Cli::parse_from([
-            "gold_digger",
-            "--db-url",
-            "mysql://test",
-            "--query",
-            "SELECT 1",
-            "--output",
-            "test.json",
-        ])
-    }
-
-    /// Creates a CLI instance with TLS options for testing
-    fn build_test_cli_with_tls() -> Cli {
-        Cli::parse_from([
-            "gold_digger",
-            "--db-url",
-            "mysql://test",
-            "--query",
-            "SELECT 1",
-            "--output",
-            "test.json",
-            "--insecure-skip-hostname-verify",
-        ])
-    }
+    use crate::tls::TlsConfig;
 
     #[test]
     fn test_create_database_connection_invalid_url() {
         // Test with invalid URL to ensure error handling works
-        let cli = build_test_cli();
-        let result = create_database_connection("invalid://url", &cli);
+        let tls = TlsConfig::Platform;
+        let result = create_database_connection("invalid://url", &tls, 0);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_create_database_connection() {
         // Test that the function exists and handles errors properly
-        let cli = build_test_cli();
+        let tls = TlsConfig::Platform;
         let result =
-            create_database_connection("mysql://invalid:invalid@nonexistent:3306/test", &cli);
+            create_database_connection("mysql://invalid:invalid@nonexistent:3306/test", &tls, 0);
         // Should fail due to invalid connection details, but not panic
         assert!(result.is_err());
     }
@@ -155,9 +136,9 @@ mod tests {
     #[test]
     fn test_create_database_connection_with_tls_options() {
         // Test TLS configuration path
-        let cli = build_test_cli_with_tls();
+        let tls = TlsConfig::SkipHostnameVerification;
         let result =
-            create_database_connection("mysql://invalid:invalid@nonexistent:3306/test", &cli);
+            create_database_connection("mysql://invalid:invalid@nonexistent:3306/test", &tls, 0);
         // Should fail due to invalid connection details, but TLS config should be processed
         assert!(result.is_err());
     }

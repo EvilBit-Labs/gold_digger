@@ -34,10 +34,15 @@ fn cli_command() -> Command {
     cmd
 }
 
-/// Fixture for creating a temporary output file
+/// Fixture for creating a temporary output file. Uses a `.csv` suffix
+/// so the format-resolution step in `ResolvedConfig::from_cli` can
+/// determine the output format from the extension; otherwise the
+/// pipeline now fails fast with a config error (exit 2) before the
+/// scenarios under test ever reach the connection / format-override
+/// path they're really exercising.
 #[fixture]
 fn temp_output_file() -> NamedTempFile {
-    NamedTempFile::new().unwrap()
+    tempfile::Builder::new().suffix(".csv").tempfile().unwrap()
 }
 
 /// Fixture for setting up standard environment variables

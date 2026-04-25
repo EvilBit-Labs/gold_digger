@@ -10,7 +10,7 @@ use clap::Parser;
 
 use gold_digger::cli::{Cli, Commands};
 use gold_digger::completion::generate_completion;
-use gold_digger::config::{EnvSnapshot, build_configuration_dump};
+use gold_digger::config::{EnvSnapshot, ResolvedConfig, build_configuration_dump};
 use gold_digger::exit::{exit_no_rows, exit_success, exit_with_error};
 use gold_digger::logging::init_tracing;
 use gold_digger::run::{RunOutcome, run};
@@ -61,6 +61,13 @@ fn main() {
     // Handle --dump-config flag. The `build_configuration_dump` helper
     // returns the JSON value so it can be unit-tested without spawning a
     // subprocess (todo #062). main.rs is responsible for the actual I/O.
+    //
+    // `--dump-config` deliberately does NOT route through
+    // `ResolvedConfig::from_cli` — operators reach for it precisely
+    // when their config is incomplete and they need to see what
+    // gold_digger sees, so requiring full resolution would defeat the
+    // diagnostic. Sensitive fields (db_url, query) are still scrubbed
+    // by the dump itself; missing fields surface as JSON `null`.
     if cli.dump_config {
         let snapshot = EnvSnapshot::from_process_env();
         let value = build_configuration_dump(&cli, &snapshot);
@@ -71,6 +78,15 @@ fn main() {
         return;
     }
 
+    // Resolve configuration once, at the binary boundary, into a
+    // typed `ResolvedConfig`. Every downstream stage (run, sink build,
+    // pool construction) consumes the resolved value rather than
+    // re-walking the parsed `Cli` and re-running validation.
+    let resolved = match ResolvedConfig::from_cli(&cli) {
+        Ok(cfg) => cfg,
+        Err(e) => exit_with_error(e, Some("Configuration error")),
+    };
+
     // Hand off to the query-execution pipeline. `run` returns a Result
     // (post-CRITICAL #3) rather than calling `process::exit` itself —
     // doing the exit here means the streaming sink's `Drop` impl runs on
@@ -78,10 +94,10 @@ fn main() {
     // the process actually terminates. The single point of `process::exit`
     // is also the single source of error logging via
     // `tracing::error!` inside `exit_with_error`.
-    match run(&cli) {
+    match run(&resolved) {
         Ok(RunOutcome::RowsWritten { .. }) => exit_success(None),
         Ok(RunOutcome::EmptyResult) => {
-            if cli.quiet {
+            if resolved.quiet {
                 exit_no_rows(None);
             } else {
                 exit_no_rows(Some("No records found in database"));
