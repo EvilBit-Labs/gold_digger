@@ -9,6 +9,13 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
+/// Clap mutually-exclusive group ID for the three TLS validation-mode
+/// flags (`--tls-ca-file`, `--insecure-skip-hostname-verify`,
+/// `--allow-invalid-certificate`). Centralised here so a future rename
+/// is a single edit, and so the literal isn't repeated in three
+/// `#[arg(group = ...)]` attributes (todo #121).
+const TLS_MODE_GROUP_ID: &str = "tls_mode";
+
 /// MySQL/MariaDB query tool with structured output
 #[derive(Parser, Debug)]
 #[command(name = "gold_digger")]
@@ -148,7 +155,7 @@ pub struct TlsOptions {
     /// private key lets an attacker present a forged certificate that
     /// this binary will trust. Protect the CA key with the same care as
     /// a production signing key.
-    #[arg(long, group = "tls_mode")]
+    #[arg(long, group = TLS_MODE_GROUP_ID)]
     pub tls_ca_file: Option<PathBuf>,
 
     /// Skip hostname verification (keeps chain and time validation).
@@ -163,7 +170,7 @@ pub struct TlsOptions {
     /// MITM the connection. This flag removes the "certificate must
     /// match this host" binding. Do not enable against
     /// internet-reachable databases.
-    #[arg(long, group = "tls_mode")]
+    #[arg(long, group = TLS_MODE_GROUP_ID)]
     pub insecure_skip_hostname_verify: bool,
 
     /// Disable certificate validation entirely (DANGEROUS — full MITM exposure).
@@ -176,7 +183,7 @@ pub struct TlsOptions {
     /// `--tls-ca-file <path>` for self-signed CAs (full validation
     /// against an explicit anchor) or `--insecure-skip-hostname-verify`
     /// for hostname-only mismatches. See SECURITY.md.
-    #[arg(long, group = "tls_mode")]
+    #[arg(long, group = TLS_MODE_GROUP_ID)]
     pub allow_invalid_certificate: bool,
 }
 

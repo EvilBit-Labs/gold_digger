@@ -405,7 +405,7 @@ The integration testing framework is actively under development. Current impleme
 - ✅ **TLS Support**: TLS and non-TLS database variants with certificate management
 - ✅ **Container Management**: Health checks, resource cleanup, and CI compatibility
 - ✅ **Test Data**: Comprehensive schema and seed data for all MySQL data types
-- 🚧 **Advanced Testing**: Data type validation, output format testing, and performance tests are planned
+- ✅ **Advanced Testing**: Data type validation, output format testing, and performance benchmarks (see `tests/` and `benches/` for the full suite)
 
 See the [Integration Testing](docs/src/development/integration-testing.md) and [TLS Variants](docs/src/development/tls-variants.md) documentation for detailed information.
 
