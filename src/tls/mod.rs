@@ -33,7 +33,7 @@ pub mod pool;
 
 // Public re-exports preserve the `gold_digger::tls::*` import paths used by
 // `src/main.rs`, `src/cli.rs`, `src/exit.rs`, and the `tests/` suite.
-pub use config::{TlsConfig, TlsValidationMode, tls_config_from_url};
+pub use config::{TlsConfig, TlsValidationMode};
 pub use error::TlsError;
 pub use pool::{create_tls_connection, redact_url};
 

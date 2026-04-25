@@ -198,14 +198,6 @@ impl TlsConfig {
     }
 }
 
-/// Helper function to create a TLS configuration from URL parameters
-/// Note: This is a placeholder for future URL-based TLS configuration
-pub fn tls_config_from_url(_url: &str) -> Result<Option<TlsConfig>> {
-    // The mysql crate doesn't support URL-based SSL configuration
-    // This function is provided for future extensibility
-    Ok(None)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -413,14 +405,6 @@ mod tests {
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("--tls-ca-file"));
         assert!(error_msg.contains("--insecure-skip-hostname-verify"));
-    }
-
-    #[test]
-    fn test_tls_config_from_url_placeholder() {
-        // This tests the placeholder function
-        let result = tls_config_from_url("mysql://user:pass@localhost:3306/db?ssl-mode=required");
-        assert!(result.is_ok());
-        assert!(result.unwrap().is_none());
     }
 
     #[test]
