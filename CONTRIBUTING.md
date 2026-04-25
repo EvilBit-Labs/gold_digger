@@ -189,6 +189,7 @@ Use `just` to run common development tasks:
 just fmt-check      # Check code formatting
 just lint           # Run clippy with zero warnings tolerance
 just test-nextest   # Run tests with nextest
+just insta-review   # Regenerate insta snapshots in-place (INSTA_UPDATE=always cargo test)
 just coverage-llvm  # Generate coverage report
 just cover          # Alias for coverage-llvm (CI naming consistency)
 just ci-check       # Run all CI checks locally
@@ -217,6 +218,16 @@ just validate-deps  # Validate TLS dependency tree
 ```
 
 See `just help` for a complete list of available commands, including GitHub Actions testing with `act`.
+
+##### Updating insta Snapshots
+
+Snapshot tests in `tests/snapshots/` (CLI help output, format goldens) use the [`insta`](https://insta.rs) crate. After an intentional change to user-facing output:
+
+1. Run `just insta-review` -- this is `INSTA_UPDATE=always cargo test`. Do **not** run `cargo insta review --accept`; the harness here uses `INSTA_UPDATE=always`, not `cargo insta review`.
+2. Inspect the regenerated `*.snap` files via `git diff tests/snapshots/`.
+3. Stage the updated snapshots alongside the source change in the same commit.
+
+Stale `*.snap.new` files are gitignored; deleting them is safe.
 
 ##### Distribution Testing
 

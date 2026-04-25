@@ -2,9 +2,11 @@
 
 Links to detailed API documentation and developer resources.
 
+> Canonical API docs (latest published release): <https://docs.rs/gold_digger>
+
 ## Rustdoc Documentation
 
-The complete API documentation is available in the [rustdoc section](../api/gold_digger/index.html) of this site.
+The complete API documentation is available in the [rustdoc section](../api/gold_digger/index.html) of this site, and on <https://docs.rs/gold_digger> for the most recent release tag.
 
 ## Public API Overview
 

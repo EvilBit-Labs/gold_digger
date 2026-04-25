@@ -160,6 +160,14 @@ test:
 test-no-docker:
     @{{ mise_exec }} cargo nextest run
 
+# Regenerate insta snapshots in-place. Use after intentional UX/output
+# changes (e.g. --help text). Reviews via `git diff` on tests/snapshots/.
+# DO NOT run `cargo insta review --accept` -- the harness uses
+# INSTA_UPDATE=always; see CONTRIBUTING.md (todo #160).
+[group('test')]
+insta-review:
+    @INSTA_UPDATE=always {{ mise_exec }} cargo test
+
 # Run integration tests (requires Docker)
 [group('test')]
 test-integration:

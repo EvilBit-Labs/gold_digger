@@ -309,9 +309,9 @@ The project has detailed requirements in `project_spec/requirements.md`. The maj
 
 ### Documentation Standards
 
-All public functions require comprehensive doc comments:
+All public functions require comprehensive doc comments. The example below uses indented inner code-block markers (no inner backticks) so the outer fence stays a regular triple-backtick `rust` block that renders consistently across Markdown viewers and `mdformat` (todo #141):
 
-````rust
+```rust
 /// Converts MySQL rows to string vectors for output formatting.
 ///
 /// # Arguments
@@ -321,14 +321,13 @@ All public functions require comprehensive doc comments:
 /// * `Vec<Vec<String>>` - Converted string data ready for format modules
 ///
 /// # Example
-/// ```
-/// let string_rows = rows_to_strings(mysql_rows)?;
-/// csv::write(string_rows, output)?;
-/// ```
+///
+///     let string_rows = rows_to_strings(mysql_rows)?;
+///     csv::write(string_rows, output)?;
 pub fn rows_to_strings(rows: Vec<mysql::Row>) -> anyhow::Result<Vec<Vec<String>>> {
     // Implementation
 }
-````
+```
 
 ### Security Requirements
 
