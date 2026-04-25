@@ -60,12 +60,6 @@ skip = [
     # subtree is only compiled for our ANSI-capable stderr path and the
     # binary size delta is negligible. Tracks todo #161.
     { crate = "supports-color", versions = ["2.1.0", "3.0.2"], reason = "owo-colors 4.3 transitively pulls two versions; overhead is negligible and upstream consolidation is pending (todo #161)" },
-    # windows-sys 0.52 comes in via is-terminal (supports-color 2.x),
-    # 0.61 is pulled by clap/console/tracing-subscriber/etc. Forcing a
-    # single version would require a workspace-wide pin; the two copies
-    # only ship on Windows targets anyway and the binary is not
-    # size-critical there. Tracks todo #161 / #162.
-    { crate = "windows-sys", versions = ["0.52.0", "0.61.2"], reason = "Transitive-only divergence (is-terminal vs clap / tracing / indicatif); Windows-only cost, no practical way to force a single version" },
 ]
 skip-tree = []
 

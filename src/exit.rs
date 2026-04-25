@@ -397,17 +397,26 @@ mod tests {
     }
 
     /// HIGH #7 regression: untyped `anyhow!("invalid …")` errors must NOT
-    /// route to `EXIT_CONFIG_ERROR` via substring match. The old behaviour
-    /// (the `"invalid"` keyword routing untyped errors to config-class)
-    /// silently miscategorised a wide range of query/IO failures. Real
-    /// config errors construct typed `ConfigError` values; everything else
-    /// falls through to the default `EXIT_QUERY_ERROR`.
+    /// route to `EXIT_CONFIG_ERROR` via substring match purely on the word
+    /// "invalid". The old behaviour silently miscategorised a wide range
+    /// of query/IO failures whose messages happened to contain "invalid".
+    /// Real config errors construct typed `ConfigError` values; the
+    /// remaining substring fallback now keys on `missing` / `configuration`
+    /// / `mutually exclusive` / etc — words that historically only appear
+    /// in true config-class wording.
+    ///
+    /// Note: an untyped error like `"Invalid configuration"` still maps
+    /// to `EXIT_CONFIG_ERROR` because the substring matcher keys on the
+    /// `"configuration"` keyword. That's the intended behaviour — the
+    /// risk we removed was the bare `"invalid"` keyword routing
+    /// `"Invalid date format"` (a query error) to config.
     #[test]
     fn test_invalid_keyword_no_longer_routes_to_config() {
-        let error = anyhow!("Invalid configuration");
+        // Bare "invalid" with no other config keyword must NOT route to config.
+        let error = anyhow!("invalid foo");
         assert_ne!(map_error_to_exit_code(&error), EXIT_CONFIG_ERROR);
 
-        let error = anyhow!("invalid foo");
+        let error = anyhow!("Invalid date format");
         assert_ne!(map_error_to_exit_code(&error), EXIT_CONFIG_ERROR);
     }
 
