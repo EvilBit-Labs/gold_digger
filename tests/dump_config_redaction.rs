@@ -137,19 +137,23 @@ fn cli_and_env_paths_redact_identically() {
 
     // The two streams must agree on the redacted query field. The full
     // JSON also includes paths/flags that may differ across env vars, so
-    // we extract just the "query" line for comparison.
-    let cli_query_line = cli
-        .lines()
-        .find(|l| l.contains("\"query\""))
-        .expect("CLI output missing query line")
-        .trim();
-    let env_query_line = env
-        .lines()
-        .find(|l| l.contains("\"query\""))
-        .expect("env output missing query line")
-        .trim();
+    // we parse both streams as JSON and compare just the `query` value.
+    // Substring-matching the literal `"query"` line was brittle: any
+    // formatter change (e.g. flat vs. pretty-printed dump) would silently
+    // flip the assertion to a false negative.
+    let cli_parsed: serde_json::Value =
+        serde_json::from_str(&cli).expect("CLI dump-config output must be valid JSON");
+    let env_parsed: serde_json::Value =
+        serde_json::from_str(&env).expect("env dump-config output must be valid JSON");
+
+    let cli_query = cli_parsed
+        .get("query")
+        .expect("CLI dump-config output missing `query` field");
+    let env_query = env_parsed
+        .get("query")
+        .expect("env dump-config output missing `query` field");
     assert_eq!(
-        cli_query_line, env_query_line,
+        cli_query, env_query,
         "CLI and env paths must redact identically"
     );
 

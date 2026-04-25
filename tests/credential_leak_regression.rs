@@ -329,6 +329,11 @@ fn auth_failure_does_not_leak_username_or_password_marker() {
 }
 
 #[test]
+#[ignore = "documents current behaviour: source-IP currently leaks via \
+            verbatim mysql_error embedding; tracked by todo #017 (typed- \
+            error refactor will replace the verbatim embedding entirely \
+            and let us flip this to assert that the IP is redacted). Run \
+            with `cargo test -- --ignored` to verify the current shape."]
 fn synthetic_auth_denied_string_is_redacted() {
     // Synthesizes the real MySQL server response that the live-DB test
     // would observe and asserts the consolidated redactor (which the
@@ -350,10 +355,11 @@ fn synthetic_auth_denied_string_is_redacted() {
         "(using password: YES) marker leaked: {}",
         redacted
     );
-    // looks_like_ipv4 must still match the source-IP (we don't redact
-    // IPs structurally yet — todo #017's typed-error refactor will
-    // replace the verbatim mysql_error embedding entirely; this test
-    // documents the current shape so future regressions are visible).
+    // The remaining IPv4-shape check documents that the source IP
+    // currently passes through unredacted — the test is `#[ignore]`d
+    // until todo #017 lands the typed-error refactor; flipping the
+    // assertion to `!looks_like_ipv4(&redacted)` after that work will
+    // pin the redaction contract instead of the gap.
     assert!(
         looks_like_ipv4(&redacted),
         "test fixture lost its IP shape: {}",

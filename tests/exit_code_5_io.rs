@@ -78,16 +78,31 @@ mod unix {
         perms.set_mode(0o700);
         let _ = fs::set_permissions(dir.path(), perms);
 
-        // Either the query-file open or the output-file open fails; both map
-        // to EXIT_IO_ERROR per `GoldDiggerError::Io`. Some platforms classify
-        // missing-config / parse failures as EXIT_CONFIG_ERROR (2) when the
-        // path itself cannot even be canonicalized — accept either as long
-        // as it is NOT 0/1/3/4/255.
+        // The query-file open fails with a permission-denied error;
+        // `GoldDiggerError::Io` maps this to `EXIT_IO_ERROR` (5).
+        //
+        // macOS exception: when the directory is chmod 0o000, macOS's
+        // canonicalisation of the inner path fails *during config
+        // resolution* before the I/O classifier runs, so the error
+        // surfaces as `EXIT_CONFIG_ERROR` (2). Linux returns the I/O
+        // error from `open()` directly, which the classifier maps to 5.
+        // The Linux/Windows path is the load-bearing contract; macOS is
+        // documented as a known-soft variant.
         let code = assert.get_output().status.code();
+
+        #[cfg(target_os = "macos")]
         assert!(
             matches!(code, Some(2) | Some(5)),
-            "unreadable query-file dir should map to EXIT_IO_ERROR (5) or \
-             EXIT_CONFIG_ERROR (2), got {code:?}",
+            "unreadable query-file dir on macOS should map to EXIT_IO_ERROR (5) \
+             or EXIT_CONFIG_ERROR (2) (canonicalisation fails before classifier \
+             reaches the I/O error), got {code:?}",
+        );
+
+        #[cfg(not(target_os = "macos"))]
+        assert_eq!(
+            code,
+            Some(5),
+            "unreadable query-file dir must map to EXIT_IO_ERROR (5), got {code:?}",
         );
     }
 }
@@ -127,12 +142,15 @@ mod windows_alt {
             ])
             .assert();
 
+        // Windows reliably returns ENOTDIR-equivalent (`ERROR_DIRECTORY`
+        // 0x10B / `ERROR_PATH_NOT_FOUND` 0x3) from `CreateFileW` when a
+        // path component is a file rather than a directory. The
+        // `GoldDiggerError::Io` mapper folds that into `EXIT_IO_ERROR`.
         let code = assert.get_output().status.code();
-        assert!(
-            matches!(code, Some(2) | Some(3) | Some(5)),
-            "unwritable output should map to EXIT_IO_ERROR (5) or \
-             EXIT_CONFIG_ERROR (2) or EXIT_DB_AUTH_ERROR (3) when DB is \
-             reached first, got {code:?}",
+        assert_eq!(
+            code,
+            Some(5),
+            "unwritable output (parent-as-file) must map to EXIT_IO_ERROR (5), got {code:?}",
         );
     }
 }

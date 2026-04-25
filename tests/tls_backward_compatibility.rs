@@ -66,19 +66,14 @@ fn generate_test_certificate() -> Result<String> {
     Ok(cert_pem)
 }
 
-/// Clap-bound env vars that must be removed from spawned binaries to prevent
-/// developer-shell exports from leaking into integration tests.
-const ENV_VARS_TO_REMOVE: &[&str] = &["DATABASE_URL", "DATABASE_QUERY", "OUTPUT_FILE", "NO_COLOR"];
+mod integration;
+mod test_support;
 
 /// Build a `gold_digger` binary `Command` with all Clap-bound env vars
-/// stripped. Use this in every test in this file instead of constructing
-/// `cargo_bin_cmd!("gold_digger")` directly.
+/// stripped. Thin wrapper over `tests/test_support/cli.rs::clean_cmd`
+/// so env-isolation hygiene stays in one place.
 fn fresh_cmd() -> Command {
-    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("gold_digger");
-    for var in ENV_VARS_TO_REMOVE {
-        cmd.env_remove(var);
-    }
-    cmd
+    crate::test_support::cli::clean_cmd()
 }
 
 mod database_url_compatibility_tests {
@@ -665,44 +660,11 @@ mod cli_flag_behavior_tests {
         Ok(())
     }
 
-    /// Test that TLS flags are always available (no feature gating)
-    /// Requirement: 7.4 - TLS flags always available
-    #[test]
-    fn test_tls_flags_always_available() {
-        // Test that help includes TLS flags
-        let mut cmd = fresh_cmd();
-        let output = cmd.arg("--help").output().unwrap();
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-
-        // Verify TLS flags are present in help with proper CLI flag forms
-        assert!(
-            stdout.contains("--tls-ca-file"),
-            "Help should include --tls-ca-file flag"
-        );
-        assert!(
-            stdout.contains("--insecure-skip-hostname-verify"),
-            "Help should include --insecure-skip-hostname-verify flag"
-        );
-        assert!(
-            stdout.contains("--allow-invalid-certificate"),
-            "Help should include --allow-invalid-certificate flag"
-        );
-
-        // Verify flag descriptions are present
-        assert!(
-            stdout.contains("CA certificate"),
-            "Help should describe CA certificate functionality"
-        );
-        assert!(
-            stdout.contains("hostname verification"),
-            "Help should describe hostname verification"
-        );
-        assert!(
-            stdout.contains("certificate validation"),
-            "Help should describe certificate validation"
-        );
-    }
+    // Test deleted: `test_tls_flags_always_available` only re-asserted
+    // substrings on `--help` output that the snapshot
+    // `tls_cli_integration__tls_cli_flag_tests__tls_help_options.snap`
+    // already pins exactly. The snapshot is a stricter contract (full
+    // line-by-line match) and survives copy edits via `cargo insta`.
 
     /// Test CLI flag error messages unchanged
     /// Requirement: 7.4 - Error message consistency
@@ -1086,47 +1048,12 @@ mod integration_compatibility_tests {
         );
     }
 
-    /// Test CLI help output includes TLS options
-    /// Requirement: 7.4 - Help documentation preserved
-    #[test]
-    fn test_cli_help_includes_tls_options() {
-        let mut cmd = fresh_cmd();
-        let output = cmd.arg("--help").output().unwrap();
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-
-        // Verify all TLS flags are documented with proper CLI flag forms
-        assert!(
-            stdout.contains("--tls-ca-file"),
-            "Help should document --tls-ca-file"
-        );
-        assert!(
-            stdout.contains("--insecure-skip-hostname-verify"),
-            "Help should document --insecure-skip-hostname-verify"
-        );
-        assert!(
-            stdout.contains("--allow-invalid-certificate"),
-            "Help should document --allow-invalid-certificate"
-        );
-
-        // Verify flag descriptions are helpful
-        assert!(
-            stdout.contains("CA certificate"),
-            "Help should describe CA certificate functionality"
-        );
-        assert!(
-            stdout.contains("hostname"),
-            "Help should mention hostname verification"
-        );
-        assert!(
-            stdout.contains("certificate"),
-            "Help should mention certificate validation"
-        );
-        assert!(
-            stdout.contains("DANGEROUS") || stdout.contains("dangerous"),
-            "Help should warn about dangerous options"
-        );
-    }
+    // Test deleted: `test_cli_help_includes_tls_options` re-asserted
+    // substrings on `--help` output that the snapshot
+    // `tls_cli_integration__tls_cli_flag_tests__tls_help_options.snap`
+    // already pins. The "DANGEROUS" / "dangerous" warning is also
+    // baked into that snapshot (see the `--allow-invalid-certificate`
+    // description). Use the snapshot, not substring matches.
 
     /// Test CLI help output snapshot for stability
     /// Requirement: 7.4 - Help documentation preserved with stable contract

@@ -16,24 +16,20 @@
 //! heavier integration-test support tree).
 
 use assert_cmd::Command;
-use assert_cmd::cargo;
 use std::fs;
 use std::path::PathBuf;
 use tempfile::tempdir;
 
-/// Clap-bound env vars that must be stripped from the child binary so
-/// developer-shell exports cannot leak into path-safety tests. Mirrors
-/// `tests/test_support/cli.rs::ENV_VARS_TO_REMOVE`.
-const ENV_VARS_TO_REMOVE: &[&str] = &["DATABASE_URL", "DATABASE_QUERY", "OUTPUT_FILE", "NO_COLOR"];
+mod fixtures;
+mod integration;
+mod test_support;
 
 /// Returns a fresh `gold_digger` command with the Clap-bound env vars
-/// removed.
+/// removed. Thin wrapper over the canonical helper in
+/// `tests/test_support/cli.rs::clean_cmd` so all integration tests
+/// go through one source.
 fn clean_cmd() -> Command {
-    let mut cmd = cargo::cargo_bin_cmd!("gold_digger");
-    for var in ENV_VARS_TO_REMOVE {
-        cmd.env_remove(var);
-    }
-    cmd
+    crate::test_support::cli::clean_cmd()
 }
 
 /// Writes a trivial valid SQL query to `path`.
@@ -74,14 +70,15 @@ fn query_file_with_exe_extension_rejected() {
     let code = output.status.code();
     let stderr = String::from_utf8_lossy(&output.stderr);
 
+    // Pin only the exit code: the human-readable diagnostic phrasing
+    // ("disallowed extension", ".exe", etc.) is presentation-only and
+    // tightly coupling tests to it has produced false-positive failures
+    // every time the message was copy-edited. The exit code is the
+    // load-bearing public contract.
     assert_eq!(
         code,
         Some(2),
         "refused .exe extension should map to EXIT_CONFIG_ERROR (2); got {code:?}; stderr: {stderr}"
-    );
-    assert!(
-        stderr.contains("disallowed extension") || stderr.contains(".exe"),
-        "stderr should mention the refused extension; got: {stderr}"
     );
 }
 
@@ -194,14 +191,13 @@ fn query_file_over_size_cap_rejected() {
     let code = output.status.code();
     let stderr = String::from_utf8_lossy(&output.stderr);
 
+    // Pin only the exit code: see the `.exe` test above for the
+    // rationale on dropping the brittle "maximum allowed" /
+    // "10 MiB" / "bytes" stderr substring asserts.
     assert_eq!(
         code,
         Some(2),
         "oversized query-file should map to EXIT_CONFIG_ERROR (2); got {code:?}; stderr: {stderr}"
-    );
-    assert!(
-        stderr.contains("maximum allowed") || stderr.contains("10 MiB") || stderr.contains("bytes"),
-        "stderr should reference the size cap; got: {stderr}"
     );
 }
 
