@@ -207,17 +207,7 @@ Gold Digger uses CLI-first configuration with environment variable fallbacks:
 
 **Resolution Pattern:**
 
-```rust
-fn resolve_config_value(cli: &Cli) -> anyhow::Result<String> {
-    if let Some(value) = &cli.field {
-        Ok(value.clone()) // CLI flag (highest priority)
-    } else if let Ok(value) = env::var("ENV_VAR") {
-        Ok(value) // Environment variable (fallback)
-    } else {
-        anyhow::bail!("Missing required configuration") // Error if neither
-    }
-}
-```
+`Cli` is parsed once, then projected into a fully-validated `ResolvedConfig` exactly once at the binary boundary (`src/main.rs::main` calls `ResolvedConfig::from_cli(&cli)`). Downstream code (`src/run.rs`, `src/connection.rs`) takes `&ResolvedConfig` and never touches `Cli`. The `Cli > env > error` precedence rule lives in `ResolvedConfig::from_cli_with_env` (`src/config.rs`); env vars are captured once via `EnvSnapshot::from_process_env` so concurrent env mutation can't shift values mid-run. Resolution failures route through typed `GoldDiggerError::Config(ConfigError::*)` variants for stable exit-code classification (exit 2). See `docs/solutions/best-practices/front-load-validation-with-resolved-config-type-2026-04-25.md` for the full pattern.
 
 ### Current Architecture
 
@@ -306,6 +296,10 @@ The project has detailed requirements in `project_spec/requirements.md`. The maj
 - **justfile**: Cross-platform build automation and common tasks
 - **.pre-commit-config.yaml**: Git hook configuration for quality gates
 - **CHANGELOG.md**: Auto-generated version history (conventional commits)
+
+### Documented Solutions
+
+`docs/solutions/` — documented solutions to past problems (bugs, best practices, workflow patterns), organized by category with YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when implementing or debugging in documented areas.
 
 ### Documentation Standards
 
