@@ -178,11 +178,21 @@ mod tls_cli_flag_tests {
             "Error should mention invalid CA format"
         );
 
-        // Normalize the temporary directory path for consistent snapshots
-        let normalized_stderr = stderr.replace(
-            &cert_path.to_string_lossy().to_string(),
-            "/tmp/test_cert.pem",
-        );
+        // Normalize the temporary directory path for consistent snapshots.
+        // After the CaFile newtype migration (#2), the path embedded in
+        // the error message is the canonicalised target (e.g. on macOS
+        // /tmp/foo canonicalises to /private/tmp/foo); normalise both
+        // shapes so the snapshot stays stable across platforms.
+        let canonical_cert_path = std::fs::canonicalize(&cert_path)
+            .unwrap_or_else(|_| cert_path.clone())
+            .to_string_lossy()
+            .into_owned();
+        let normalized_stderr = stderr
+            .replace(&canonical_cert_path, "/tmp/test_cert.pem")
+            .replace(
+                &cert_path.to_string_lossy().to_string(),
+                "/tmp/test_cert.pem",
+            );
         assert_snapshot!("invalid_ca_file_content_error", normalized_stderr);
     }
 }

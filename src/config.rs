@@ -119,24 +119,55 @@ pub fn resolve_database_url_with_env(cli: &Cli, env: &EnvSnapshot) -> Result<Str
 /// Applies three path-safety guards before returning the canonical path
 /// the caller should pass to `read_to_string`:
 ///
-/// 1. **Canonicalize.** `std::fs::canonicalize` resolves `..` and symlinks,
+/// 1. **Size cap (pre-canonicalise).** `std::fs::symlink_metadata` reads
+///    only the entry the path names — never following symlinks — so we
+///    can refuse oversize files via [`MAX_QUERY_FILE_SIZE_BYTES`] before
+///    paying the traversal cost of `canonicalize` (#6 medium fix). On a
+///    hostile filesystem, `canonicalize` can read deeply-nested symlink
+///    chain entries; capping the size first bounds that work too. Stat
+///    failures map to [`GoldDiggerError::Io`] (exit 5).
+/// 2. **Canonicalize.** `std::fs::canonicalize` resolves `..` and symlinks,
 ///    giving the caller a stable path that matches what the OS will open.
 ///    Any failure (including broken symlinks or missing files) maps to
 ///    [`GoldDiggerError::Io`] so the exit code (5) reflects the filesystem
-///    interaction. Permissive traversal handling is acceptable because
-///    the size / extension checks below are the real safety net.
-/// 2. **Extension deny-list.** Refuse obvious binary extensions (`.exe`,
+///    interaction.
+/// 3. **Extension deny-list.** Refuse obvious binary extensions (`.exe`,
 ///    `.dll`, `.so`, `.dylib`, `.bin`, `.bat`, `.cmd`, `.com`) with a
 ///    configuration error so the operator sees the problem, not a cryptic
 ///    SQL syntax error from the server. `.sql` / `.txt` / missing are
-///    allowed. Comparison is case-insensitive (`query.SQL` works).
-/// 3. **Size cap.** Refuse files larger than [`MAX_QUERY_FILE_SIZE_BYTES`]
-///    to bound memory use and avoid OOM on attacker-chosen large inputs.
+///    allowed. Comparison is case-insensitive (`query.SQL` works). The
+///    extension is checked on the canonicalised path so symlinks pointing
+///    at refused targets are caught.
 ///
 /// Failures use [`GoldDiggerError::Config`] (exit 2) for policy rejections
 /// and [`GoldDiggerError::Io`] (exit 5) for filesystem / stat failures.
 pub fn validate_query_file_path(path: &Path) -> Result<PathBuf> {
-    // 1. Canonicalize. Broken symlinks and missing files fail here with
+    // 1. Size cap, pre-canonicalise. `symlink_metadata` does NOT follow
+    //    symlinks, so a deeply-nested or attacker-controlled symlink
+    //    chain cannot trick us into expensive traversal before we've
+    //    even confirmed the file is small enough to read. If the entry
+    //    itself is a symlink we still want to reject when its TARGET is
+    //    huge, so this guard runs again post-canonicalise below — but
+    //    the cheap check up front bounds the worst case for non-symlink
+    //    files (todo #6).
+    let entry_metadata = std::fs::symlink_metadata(path).map_err(|e| {
+        anyhow::Error::from(GoldDiggerError::Io(e))
+            .context(format!("Failed to stat query file {}", path.display()))
+    })?;
+    if entry_metadata.is_file() && entry_metadata.len() > MAX_QUERY_FILE_SIZE_BYTES {
+        return Err(GoldDiggerError::Config(ConfigError::InvalidQueryFile {
+            path: path.to_path_buf(),
+            reason: format!(
+                "Query file is {} bytes; maximum allowed is {} bytes (10 MiB). \
+                 Split the query or raise MAX_QUERY_FILE_SIZE_BYTES.",
+                entry_metadata.len(),
+                MAX_QUERY_FILE_SIZE_BYTES
+            ),
+        })
+        .into());
+    }
+
+    // 2. Canonicalize. Broken symlinks and missing files fail here with
     //    a real `io::Error`, which gets wrapped via `GoldDiggerError::Io`
     //    (exit 5) for stable routing.
     let canonical = std::fs::canonicalize(path).map_err(|e| {
@@ -146,7 +177,7 @@ pub fn validate_query_file_path(path: &Path) -> Result<PathBuf> {
         ))
     })?;
 
-    // 2. Extension deny-list (case-insensitive; missing is allowed).
+    // 3. Extension deny-list (case-insensitive; missing is allowed).
     if let Some(ext) = canonical.extension().and_then(|s| s.to_str()) {
         let lower = ext.to_ascii_lowercase();
         if REFUSED_QUERY_FILE_EXTENSIONS.iter().any(|r| *r == lower) {
@@ -162,7 +193,10 @@ pub fn validate_query_file_path(path: &Path) -> Result<PathBuf> {
         }
     }
 
-    // 3. Size cap. Use metadata on the canonical path.
+    // 4. Size cap, post-canonicalise. The pre-canonicalise check above
+    //    only inspected the entry the path named (no symlink follow);
+    //    re-check on the canonical target so a symlink pointing at a
+    //    huge file is still caught.
     let metadata = std::fs::metadata(&canonical).map_err(|e| {
         anyhow::Error::from(GoldDiggerError::Io(e))
             .context(format!("Failed to stat query file {}", canonical.display()))
