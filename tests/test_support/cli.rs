@@ -33,6 +33,19 @@ pub fn clean_cmd() -> Command {
     cmd
 }
 
+/// Like [`clean_cmd`] but additionally asserts `NO_COLOR=1` so tracing
+/// formatters and any future colorised diagnostics emit deterministic
+/// ASCII for stdout/stderr separation snapshots and contract tests.
+///
+/// Use this in tests that diff the literal stderr/stdout payload (e.g.
+/// `tests/stream_separation.rs`) where ANSI colour escapes from a colour-
+/// detecting parent terminal would make assertions brittle.
+pub fn clean_cmd_no_color() -> Command {
+    let mut cmd = clean_cmd();
+    cmd.env("NO_COLOR", "1");
+    cmd
+}
+
 /// CLI command builder for Gold Digger tests
 #[derive(Debug, Clone)]
 pub struct GoldDiggerCommand {

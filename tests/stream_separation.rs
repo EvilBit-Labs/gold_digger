@@ -14,22 +14,22 @@
 //! this file is the canary. Each test pins one specific contract; new
 //! commands should add a row here when they land.
 
-use assert_cmd::cargo;
 use predicates::prelude::*;
 use tempfile::tempdir;
 
-const ENV_VARS_TO_REMOVE: &[&str] = &["DATABASE_URL", "DATABASE_QUERY", "OUTPUT_FILE", "NO_COLOR"];
+mod fixtures;
+mod integration;
+mod test_support;
 
-/// Build a `gold_digger` invocation with all Clap-bound env vars
-/// stripped. Mirrors helpers in the rest of the test suite so a future
-/// consolidation can pull from a single source.
+/// Build a `gold_digger` invocation with Clap-bound env vars stripped
+/// AND `NO_COLOR=1` set. The `NO_COLOR` env var is a load-bearing
+/// difference from the canonical `clean_cmd()`: this file diffs the
+/// literal stderr/stdout payload, so we need to suppress any ANSI
+/// colour escapes the tracing formatter or future colourised
+/// diagnostics might emit. Delegates to the shared
+/// `clean_cmd_no_color()` helper for consistency.
 fn fresh_cmd() -> assert_cmd::Command {
-    let mut cmd = cargo::cargo_bin_cmd!("gold_digger");
-    for var in ENV_VARS_TO_REMOVE {
-        cmd.env_remove(var);
-    }
-    cmd.env("NO_COLOR", "1");
-    cmd
+    crate::test_support::cli::clean_cmd_no_color()
 }
 
 /// `--help` emits to stdout. Stderr must stay empty (no banner, no

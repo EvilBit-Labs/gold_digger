@@ -22,14 +22,12 @@ mod integration;
 mod test_support;
 
 use anyhow::Result;
-use assert_cmd::cargo;
 use std::path::Path;
 
 use crate::integration::{
     TestDatabase,
     containers::{database_container::DatabaseContainer, utils::skip_if_no_docker},
 };
-use crate::test_support::cli::ENV_VARS_TO_REMOVE;
 
 /// SQL guaranteed to return zero rows on an empty seed schema. Uses
 /// `WHERE 1=0` so it parses on MySQL and MariaDB without needing any
@@ -37,15 +35,11 @@ use crate::test_support::cli::ENV_VARS_TO_REMOVE;
 const EMPTY_QUERY: &str = "SELECT table_name FROM information_schema.tables WHERE 1=0";
 
 /// Build a `gold_digger` invocation with all Clap-bound env vars
-/// stripped — same hygiene every other integration test in this crate
-/// applies (project memory: env-leakage from developer shells is the
-/// recurring failure mode for `assert_cmd` runs).
+/// stripped — thin wrapper over the canonical helper in
+/// `tests/test_support/cli.rs::clean_cmd` so env-isolation hygiene
+/// stays in one place.
 fn fresh_cmd() -> assert_cmd::Command {
-    let mut cmd = cargo::cargo_bin_cmd!("gold_digger");
-    for var in ENV_VARS_TO_REMOVE {
-        cmd.env_remove(var);
-    }
-    cmd
+    crate::test_support::cli::clean_cmd()
 }
 
 /// Default empty result -> EXIT_NO_ROWS (1), no output file committed.

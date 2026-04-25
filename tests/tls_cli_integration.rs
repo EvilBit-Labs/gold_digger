@@ -40,19 +40,14 @@ fn generate_test_certificate() -> Result<String, Box<dyn std::error::Error>> {
     Ok(cert_pem)
 }
 
-/// Clap-bound env vars that must be removed from spawned binaries to prevent
-/// developer-shell exports from leaking into integration tests.
-const ENV_VARS_TO_REMOVE: &[&str] = &["DATABASE_URL", "DATABASE_QUERY", "OUTPUT_FILE", "NO_COLOR"];
+mod integration;
+mod test_support;
 
 /// Build a `gold_digger` binary `Command` with all Clap-bound env vars
-/// stripped. Use this in every test in this file instead of constructing
-/// `cargo_bin_cmd!("gold_digger")` directly.
+/// stripped. Thin wrapper over `tests/test_support/cli.rs::clean_cmd`
+/// so env-isolation hygiene stays in one place.
 fn fresh_cmd() -> Command {
-    let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("gold_digger");
-    for var in ENV_VARS_TO_REMOVE {
-        cmd.env_remove(var);
-    }
-    cmd
+    crate::test_support::cli::clean_cmd()
 }
 
 mod tls_cli_flag_tests {

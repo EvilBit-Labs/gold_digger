@@ -7,6 +7,7 @@
 
 use anyhow::{Context, Result};
 use assert_cmd::Command;
+use assert_cmd::cargo;
 use predicates::prelude::*;
 use serde_json;
 use std::collections::HashMap;
@@ -28,10 +29,10 @@ const ENV_VARS_TO_REMOVE: &[&str] = &["DATABASE_URL", "DATABASE_QUERY", "OUTPUT_
 
 /// Build the binary `Command` with all Clap-bound env vars removed. Use in
 /// every site that invokes `gold_digger`; never call `Command::cargo_bin`
-/// directly from this module.
+/// directly from this module. Uses the `cargo::cargo_bin_cmd!` macro
+/// (assert_cmd 2.1+); the `Command::cargo_bin` function is deprecated.
 fn fresh_cmd() -> anyhow::Result<Command> {
-    #[allow(deprecated)]
-    let mut cmd = Command::cargo_bin("gold_digger")?;
+    let mut cmd = cargo::cargo_bin_cmd!("gold_digger");
     for var in ENV_VARS_TO_REMOVE {
         cmd.env_remove(var);
     }
