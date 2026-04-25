@@ -20,6 +20,5 @@ rules:
       # cargo-dist.yml entry — that workflow no longer exists (todo #113).
       - release.yml
       - ci.yml
-      - codeql.yml
       - docs.yml
       - security.yml
