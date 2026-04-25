@@ -90,6 +90,17 @@ fn validate_date(
 /// The `hours` field from the wire protocol is limited to u8 (0-255),
 /// but when combined with `days` (`days * 24 + hours`) the total can
 /// reach up to 838.
+///
+/// # Overflow safety (CRITICAL #4)
+///
+/// A hostile or malformed `mysql::Value::Time` may carry `days` near
+/// `u32::MAX`. Computing `days * 24 + hours` in u32 wraps in release
+/// builds (`overflow-checks = false` for `--release`) and panics in the
+/// release-with-checks profile cargo-dist uses (`panic = "abort"` +
+/// `overflow-checks = true`). Both outcomes contradict
+/// `TypeTransformer`'s panic-free contract. We compute the total in
+/// u64 (where 838 fits comfortably) and range-check BEFORE casting back
+/// so the addition cannot wrap.
 fn validate_time(
     days: u32,
     hours: u8,
@@ -97,8 +108,8 @@ fn validate_time(
     seconds: u8,
     microseconds: u32,
 ) -> anyhow::Result<()> {
-    let total_hours = days * 24 + hours as u32;
-    if total_hours > MAX_TIME_TOTAL_HOURS {
+    let total_hours: u64 = (days as u64) * 24u64 + (hours as u64);
+    if total_hours > MAX_TIME_TOTAL_HOURS as u64 {
         anyhow::bail!(
             "Type conversion error: Invalid total hour value {} in time \
              (max {})",
@@ -283,7 +294,11 @@ impl TypeTransformer {
                 validate_time(*days, *hours, *minutes, *seconds, *microseconds)?;
 
                 let sign = if *negative { "-" } else { "" };
-                let total_hours = *days * 24 + *hours as u32;
+                // CRITICAL #4: compute in u64 to avoid the same overflow
+                // path validate_time guards against. The validator caps
+                // total_hours at MAX_TIME_TOTAL_HOURS (838), so the cast
+                // back to u32 here is bounded and safe for formatting.
+                let total_hours: u32 = ((*days as u64) * 24u64 + (*hours as u64)) as u32;
                 Ok(format!(
                     "{}{:02}:{:02}:{:02}.{:06}",
                     sign, total_hours, minutes, seconds, microseconds
@@ -368,7 +383,10 @@ impl TypeTransformer {
                 validate_time(*days, *hours, *minutes, *seconds, *microseconds)?;
 
                 let sign = if *negative { "-" } else { "" };
-                let total_hours = *days * 24 + *hours as u32;
+                // CRITICAL #4: compute in u64 to avoid wrap/panic; the
+                // validator caps the total at MAX_TIME_TOTAL_HOURS (838),
+                // so the cast back to u32 here is bounded and safe.
+                let total_hours: u32 = ((*days as u64) * 24u64 + (*hours as u64)) as u32;
                 Ok(serde_json::Value::String(format!(
                     "{}{:02}:{:02}:{:02}.{:06}",
                     sign, total_hours, minutes, seconds, microseconds
@@ -1010,6 +1028,78 @@ mod tests {
         assert!(validate_time(0, 0, 60, 0, 0).is_err());
         assert!(validate_time(0, 0, 0, 60, 0).is_err());
         assert!(validate_time(0, 0, 0, 0, 1_000_000).is_err());
+    }
+
+    /// CRITICAL #4 regression: a hostile / malformed `mysql::Value::Time`
+    /// with `days = u32::MAX` previously computed `days * 24 + hours`
+    /// in u32, which wraps in release builds and panics under
+    /// `overflow-checks = true` (the cargo-dist release-with-checks
+    /// profile). After the fix the multiplication is performed in u64
+    /// and range-checked before any cast back, so the validator returns
+    /// a typed `anyhow::Error` instead of crashing the binary.
+    #[test]
+    fn test_validate_time_u32_overflow_returns_error_not_panic() {
+        let result = validate_time(u32::MAX, 23, 59, 59, 999999);
+        assert!(
+            result.is_err(),
+            "u32::MAX days must be rejected as out-of-range, not silently wrap"
+        );
+        let err_msg = result.expect_err("checked above").to_string();
+        assert!(
+            err_msg.contains("Invalid total hour value"),
+            "error message must identify the offending field; got: {}",
+            err_msg
+        );
+    }
+
+    /// CRITICAL #4 regression: same overflow input through the
+    /// `value_to_string` Time arm must surface as an error rather than
+    /// a panic from arithmetic overflow.
+    #[test]
+    fn test_value_to_string_time_u32_overflow_returns_error_not_panic() {
+        let result = TypeTransformer::value_to_string(&mysql::Value::Time(
+            false,
+            u32::MAX,
+            23,
+            59,
+            59,
+            999999,
+        ));
+        assert!(
+            result.is_err(),
+            "u32::MAX days must produce an error, not a panic"
+        );
+        let err_msg = result.expect_err("checked above").to_string();
+        assert!(
+            err_msg.contains("Invalid total hour value"),
+            "error message must identify the offending field; got: {}",
+            err_msg
+        );
+    }
+
+    /// CRITICAL #4 regression: same overflow input through the
+    /// `value_to_json` Time arm must surface as an error rather than
+    /// a panic from arithmetic overflow.
+    #[test]
+    fn test_value_to_json_time_u32_overflow_returns_error_not_panic() {
+        let result = TypeTransformer::value_to_json(&mysql::Value::Time(
+            false,
+            u32::MAX,
+            23,
+            59,
+            59,
+            999999,
+        ));
+        assert!(
+            result.is_err(),
+            "u32::MAX days must produce an error, not a panic"
+        );
+        let err_msg = result.expect_err("checked above").to_string();
+        assert!(
+            err_msg.contains("Invalid total hour value"),
+            "error message must identify the offending field; got: {}",
+            err_msg
+        );
     }
 
     #[test]

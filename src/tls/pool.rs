@@ -172,14 +172,12 @@ pub fn create_tls_connection(
     // matched. We now match on the typed `mysql::Error` variants
     // directly: `TlsError(rustls::Error)` flows through the typed
     // classifier; other variants get specific, non-substring routing.
-    Pool::new(opts_builder).map_err(|mysql_error| {
-        let redacted_error = crate::utils::redact_sql_error(&mysql_error.to_string());
-        classify_mysql_pool_error(mysql_error, redacted_error)
-    })
+    Pool::new(opts_builder).map_err(classify_mysql_pool_error)
 }
 
-/// Maps a [`mysql::Error`] from `Pool::new` into a typed [`TlsError`]
-/// using the underlying error variant rather than substring matching.
+/// Maps a [`mysql::Error`] from `Pool::new` (or any other pool surface,
+/// notably [`mysql::Pool::get_conn`]) into a typed [`TlsError`] using the
+/// underlying error variant rather than substring matching.
 ///
 /// CRITICAL #1: the typed classifier ([`TlsError::from_rustls_error`]) is
 /// only reachable when we match on `mysql::Error::TlsError(rustls_err)`
@@ -187,11 +185,18 @@ pub fn create_tls_connection(
 /// substrings (the legacy approach) buries the typed value beyond
 /// recovery.
 ///
-/// `redacted_error` is the credential-scrubbed rendering of the error and
-/// is interpolated into the `message` field of constructed `TlsError`
-/// variants. Callers MUST pre-compute it via `redact_sql_error` to
-/// guarantee credentials never reach the user-facing message.
-fn classify_mysql_pool_error(mysql_error: mysql::Error, redacted_error: String) -> TlsError {
+/// HIGH #10: `pool.get_conn()` failures used to bypass this classifier
+/// and route through a free-form `anyhow::anyhow!(...)` message that
+/// embedded the raw `mysql::Error`. Exposing the classifier as
+/// `pub(crate)` lets the run pipeline reuse the same typed routing and
+/// credential redaction the `Pool::new` path already enforces.
+///
+/// Credential redaction is performed internally via
+/// [`crate::utils::redact_sql_error`] so callers cannot accidentally
+/// embed an un-scrubbed error string. The redacted text is interpolated
+/// into the `message` field of every constructed `TlsError` variant.
+pub(crate) fn classify_mysql_pool_error(mysql_error: mysql::Error) -> TlsError {
+    let redacted_error = crate::utils::redact_sql_error(&mysql_error.to_string());
     // `mysql::error::tls::TlsError` is the inner TLS-stack error wrapped
     // by `mysql::Error::TlsError`; aliasing locally avoids a clash with
     // our own `super::error::TlsError`.

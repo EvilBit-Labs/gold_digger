@@ -27,7 +27,6 @@ use crate::config::{
     resolve_output_file_with_env,
 };
 use crate::connection::create_database_connection;
-use crate::exit::GoldDiggerError;
 use crate::logging::make_progress;
 use crate::mysql_errors::{
     CR_CONN_HOST_ERROR, CR_CONNECTION_ERROR, CR_SERVER_GONE_ERROR, CR_SERVER_LOST,
@@ -94,14 +93,23 @@ pub fn run(cli: &Cli) -> anyhow::Result<RunOutcome> {
             return Err(e);
         }
     };
+    // HIGH #10: route `pool.get_conn()` failures through the same
+    // typed classifier `Pool::new` uses (`classify_mysql_pool_error`).
+    // The previous path wrapped the raw `mysql::Error` into a
+    // `GoldDiggerError::DbAuth(...)` string via free-form `anyhow!`,
+    // which (a) skipped the typed `TlsError` routing required for
+    // accurate exit codes (handshake/cert/hostname failures need exit
+    // 3 with TLS-specific framing, not generic "DB auth"), and (b)
+    // bypassed the credential-redaction guarantees the classifier
+    // bakes in for every variant. The classifier internally routes
+    // through `redact_sql_error`, so the user-facing message can never
+    // embed an un-scrubbed `mysql::Error::to_string()`.
     let mut conn = match pool.get_conn() {
         Ok(conn) => conn,
         Err(e) => {
             connect_progress.finish_and_clear();
-            return Err(anyhow::Error::from(GoldDiggerError::DbAuth(format!(
-                "Database connection failed: {}",
-                redact_sql_error(&e.to_string())
-            ))));
+            let typed = crate::tls::pool::classify_mysql_pool_error(e);
+            return Err(anyhow::Error::from(typed).context("Database connection failed"));
         }
     };
     connect_progress.finish_and_clear();

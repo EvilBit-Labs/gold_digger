@@ -41,37 +41,62 @@ static REDACTION_PATTERNS: OnceLock<Vec<(Regex, &'static str)>> = OnceLock::new(
 ///
 /// Kept as a plain slice (not a `OnceLock`) so [`EXPECTED_REDACTION_PATTERN_COUNT`]
 /// and the fail-closed initialiser can both reference the same definition.
+///
+/// # Word-boundary anchoring (HIGH #8)
+///
+/// Every label pattern starts with `\b` so the matcher fires only on
+/// real secret labels, not on substrings inside larger words. Without
+/// the boundary, `boarding_pass=ABC` matched the bare `pass` pattern
+/// and got mangled, and `the secret ingredient is salt` matched the
+/// bare `secret\s+\S+` pattern. The bare-space variants (`token \S+`
+/// and `secret \S+`) are deleted entirely — real credential leaks use
+/// the `[=:]` separator form, while the bare-space variants guarantee
+/// false positives on prose.
+///
+/// # URL userinfo placeholder (MEDIUM idempotence)
+///
+/// The URL-userinfo replacement uses [`REDACTION_PLACEHOLDER`] for both
+/// user and password components. Previously the replacement was the
+/// literal `://***:***@`, which produced a different placeholder than
+/// [`redact_url`] (which inserts [`REDACTION_PLACEHOLDER`]). Operators
+/// grepping for "REDACTED" missed lines that flowed through the URL
+/// regex, and chaining `redact_sql_error` over `redact_url` output
+/// rewrote `***REDACTED***` back into `***`. The shared placeholder
+/// makes both redactors converge to the same fixed point.
 const REDACTION_PATTERN_DEFS: &[(&str, &str)] = &[
     // Common key=value / key:value secret pairs (English).
-    (r"(?i)password\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
-    (r"(?i)passwd\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+    (r"(?i)\bpassword\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+    (r"(?i)\bpasswd\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
     (r"(?i)\bpwd\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
-    (r"(?i)pass\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
-    (r"(?i)identified\s+by\s+\S+", REDACTION_PLACEHOLDER),
+    (r"(?i)\bpass\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+    (r"(?i)\bidentified\s+by\s+\S+", REDACTION_PLACEHOLDER),
     (
-        r"(?i)identified\s+with\s+\S+\s+by\s+\S+",
+        r"(?i)\bidentified\s+with\s+\S+\s+by\s+\S+",
         REDACTION_PLACEHOLDER,
     ),
-    (r"(?i)token\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
-    (r"(?i)token\s+\S+", REDACTION_PLACEHOLDER),
-    (r"(?i)api[_-]?key\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
-    (r"(?i)secret\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
-    (r"(?i)secret\s+\S+", REDACTION_PLACEHOLDER),
+    (r"(?i)\btoken\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+    (r"(?i)\bapi[_-]?key\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+    (r"(?i)\bsecret\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
     // GRANT ... IDENTIFIED BY '<pw>' (already covered by identified_by, kept for clarity).
     // SET PASSWORD = 'x' / SET PASSWORD FOR user = 'x'.
     (
-        r"(?i)set\s+password\s+(?:for\s+\S+\s+)?=\s*\S+",
+        r"(?i)\bset\s+password\s+(?:for\s+\S+\s+)?=\s*\S+",
         REDACTION_PLACEHOLDER,
     ),
     // Non-English secret labels we have observed in production logs.
-    (r"(?i)kennwort\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+    (r"(?i)\bkennwort\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
     (
-        r"(?i)mot[_-]?de[_-]?passe\s*[=:]\s*\S+",
+        r"(?i)\bmot[_-]?de[_-]?passe\s*[=:]\s*\S+",
         REDACTION_PLACEHOLDER,
     ),
-    (r"(?i)contrase[nñ]a\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
-    // URL userinfo (any scheme).
-    (r"(?i)://[^:/\s]+:[^@\s]+@", "://***:***@"),
+    (r"(?i)\bcontrase[nñ]a\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+    // URL userinfo (any scheme). Replacement uses REDACTION_PLACEHOLDER
+    // for both user and password components so a chained pass through
+    // redact_sql_error after redact_url is a no-op (MEDIUM idempotence).
+    (
+        r"(?i)://[^:/\s]+:[^@\s]+@",
+        "://***REDACTED***:***REDACTED***@",
+    ),
 ];
 
 /// Number of redaction patterns the `redact_sql_error` pipeline expects to
@@ -169,11 +194,12 @@ fn get_redaction_patterns() -> &'static Vec<(Regex, &'static str)> {
 /// assert!(redacted.contains("***REDACTED***"), "placeholder must appear");
 /// assert!(!redacted.contains("password: YES"), "original text must be gone");
 ///
-/// // URL userinfo is replaced structurally (different placeholder) so
-/// // failure output distinguishes "URL was parseable" from "generic key=value match".
+/// // URL userinfo is replaced with the shared REDACTION_PLACEHOLDER so
+/// // chaining redactors converges to a single fixed point (operators
+/// // grepping stderr for "REDACTED" hit every scrubbed surface).
 /// let url_error = "Failed to connect to mysql://alice:secret@db:3306/prod";
 /// let redacted = redact_sql_error(url_error);
-/// assert!(redacted.contains("://***:***@"), "URL userinfo replaced");
+/// assert!(redacted.contains("://***REDACTED***:***REDACTED***@"), "URL userinfo replaced");
 /// assert!(!redacted.contains("alice:secret"), "credentials must be gone");
 ///
 /// // Redaction is idempotent — running on an already-redacted string is a no-op.
@@ -283,8 +309,12 @@ mod tests {
 
     #[test]
     fn test_redact_sql_error_token_and_apikey() {
-        let redacted = redact_sql_error("Error: Invalid token abc123");
+        // HIGH #8: bare-space `token \S+` matched arbitrary prose
+        // (e.g. `JSON_TOKEN parser`) and was deleted. Real credential
+        // leaks use the `[=:]` separator form, which still matches.
+        let redacted = redact_sql_error("Error: Invalid token=abc123");
         assert!(redacted.contains(REDACTION_PLACEHOLDER));
+        assert!(!redacted.contains("abc123"));
 
         let redacted = redact_sql_error("Error: api_key=sensitive_value");
         assert!(redacted.contains(REDACTION_PLACEHOLDER));
@@ -303,7 +333,10 @@ mod tests {
         let redacted = redact_sql_error(msg);
         assert!(!redacted.contains("hunter2"));
         assert!(!redacted.contains("alice"));
-        assert!(redacted.contains("***:***@"));
+        // MEDIUM idempotence fix: URL userinfo is replaced with the
+        // shared REDACTION_PLACEHOLDER so a follow-up pass through
+        // redact_sql_error (or grep for "REDACTED") sees consistent output.
+        assert!(redacted.contains("://***REDACTED***:***REDACTED***@"));
     }
 
     #[test]
@@ -442,5 +475,71 @@ mod tests {
         let via_sql = redact_sql_error(q);
         assert_eq!(via_dump, via_sql);
         assert!(!via_dump.contains("'hunter2'"));
+    }
+
+    /// HIGH #8 regression: label patterns must not fire on substrings
+    /// that happen to contain a label as part of a larger identifier.
+    /// Pre-fix the bare `pass` pattern matched `boarding_pass=ABC` and
+    /// turned it into `***REDACTED***`. The `\b` left-anchor restricts
+    /// the matcher to real label boundaries.
+    #[test]
+    fn test_redact_sql_error_does_not_match_substring_labels() {
+        // `boarding_pass` contains `pass` but is not a credential label;
+        // \b ensures the matcher does not fire on `_pass`.
+        let raw = "boarding_pass=ABC";
+        let redacted = redact_sql_error(raw);
+        assert_eq!(redacted, raw, "boarding_pass=ABC must survive unchanged");
+
+        // `the secret ingredient is salt` previously matched the bare
+        // `secret \S+` pattern and got mangled. With the bare-space
+        // variant deleted (and `\b` on the [=:] form), prose survives.
+        let raw = "the secret ingredient is salt";
+        let redacted = redact_sql_error(raw);
+        assert_eq!(redacted, raw, "prose containing 'secret' must survive");
+
+        // `JSON_TOKEN parser` previously matched the bare `token \S+`
+        // pattern. Same deletion + boundary fix as above.
+        let raw = "JSON_TOKEN parser";
+        let redacted = redact_sql_error(raw);
+        assert_eq!(redacted, raw, "JSON_TOKEN parser must survive unchanged");
+    }
+
+    /// HIGH #8 positive control: real `password=` lines still get
+    /// scrubbed after the boundary fix. Establishes that we did not
+    /// over-restrict the matcher while removing false positives.
+    #[test]
+    fn test_redact_sql_error_password_keyvalue_still_redacts() {
+        let raw = "password=hunter2";
+        let redacted = redact_sql_error(raw);
+        assert!(
+            redacted.contains(REDACTION_PLACEHOLDER),
+            "real password label must still be redacted; got {redacted:?}"
+        );
+        assert!(!redacted.contains("hunter2"), "secret leaked: {redacted:?}");
+    }
+
+    /// MEDIUM idempotence regression: `redact_url` rewrites a URL's
+    /// userinfo to use [`REDACTION_PLACEHOLDER`]; `redact_sql_error`
+    /// must then leave that output untouched (or, equivalently, produce
+    /// a stable fixed point). Pre-fix the URL regex emitted `://***:***@`
+    /// (a different placeholder), so chaining the two redactors changed
+    /// the output and operators grepping for "REDACTED" missed lines
+    /// that flowed through `redact_sql_error` after `redact_url`.
+    #[test]
+    fn redact_sql_error_is_idempotent_over_redact_url_output() {
+        let url = "mysql://alice:secret@host:3306/db";
+        let r1 = redact_url(url);
+        let r2 = redact_sql_error(&r1);
+        let r3 = redact_sql_error(&r2);
+        assert_eq!(
+            r2, r3,
+            "redact_sql_error must be idempotent over redact_url output"
+        );
+        assert!(!r2.contains("alice"), "username must be redacted: {r2:?}");
+        assert!(!r2.contains("secret"), "password must be redacted: {r2:?}");
+        assert!(
+            r2.contains(REDACTION_PLACEHOLDER),
+            "shared placeholder must appear: {r2:?}"
+        );
     }
 }

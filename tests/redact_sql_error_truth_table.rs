@@ -42,11 +42,15 @@ use rstest::rstest;
     "Hunter2_pw06"
 )]
 #[case::token_eq("token=", "token=Hunter2_pw07", "Hunter2_pw07")]
-#[case::token_space("token <space>", "token Hunter2_pw08", "Hunter2_pw08")]
+// HIGH #8: bare-space `token \S+` and `secret \S+` patterns were
+// removed because they fired on prose (`JSON_TOKEN parser`,
+// `the secret ingredient is salt`). Real credential leaks use the
+// `[=:]` separator forms, which still cover these cases below.
+#[case::token_colon("token:", "token:Hunter2_pw08", "Hunter2_pw08")]
 #[case::api_key_underscore("api_key=", "api_key=Hunter2_pw09", "Hunter2_pw09")]
 #[case::api_key_dash("api-key=", "api-key=Hunter2_pw10", "Hunter2_pw10")]
 #[case::secret_eq("secret=", "secret=Hunter2_pw11", "Hunter2_pw11")]
-#[case::secret_space("secret <space>", "secret Hunter2_pw12", "Hunter2_pw12")]
+#[case::secret_colon("secret:", "secret:Hunter2_pw12", "Hunter2_pw12")]
 #[case::set_password(
     "set password",
     "SET PASSWORD FOR alice = 'Hunter2_pw13'",
