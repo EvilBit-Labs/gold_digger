@@ -73,6 +73,16 @@ pub enum ConfigError {
     #[error("Output file already exists: {path}. Pass --force to overwrite.")]
     OutputExists { path: PathBuf },
 
+    /// A leftover sibling `<output>.tmp` file was found at sink-open time.
+    /// Refusing to truncate it closes the predictable-tempfile attack
+    /// (HIGH #9 from PR review): a co-tenant can plant a file at the
+    /// known `.tmp` path and otherwise have its contents silently
+    /// destroyed every run.
+    #[error(
+        "Stale temporary output file at {path}. Remove it manually before retrying (a previous run may have crashed, or another process may be writing here)."
+    )]
+    StaleTempFile { path: PathBuf },
+
     /// Format-resolution rejection (unknown extension and no `--format`).
     #[error("{0}")]
     UnresolvableFormat(String),
@@ -269,10 +279,17 @@ pub fn map_error_to_exit_code(error: &Error) -> i32 {
         return EXIT_NO_ROWS;
     }
 
+    // Note: the `"invalid"` substring keyword was removed (HIGH #7). It was
+    // the noisiest single token in the classifier — a generic
+    // `anyhow!("invalid X")` from any layer of the codebase routed to
+    // EXIT_CONFIG_ERROR even when the underlying problem was a query or I/O
+    // failure. Now that the typed `GoldDiggerError`/`ConfigError` pipeline is
+    // wired through the wire path (Wave 1), real config errors are
+    // constructed as typed values and reach the exit code via the typed
+    // downcast path above. Untyped `anyhow!("invalid …")` errors fall
+    // through to the default `EXIT_QUERY_ERROR` arm at the bottom, which is
+    // safer than over-broad config-class routing.
     if error_string.contains("missing")
-        || (error_string.contains("invalid")
-            && !error_string.contains("invalid certificate format")
-            && !error_string.contains("type conversion"))
         || error_string.contains("configuration")
         || error_string.contains("mutually exclusive")
         || error_string.contains("tls feature not enabled")
@@ -360,10 +377,13 @@ mod tests {
 
     #[test]
     fn test_map_error_to_exit_code_config() {
+        // HIGH #7: the substring matcher no longer keys on `"invalid"` — real
+        // config errors are now constructed as typed `ConfigError` values and
+        // route through the typed downcast path (see
+        // `test_config_error_routes_to_config_exit_code`). The substring
+        // fallback retains only the high-precision keywords that aren't
+        // load-bearing in untyped query/IO errors.
         let error = anyhow!("Missing database URL");
-        assert_eq!(map_error_to_exit_code(&error), EXIT_CONFIG_ERROR);
-
-        let error = anyhow!("Invalid configuration");
         assert_eq!(map_error_to_exit_code(&error), EXIT_CONFIG_ERROR);
 
         let error = anyhow!("Mutually exclusive flags");
@@ -374,6 +394,21 @@ mod tests {
 
         let error = anyhow!("Certificate file not found");
         assert_eq!(map_error_to_exit_code(&error), EXIT_CONFIG_ERROR);
+    }
+
+    /// HIGH #7 regression: untyped `anyhow!("invalid …")` errors must NOT
+    /// route to `EXIT_CONFIG_ERROR` via substring match. The old behaviour
+    /// (the `"invalid"` keyword routing untyped errors to config-class)
+    /// silently miscategorised a wide range of query/IO failures. Real
+    /// config errors construct typed `ConfigError` values; everything else
+    /// falls through to the default `EXIT_QUERY_ERROR`.
+    #[test]
+    fn test_invalid_keyword_no_longer_routes_to_config() {
+        let error = anyhow!("Invalid configuration");
+        assert_ne!(map_error_to_exit_code(&error), EXIT_CONFIG_ERROR);
+
+        let error = anyhow!("invalid foo");
+        assert_ne!(map_error_to_exit_code(&error), EXIT_CONFIG_ERROR);
     }
 
     #[test]
@@ -556,6 +591,9 @@ mod tests {
                 flags: "--a, --b".into(),
             }),
             GoldDiggerError::Config(ConfigError::OutputExists { path: "/x".into() }),
+            GoldDiggerError::Config(ConfigError::StaleTempFile {
+                path: "/x.tmp".into(),
+            }),
             GoldDiggerError::Config(ConfigError::UnresolvableFormat("x".into())),
             GoldDiggerError::Config(ConfigError::Other("anything".into())),
         ] {
