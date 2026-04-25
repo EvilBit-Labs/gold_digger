@@ -278,15 +278,15 @@ fn atomic_force_rename(tmp_path: &Path, output: &Path) -> Result<()> {
 /// returns `EEXIST` on collision.
 #[cfg(target_os = "linux")]
 fn commit_tmp_linux(tmp_path: &Path, output: &Path) -> Result<()> {
-    use nix::fcntl::{RenameFlags, renameat2};
+    use nix::fcntl::{AT_FDCWD, RenameFlags, renameat2};
 
-    // `None` for both directory fds means the paths are interpreted
+    // `AT_FDCWD` for both directory fds means the paths are interpreted
     // relative to CWD (same as plain `rename(2)`); we always pass
     // absolute or CWD-relative paths from the call sites in this module.
     match renameat2(
-        None::<std::os::fd::BorrowedFd>,
+        AT_FDCWD,
         tmp_path,
-        None::<std::os::fd::BorrowedFd>,
+        AT_FDCWD,
         output,
         RenameFlags::RENAME_NOREPLACE,
     ) {

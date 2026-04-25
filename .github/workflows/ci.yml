@@ -39,11 +39,10 @@ jobs:
               run: rustup component add rustfmt clippy
 
             - name: Check formatting
-              run: just lint-rust
+              run: just fmt-check
 
-            - name: Run clippy (minimal features)
-              run: cargo clippy --no-default-features --features
-                  "additional_mysql_types" -- -D warnings
+            - name: Run clippy (default + minimal features)
+              run: just lint
 
     # Test TLS functionality (always available)
     test-tls:

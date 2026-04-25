@@ -12,4 +12,9 @@ ignore = [
     # lru unsoundness in IterMut - transitive via mysql crate
     # We don't use IterMut on lru directly; waiting for mysql to update
     "RUSTSEC-2026-0002",
+
+    # rand 0.9.2 unsoundness with custom logger using rand::rng()
+    # Transitive via proptest (test-only) and bollard -> testcontainers (test-only).
+    # We don't ship rand and don't install custom loggers in tests.
+    "RUSTSEC-2026-0097",
 ]
