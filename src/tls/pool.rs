@@ -107,10 +107,10 @@ pub fn create_tls_connection(
                         TlsValidationMode::Platform => {
                             tracing::info!("[TLS] Using platform certificate store");
                         }
-                        TlsValidationMode::CustomCa { ca_file_path } => {
+                        TlsValidationMode::CustomCa { ca_file } => {
                             tracing::info!(
                                 "[TLS] Using custom CA file: {}",
-                                ca_file_path.display()
+                                ca_file.path().display()
                             );
                         }
                         TlsValidationMode::SkipHostnameVerification => {

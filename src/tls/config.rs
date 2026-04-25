@@ -1,49 +1,69 @@
-//! [`TlsConfig`] DTO + [`TlsValidationMode`] enum.
+//! [`TlsValidationMode`] enum (the canonical TLS configuration type).
 //!
-//! `TlsConfig` is the only object `src/main.rs` and `src/cli.rs` hand to
-//! [`super::pool::create_tls_connection`]. It captures the user's chosen
-//! validation posture and converts itself to [`mysql::SslOpts`] on demand.
+//! `TlsValidationMode` is the only object `src/main.rs` and `src/cli.rs`
+//! hand to [`super::pool::create_tls_connection`]. It captures the
+//! user's chosen validation posture and converts itself to
+//! [`mysql::SslOpts`] on demand.
+//!
+//! `TlsConfig` is now a backward-compatible type alias for
+//! `TlsValidationMode` (see #3 type-design fix). Existing imports
+//! continue to compile; the methods previously living on the old
+//! `TlsConfig` wrapper are now inherent methods on the enum itself.
 //!
 //! The CLI adapter (`TlsOptions::to_tls_config`) lives in [`crate::cli`] to
 //! keep this module dependent only on primitive types; see commit `ce7685a`
 //! for the rationale (presentation → infrastructure coupling).
 
-use super::ca;
+use super::ca::CaFile;
 use super::error::TlsError;
-use anyhow::Result;
 use mysql::SslOpts;
 use std::path::PathBuf;
 
-/// TLS validation modes for different security requirements
-#[derive(Debug, Clone, PartialEq, Default)]
+/// TLS validation modes for different security requirements.
+///
+/// This is the canonical TLS configuration type. The historical
+/// `TlsConfig` wrapper was a single-field newtype that added no real
+/// abstraction — every method just delegated to the inner mode — so
+/// it has been collapsed into this enum (#3 type-design fix).
+/// `TlsConfig` remains as a type alias for backward compatibility with
+/// existing imports.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum TlsValidationMode {
     /// Use platform certificate store with full validation (default)
     #[default]
     Platform,
-    /// Use custom CA file with full validation
-    CustomCa { ca_file_path: PathBuf },
+    /// Use a custom CA bundle that has been validated at construction
+    /// time (canonicalised, exists, ≥ 1 valid PEM cert).
+    CustomCa { ca_file: CaFile },
     /// Use platform store but skip hostname verification
     SkipHostnameVerification,
     /// Accept any certificate (no validation) - DANGEROUS
     AcceptInvalid,
 }
 
-/// TLS configuration for MySQL connections
-#[derive(Debug, Clone, PartialEq, Default)]
-pub struct TlsConfig {
-    /// TLS validation mode
-    pub validation_mode: TlsValidationMode,
-}
+/// Backward-compatibility alias for the historical `TlsConfig` wrapper.
+///
+/// `TlsConfig` was a single-field struct around [`TlsValidationMode`];
+/// the wrapper added no abstraction so it has been collapsed into the
+/// enum itself (#3 type-design fix). This alias keeps existing imports
+/// (`use gold_digger::tls::TlsConfig`) compiling.
+pub type TlsConfig = TlsValidationMode;
 
-impl TlsConfig {
-    /// Creates a new TLS configuration with platform validation
+impl TlsValidationMode {
+    /// Creates a new TLS configuration with platform validation.
+    ///
+    /// Equivalent to `TlsValidationMode::Platform`; retained for the
+    /// fluent `TlsConfig::new()` style used by the existing call sites.
     pub fn new() -> Self {
-        Self {
-            validation_mode: TlsValidationMode::Platform,
-        }
+        Self::Platform
     }
 
-    /// Creates a TLS configuration from CLI arguments with validation
+    /// Creates a TLS configuration from CLI arguments with validation.
+    ///
+    /// When `ca_file` is supplied, the path is loaded and validated
+    /// eagerly via [`CaFile::load`] — bogus paths produce
+    /// [`TlsError::CaFileNotFound`] / [`TlsError::InvalidCaFormat`] at
+    /// construction time rather than later inside the mysql driver.
     pub fn from_cli_args(
         ca_file: Option<&PathBuf>,
         skip_hostname: bool,
@@ -69,25 +89,22 @@ impl TlsConfig {
             return Err(TlsError::mutually_exclusive_flags(flags.join(", ")));
         }
 
-        let validation_mode = if let Some(ca_file_path) = ca_file {
-            // Validate CA file exists and is readable
-            if !ca_file_path.exists() {
-                return Err(TlsError::ca_file_not_found(
-                    ca_file_path.display().to_string(),
-                ));
-            }
-            TlsValidationMode::CustomCa {
-                ca_file_path: ca_file_path.clone(),
-            }
+        let mode = if let Some(ca_file_path) = ca_file {
+            // Eager validation at construction time (#2 type-design fix):
+            // CaFile::load canonicalises, checks existence, opens the
+            // file, and parses PEM. Bogus paths cannot survive past
+            // this point.
+            let ca_file = CaFile::load(ca_file_path)?;
+            Self::CustomCa { ca_file }
         } else if skip_hostname {
-            TlsValidationMode::SkipHostnameVerification
+            Self::SkipHostnameVerification
         } else if accept_invalid {
-            TlsValidationMode::AcceptInvalid
+            Self::AcceptInvalid
         } else {
-            TlsValidationMode::Platform
+            Self::Platform
         };
 
-        Ok(Self { validation_mode })
+        Ok(mode)
     }
 
     /// Displays security warnings for insecure TLS modes.
@@ -98,8 +115,8 @@ impl TlsConfig {
     pub fn display_security_warnings(&self) {
         use crate::logging::{danger_banner, warn_banner};
 
-        match &self.validation_mode {
-            TlsValidationMode::SkipHostnameVerification => {
+        match self {
+            Self::SkipHostnameVerification => {
                 tracing::warn!(
                     "{}",
                     warn_banner(
@@ -113,7 +130,7 @@ impl TlsConfig {
                     )
                 );
             }
-            TlsValidationMode::AcceptInvalid => {
+            Self::AcceptInvalid => {
                 tracing::error!(
                     "{}",
                     danger_banner("[DANGER] Certificate validation completely disabled!")
@@ -131,62 +148,64 @@ impl TlsConfig {
                     )
                 );
             }
-            TlsValidationMode::Platform | TlsValidationMode::CustomCa { .. } => {
+            Self::Platform | Self::CustomCa { .. } => {
                 // No warnings for secure modes
             }
         }
     }
 
-    /// Creates a TLS configuration with custom CA file validation
-    pub fn with_custom_ca<P: Into<PathBuf>>(ca_file_path: P) -> Self {
-        Self {
-            validation_mode: TlsValidationMode::CustomCa {
-                ca_file_path: ca_file_path.into(),
-            },
-        }
+    /// Creates a TLS configuration with custom CA file validation.
+    ///
+    /// The CA file is loaded and validated eagerly via [`CaFile::load`].
+    /// Returns [`TlsError`] when the path is missing, unreadable, or
+    /// not valid PEM (#2 type-design fix).
+    pub fn with_custom_ca<P: AsRef<std::path::Path>>(ca_file_path: P) -> Result<Self, TlsError> {
+        let ca_file = CaFile::load(ca_file_path)?;
+        Ok(Self::CustomCa { ca_file })
     }
 
-    /// Creates a TLS configuration that skips hostname verification
+    /// Creates a TLS configuration that skips hostname verification.
     pub fn with_skip_hostname_verification() -> Self {
-        Self {
-            validation_mode: TlsValidationMode::SkipHostnameVerification,
-        }
+        Self::SkipHostnameVerification
     }
 
-    /// Creates a TLS configuration that accepts invalid certificates
+    /// Creates a TLS configuration that accepts invalid certificates.
     pub fn with_accept_invalid() -> Self {
-        Self {
-            validation_mode: TlsValidationMode::AcceptInvalid,
-        }
+        Self::AcceptInvalid
     }
 
-    /// Returns the validation mode
-    pub fn validation_mode(&self) -> &TlsValidationMode {
-        &self.validation_mode
+    /// Returns the validation mode.
+    ///
+    /// Historically this was `TlsConfig::validation_mode(&self) ->
+    /// &TlsValidationMode`. After collapsing the wrapper, the value
+    /// IS the mode — so this just returns `self`. Retained as an
+    /// inherent method so existing call sites
+    /// (`config.validation_mode()`) keep compiling.
+    pub fn validation_mode(&self) -> &Self {
+        self
     }
 
-    /// Converts the TLS configuration to mysql::SslOpts using rustls-only implementation
+    /// Converts the TLS configuration to mysql::SslOpts using rustls-only implementation.
     pub fn to_ssl_opts(&self) -> Result<Option<SslOpts>, TlsError> {
-        // For custom CA validation, validate the CA file exists and is readable
-        if let TlsValidationMode::CustomCa { ca_file_path } = &self.validation_mode {
-            ca::validate_ca_file(ca_file_path)?;
-        }
-
-        // Create SslOpts based on validation mode using rustls-only implementation
-        let ssl_opts = match &self.validation_mode {
-            TlsValidationMode::Platform => {
+        // Create SslOpts based on validation mode using rustls-only implementation.
+        // CustomCa skips re-validation: CaFile::load already canonicalised
+        // the path and confirmed at least one valid PEM certificate at
+        // construction time, so we can hand the path straight to mysql
+        // without re-reading the file (#2 type-design fix).
+        let ssl_opts = match self {
+            Self::Platform => {
                 // Use default SslOpts which will use rustls with platform certificates
                 SslOpts::default()
             }
-            TlsValidationMode::CustomCa { ca_file_path } => {
+            Self::CustomCa { ca_file } => {
                 // Set the CA file path for custom CA validation
-                SslOpts::default().with_root_cert_path(Some(ca_file_path.clone()))
+                SslOpts::default().with_root_cert_path(Some(ca_file.path().to_path_buf()))
             }
-            TlsValidationMode::SkipHostnameVerification => {
+            Self::SkipHostnameVerification => {
                 // Use SslOpts that skips hostname verification
                 SslOpts::default().with_danger_skip_domain_validation(true)
             }
-            TlsValidationMode::AcceptInvalid => {
+            Self::AcceptInvalid => {
                 // Use SslOpts that accepts invalid certificates
                 SslOpts::default()
                     .with_danger_accept_invalid_certs(true)
@@ -201,44 +220,49 @@ impl TlsConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    /// Writes a freshly-generated self-signed PEM certificate to a
+    /// temp file and returns it. Used by every CustomCa test in this
+    /// module so the eager-validation path in `CaFile::load` succeeds.
+    fn temp_valid_ca_file() -> NamedTempFile {
+        use rcgen::generate_simple_self_signed;
+        let cert =
+            generate_simple_self_signed(vec!["localhost".to_string()]).expect("generate cert");
+        let pem = cert.cert.pem();
+        let mut tf = NamedTempFile::new().unwrap();
+        tf.write_all(pem.as_bytes()).unwrap();
+        tf.flush().unwrap();
+        tf
+    }
 
     #[test]
     fn test_tls_config_default() {
         let config = TlsConfig::default();
-        assert!(matches!(
-            config.validation_mode,
-            TlsValidationMode::Platform
-        ));
+        assert!(matches!(config, TlsValidationMode::Platform));
     }
 
     #[test]
     fn test_tls_config_new() {
         let config = TlsConfig::new();
-        assert!(matches!(
-            config.validation_mode,
-            TlsValidationMode::Platform
-        ));
+        assert!(matches!(config, TlsValidationMode::Platform));
     }
 
     #[test]
     fn test_tls_config_builder_patterns() {
-        let config = TlsConfig::with_custom_ca("/path/to/ca.pem");
-        assert!(matches!(
-            config.validation_mode,
-            TlsValidationMode::CustomCa { .. }
-        ));
+        let ca = temp_valid_ca_file();
+        let config = TlsConfig::with_custom_ca(ca.path()).expect("valid ca");
+        assert!(matches!(config, TlsValidationMode::CustomCa { .. }));
 
         let config = TlsConfig::with_skip_hostname_verification();
         assert!(matches!(
-            config.validation_mode,
+            config,
             TlsValidationMode::SkipHostnameVerification
         ));
 
         let config = TlsConfig::with_accept_invalid();
-        assert!(matches!(
-            config.validation_mode,
-            TlsValidationMode::AcceptInvalid
-        ));
+        assert!(matches!(config, TlsValidationMode::AcceptInvalid));
     }
 
     #[test]
@@ -259,14 +283,15 @@ mod tests {
     }
 
     #[test]
-    fn test_to_ssl_opts_with_nonexistent_ca_certificate() {
-        let config = TlsConfig::with_custom_ca("/nonexistent/ca.pem");
-
-        let ssl_opts = config.to_ssl_opts();
-        assert!(ssl_opts.is_err());
-
-        let error = ssl_opts.unwrap_err();
-        assert!(error.to_string().contains("CA certificate file not found"));
+    fn test_with_custom_ca_nonexistent_returns_not_found() {
+        // The eager-validation path now rejects bogus paths at
+        // construction time (#2 fix), not at to_ssl_opts() time.
+        let result = TlsConfig::with_custom_ca("/nonexistent/ca.pem");
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            TlsError::CaFileNotFound { .. }
+        ));
     }
 
     #[test]
@@ -286,7 +311,8 @@ mod tests {
 
     #[test]
     fn test_tls_config_clone() {
-        let config1 = TlsConfig::with_custom_ca("/path/to/ca.pem");
+        let ca = temp_valid_ca_file();
+        let config1 = TlsConfig::with_custom_ca(ca.path()).expect("valid ca");
         let config2 = config1.clone();
 
         assert_eq!(config1, config2);
@@ -295,10 +321,7 @@ mod tests {
     #[test]
     fn test_from_cli_args_platform_default() {
         let config = TlsConfig::from_cli_args(None, false, false).unwrap();
-        assert!(matches!(
-            config.validation_mode,
-            TlsValidationMode::Platform
-        ));
+        assert!(matches!(config, TlsValidationMode::Platform));
     }
 
     #[test]
@@ -313,16 +336,13 @@ mod tests {
                 .to_string()
                 .contains("CA certificate file not found")
         );
-
-        // Test with valid file would require creating a temporary file
-        // For now, we test the error case which is the expected behavior
     }
 
     #[test]
     fn test_from_cli_args_skip_hostname() {
         let config = TlsConfig::from_cli_args(None, true, false).unwrap();
         assert!(matches!(
-            config.validation_mode,
+            config,
             TlsValidationMode::SkipHostnameVerification
         ));
     }
@@ -330,10 +350,7 @@ mod tests {
     #[test]
     fn test_from_cli_args_accept_invalid() {
         let config = TlsConfig::from_cli_args(None, false, true).unwrap();
-        assert!(matches!(
-            config.validation_mode,
-            TlsValidationMode::AcceptInvalid
-        ));
+        assert!(matches!(config, TlsValidationMode::AcceptInvalid));
     }
 
     #[test]
@@ -427,16 +444,8 @@ mod tests {
         assert!(ssl_opts.is_ok());
         assert!(ssl_opts.unwrap().is_some());
 
-        // Test custom CA with nonexistent file
-        let config = TlsConfig::with_custom_ca("/nonexistent/ca.pem");
-        let ssl_opts = config.to_ssl_opts();
-        assert!(ssl_opts.is_err());
-        assert!(
-            ssl_opts
-                .unwrap_err()
-                .to_string()
-                .contains("CA certificate file not found")
-        );
+        // Custom CA with bogus path now fails at construction (not
+        // at to_ssl_opts) — see test_with_custom_ca_nonexistent_returns_not_found.
     }
 
     #[test]
@@ -467,134 +476,30 @@ mod tests {
 
     #[test]
     fn test_to_ssl_opts_custom_ca_with_temp_file() {
-        use std::io::Write;
-        use tempfile::NamedTempFile;
+        // Build a freshly-generated valid PEM via rcgen so CaFile::load
+        // accepts it (the historical hardcoded cert was malformed and
+        // relied on the lazy-validation path failing at to_ssl_opts).
+        let ca_file = temp_valid_ca_file();
 
-        // Create a temporary file with a valid self-signed certificate (for testing purposes)
-        let mut temp_file = NamedTempFile::new().unwrap();
-        // This is a valid self-signed certificate for testing
-        writeln!(temp_file, "-----BEGIN CERTIFICATE-----").unwrap();
-        writeln!(
-            temp_file,
-            "MIIDXTCCAkWgAwIBAgIJAKoK/heBjcOuMA0GCSqGSIb3DQEBBQUAMEUxCzAJBgNV"
-        )
-        .unwrap();
-        writeln!(
-            temp_file,
-            "BAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBX"
-        )
-        .unwrap();
-        writeln!(
-            temp_file,
-            "aWRnaXRzIFB0eSBMdGQwHhcNMTcwODI4MTkzNDA5WhcNMTgwODI4MTkzNDA5WjBF"
-        )
-        .unwrap();
-        writeln!(
-            temp_file,
-            "MQswCQYDVQQGEwJBVTETMBEGA1UECAwKU29tZS1TdGF0ZTEhMB8GA1UECgwYSW50"
-        )
-        .unwrap();
-        writeln!(
-            temp_file,
-            "ZXJuZXQgV2lkZ2l0cyBQdHkgTHRkMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIB"
-        )
-        .unwrap();
-        writeln!(
-            temp_file,
-            "CgKCAQEAuuExKvY1nOmAHO13nPiOxvTnoFrL23apFR9W+VdtPGrb+sQXebHjZ/UU"
-        )
-        .unwrap();
-        writeln!(
-            temp_file,
-            "kKtjWQqLQlHgHOgFbt7jr8I2J2jFiaNBBBYuHBw6NMVBnhkdXRJDn9LxMa02cx1q"
-        )
-        .unwrap();
-        writeln!(
-            temp_file,
-            "BxuFqV7zUg4EQVXveZd0HFDZrpVeUiA21IlQpFYxyFveOiGspMdYjI5u3Ngkqbz6"
-        )
-        .unwrap();
-        writeln!(
-            temp_file,
-            "pXrbRqZzjXaFUcuJpPMFRNKGWv5wyAcb5B2fHX1sGtSaYvNilgxnE8+ykQs6rp+j"
-        )
-        .unwrap();
-        writeln!(
-            temp_file,
-            "kVf3lbVvB4zUHg9S5RoQBQ1CuHnRkl9wjw03EBEQ4h2z4k5cyR2DpmdJ0b+2cxJl"
-        )
-        .unwrap();
-        writeln!(
-            temp_file,
-            "Ww9cDcTgWwIDAQABo1AwTjAdBgNVHQ4EFgQUhG9lFWZWnPfLwB9gQQd8it/u+MQw"
-        )
-        .unwrap();
-        writeln!(
-            temp_file,
-            "HwYDVR0jBBgwFoAUhG9lFWZWnPfLwB9gQQd8it/u+MQwDAYDVR0TBAUwAwEB/zAN"
-        )
-        .unwrap();
-        writeln!(
-            temp_file,
-            "BgkqhkiG9w0BAQUFAAOCAQEAeM9ahJ6iAJfyFq4wzSmpOddgfGqJWjXiH+OqZlHO"
-        )
-        .unwrap();
-        writeln!(
-            temp_file,
-            "2k8sVjCjmHylI+XleLu2dDxwjNuBllhid/Qs6TRcZxEqn+cAskHReXlZjQoHuSHx"
-        )
-        .unwrap();
-        writeln!(
-            temp_file,
-            "VxHp2+PpVUFnuU19LFbmqZ3+/dvTVc0V0QNFS4HgBXkKwA9fPQ+k/roUe0is7d+8"
-        )
-        .unwrap();
-        writeln!(
-            temp_file,
-            "O4ArHZka85ZMd1qY4z0xvFvbMmJuC0KJvEieakGFkCEc7trGwfIuXgFMLJLBB5uZ"
-        )
-        .unwrap();
-        writeln!(
-            temp_file,
-            "F74imqDbImh5tbwQcQYBYVHhkCjDOw+XdXUSPiOBueno0soKjOxjVmooPdxyaAuW"
-        )
-        .unwrap();
-        writeln!(
-            temp_file,
-            "fuFhiGI+bI90H4+17ceuJAOzOFvhPH1RTwf5k+7+BzXrqbHlt+2RfEECAwEAAQ=="
-        )
-        .unwrap();
-        writeln!(temp_file, "-----END CERTIFICATE-----").unwrap();
-        temp_file.flush().unwrap();
+        // Construct via the public builder (eager validation).
+        let config = TlsConfig::with_custom_ca(ca_file.path()).expect("valid ca");
 
-        // Test custom CA mode with the temporary file
-        let config = TlsConfig::with_custom_ca(temp_file.path());
-
-        // Verify the configuration is set up correctly
-        assert_eq!(
-            config.validation_mode(),
-            &TlsValidationMode::CustomCa {
-                ca_file_path: temp_file.path().to_path_buf()
+        // Verify the configuration carries a CaFile pointing at the
+        // canonicalised temp path.
+        let canonical = std::fs::canonicalize(ca_file.path()).unwrap();
+        match &config {
+            TlsValidationMode::CustomCa { ca_file: cf } => {
+                assert_eq!(cf.path(), canonical);
+                assert!(cf.cert_count() >= 1);
             }
-        );
-
-        // The to_ssl_opts() call may fail due to invalid certificate, which is expected
-        // We're testing that the error handling works correctly
-        match config.to_ssl_opts() {
-            Ok(Some(ssl_opts)) => {
-                // If it succeeds, verify the configuration
-                assert!(!ssl_opts.skip_domain_validation());
-                assert!(!ssl_opts.accept_invalid_certs());
-                assert!(ssl_opts.root_cert_path().is_some());
-                assert_eq!(ssl_opts.root_cert_path().unwrap(), temp_file.path());
-            }
-            Err(TlsError::CertificateValidationFailed { .. })
-            | Err(TlsError::InvalidCaFormat { .. }) => {
-                // This is expected with an invalid test certificate
-                // The important thing is that the error is properly classified
-            }
-            other => panic!("Unexpected result: {:?}", other),
+            other => panic!("expected CustomCa, got {:?}", other),
         }
+
+        // to_ssl_opts() should succeed without re-reading the file.
+        let ssl_opts = config.to_ssl_opts().expect("to_ssl_opts succeeds").unwrap();
+        assert!(!ssl_opts.skip_domain_validation());
+        assert!(!ssl_opts.accept_invalid_certs());
+        assert_eq!(ssl_opts.root_cert_path().unwrap(), canonical);
     }
 
     #[test]
@@ -706,23 +611,6 @@ mod tests {
         let config = TlsConfig::default();
         let ssl_opts = config.to_ssl_opts().unwrap();
         assert!(ssl_opts.is_some());
-    }
-
-    #[test]
-    fn test_ssl_opts_nonexistent_ca_file() {
-        let nonexistent_path = PathBuf::from("/nonexistent/cert.pem");
-        let config = TlsConfig {
-            validation_mode: TlsValidationMode::CustomCa {
-                ca_file_path: nonexistent_path,
-            },
-        };
-
-        let ssl_opts_result = config.to_ssl_opts();
-        assert!(ssl_opts_result.is_err());
-        assert!(matches!(
-            ssl_opts_result.unwrap_err(),
-            TlsError::CaFileNotFound { .. }
-        ));
     }
 
     #[test]

@@ -170,7 +170,20 @@ mod database_url_compatibility_tests {
         let cert_pem = generate_test_certificate()?;
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
-        // Test cases: (url_with_ssl_params, cli_tls_options, expected_validation_mode)
+        // After the CaFile newtype migration, the CustomCa variant
+        // wraps a `CaFile`, not a `PathBuf`. Express each expected
+        // outcome as a small enum that the assertion logic below knows
+        // how to compare against the produced TlsValidationMode without
+        // forcing the test to construct a CaFile up front.
+        #[derive(Debug, PartialEq, Eq)]
+        enum ExpectedMode {
+            Platform,
+            SkipHostname,
+            AcceptInvalid,
+            CustomCa,
+        }
+
+        // Test cases: (url_with_ssl_params, cli_tls_options, expected_outcome)
         let test_cases = vec![
             // URL with ssl-mode=required, CLI with --allow-invalid-certificate
             (
@@ -180,7 +193,7 @@ mod database_url_compatibility_tests {
                     insecure_skip_hostname_verify: false,
                     allow_invalid_certificate: true,
                 },
-                TlsValidationMode::AcceptInvalid,
+                ExpectedMode::AcceptInvalid,
             ),
             // URL with ssl-ca=/path/to/ca.pem, CLI with --insecure-skip-hostname-verify
             (
@@ -190,7 +203,7 @@ mod database_url_compatibility_tests {
                     insecure_skip_hostname_verify: true,
                     allow_invalid_certificate: false,
                 },
-                TlsValidationMode::SkipHostnameVerification,
+                ExpectedMode::SkipHostname,
             ),
             // URL with multiple SSL params, CLI with --tls-ca-file
             (
@@ -200,9 +213,7 @@ mod database_url_compatibility_tests {
                     insecure_skip_hostname_verify: false,
                     allow_invalid_certificate: false,
                 },
-                TlsValidationMode::CustomCa {
-                    ca_file_path: cert_path.clone(),
-                },
+                ExpectedMode::CustomCa,
             ),
             // URL with ssl-mode=disabled, CLI with platform mode (no flags)
             (
@@ -212,56 +223,48 @@ mod database_url_compatibility_tests {
                     insecure_skip_hostname_verify: false,
                     allow_invalid_certificate: false,
                 },
-                TlsValidationMode::Platform,
+                ExpectedMode::Platform,
             ),
         ];
+
+        let canonical_cert_path = std::fs::canonicalize(&cert_path)?;
 
         for (url, cli_tls_options, expected_mode) in test_cases {
             // Create TLS config from CLI options (this simulates the actual CLI parsing)
             let tls_config = cli_tls_options.to_tls_config()?;
 
             // Assert that the CLI flags determine the validation mode, not URL parameters
-            assert_eq!(
-                *tls_config.validation_mode(),
-                expected_mode,
-                "CLI TLS flags should take precedence over URL SSL parameters. URL: {}, Expected: {:?}, Got: {:?}",
-                url,
-                expected_mode,
-                tls_config.validation_mode()
-            );
-
-            // Verify that URL SSL parameters are not present in the final SSL options
-            // Note: Certificate parsing may fail for test certificates, which is acceptable
-            assert_ssl_opts_available(&tls_config, "CLI TLS flags precedence test")?;
-
-            // For custom CA file, verify the path comes from CLI, not URL
-            if let TlsValidationMode::CustomCa { ca_file_path } = &expected_mode {
-                // The SSL options should contain the CLI-specified CA file path
-                // We can't directly inspect the SslOpts, but we can verify the config was created correctly
-                assert_eq!(
-                    *tls_config.validation_mode(),
-                    TlsValidationMode::CustomCa {
-                        ca_file_path: ca_file_path.clone()
-                    },
-                    "Custom CA file path should come from CLI flags, not URL parameters"
-                );
+            match (&expected_mode, tls_config.validation_mode()) {
+                (ExpectedMode::Platform, TlsValidationMode::Platform) => {}
+                (ExpectedMode::SkipHostname, TlsValidationMode::SkipHostnameVerification) => {}
+                (ExpectedMode::AcceptInvalid, TlsValidationMode::AcceptInvalid) => {}
+                (ExpectedMode::CustomCa, TlsValidationMode::CustomCa { ca_file }) => {
+                    // Verify the CA file path comes from CLI, post-canonicalisation.
+                    assert_eq!(
+                        ca_file.path(),
+                        canonical_cert_path,
+                        "Custom CA path must trace back to the CLI flag, URL: {url}"
+                    );
+                }
+                (expected, actual) => panic!(
+                    "CLI TLS flags should take precedence over URL SSL parameters. \
+                     URL: {url}, Expected: {expected:?}, Got: {actual:?}"
+                ),
             }
 
-            // Negative assertion: URL SSL parameters should not influence the final configuration
-            // This is tested by ensuring the validation mode matches the CLI flags, not URL parameters
-            if url.contains("ssl-mode=required") && expected_mode != TlsValidationMode::Platform {
-                // If URL has ssl-mode=required but CLI specifies a different mode, CLI should win
-                assert_ne!(
-                    *tls_config.validation_mode(),
-                    TlsValidationMode::Platform,
+            // Verify that SSL options can be generated for the resulting config.
+            assert_ssl_opts_available(&tls_config, "CLI TLS flags precedence test")?;
+
+            // Negative assertion: URL ssl-mode/ssl-ca parameters should not
+            // influence the final configuration when the CLI says otherwise.
+            if url.contains("ssl-mode=required") && expected_mode != ExpectedMode::Platform {
+                assert!(
+                    !matches!(tls_config.validation_mode(), TlsValidationMode::Platform),
                     "URL ssl-mode=required should not override CLI TLS flags"
                 );
             }
 
-            if url.contains("ssl-ca=")
-                && !matches!(&expected_mode, TlsValidationMode::CustomCa { .. })
-            {
-                // If URL has ssl-ca but CLI doesn't specify --tls-ca-file, URL should be ignored
+            if url.contains("ssl-ca=") && expected_mode != ExpectedMode::CustomCa {
                 assert!(
                     !matches!(
                         tls_config.validation_mode(),
@@ -376,11 +379,12 @@ mod tls_connection_compatibility_tests {
         let cert_pem = generate_test_certificate()?;
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
-        // Test custom CA configuration
-        let config = TlsConfig::with_custom_ca(&cert_path);
+        // Test custom CA configuration (eager validation; canonicalised path).
+        let config = TlsConfig::with_custom_ca(&cert_path)?;
 
-        if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
-            assert_eq!(ca_file_path, &cert_path, "CA file path should be preserved");
+        if let TlsValidationMode::CustomCa { ca_file } = config.validation_mode() {
+            let expected = std::fs::canonicalize(&cert_path)?;
+            assert_eq!(ca_file.path(), expected, "CA file path should be preserved");
         } else {
             panic!("Expected CustomCa validation mode");
         }
@@ -439,7 +443,7 @@ mod tls_connection_compatibility_tests {
         let cert_pem = generate_test_certificate()?;
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
-        let custom_ca_config = TlsConfig::with_custom_ca(&cert_path);
+        let custom_ca_config = TlsConfig::with_custom_ca(&cert_path)?;
         let skip_hostname_config = TlsConfig::with_skip_hostname_verification();
         let accept_invalid_config = TlsConfig::with_accept_invalid();
 
@@ -481,8 +485,9 @@ mod tls_connection_compatibility_tests {
         };
 
         let config = ca_tls_options.to_tls_config()?;
-        if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
-            assert_eq!(ca_file_path, &cert_path);
+        if let TlsValidationMode::CustomCa { ca_file } = config.validation_mode() {
+            let expected = std::fs::canonicalize(&cert_path)?;
+            assert_eq!(ca_file.path(), expected);
         } else {
             panic!("Expected CustomCa validation mode");
         }
@@ -751,10 +756,11 @@ mod security_warnings_tests {
         // Test custom CA mode (no warning)
         let cert_pem = generate_test_certificate().unwrap();
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem).unwrap();
-        let config = TlsConfig::with_custom_ca(&cert_path);
+        let config = TlsConfig::with_custom_ca(&cert_path).unwrap();
         config.display_security_warnings();
-        if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
-            assert_eq!(ca_file_path, &cert_path);
+        if let TlsValidationMode::CustomCa { ca_file } = config.validation_mode() {
+            let expected = std::fs::canonicalize(&cert_path).unwrap();
+            assert_eq!(ca_file.path(), expected);
         } else {
             panic!("Expected CustomCa validation mode");
         }
@@ -852,10 +858,11 @@ mod security_warnings_tests {
         // Test custom CA mode (secure, no warnings)
         let cert_pem = generate_test_certificate().unwrap();
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem).unwrap();
-        let config = TlsConfig::with_custom_ca(&cert_path);
+        let config = TlsConfig::with_custom_ca(&cert_path).unwrap();
         config.display_security_warnings(); // Should not display warnings
-        if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
-            assert_eq!(ca_file_path, &cert_path);
+        if let TlsValidationMode::CustomCa { ca_file } = config.validation_mode() {
+            let expected = std::fs::canonicalize(&cert_path).unwrap();
+            assert_eq!(ca_file.path(), expected);
         } else {
             panic!("Expected CustomCa validation mode");
         }
@@ -871,7 +878,7 @@ mod security_warnings_tests {
         let platform_config = TlsConfig::new();
         let cert_pem = generate_test_certificate()?;
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
-        let custom_ca_config = TlsConfig::with_custom_ca(&cert_path);
+        let custom_ca_config = TlsConfig::with_custom_ca(&cert_path)?;
 
         // Verify configuration modes are correct
         assert!(matches!(
@@ -886,8 +893,9 @@ mod security_warnings_tests {
             platform_config.validation_mode(),
             TlsValidationMode::Platform
         ));
-        if let TlsValidationMode::CustomCa { ca_file_path } = custom_ca_config.validation_mode() {
-            assert_eq!(ca_file_path, &cert_path);
+        if let TlsValidationMode::CustomCa { ca_file } = custom_ca_config.validation_mode() {
+            let expected = std::fs::canonicalize(&cert_path)?;
+            assert_eq!(ca_file.path(), expected);
         } else {
             panic!("Expected CustomCa validation mode");
         }
@@ -932,9 +940,9 @@ mod tls_always_available_tests {
         // Test custom CA configuration
         let cert_pem = generate_test_certificate()?;
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
-        let custom_ca_config = TlsConfig::with_custom_ca(&cert_path);
+        let custom_ca_config = TlsConfig::with_custom_ca(&cert_path)?;
 
-        // Custom CA may fail certificate parsing, but configuration should be created
+        // Custom CA was eagerly validated; SSL opts must be available.
         assert_ssl_opts_available(&custom_ca_config, "Custom CA config always available")?;
 
         Ok(())
