@@ -9,7 +9,8 @@
 //! Requirements covered: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6
 
 use anyhow::Result;
-use gold_digger::tls::{TlsConfig, redact_url};
+use gold_digger::tls::TlsConfig;
+use gold_digger::utils::redact_url;
 use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;

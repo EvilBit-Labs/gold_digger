@@ -35,7 +35,13 @@ pub mod pool;
 // `src/main.rs`, `src/cli.rs`, `src/exit.rs`, and the `tests/` suite.
 pub use config::{TlsConfig, TlsValidationMode};
 pub use error::TlsError;
-pub use pool::{create_tls_connection, redact_url};
+pub use pool::create_tls_connection;
+// Backward-compat re-export of the deprecated `redact_url` wrapper. New
+// callers should import `gold_digger::utils::redact_url` directly; this
+// re-export keeps `gold_digger::tls::redact_url` resolving for existing
+// consumers until the next breaking release.
+#[allow(deprecated)]
+pub use pool::redact_url;
 
 /// Backward-compat alias for the CA-loading helpers. Tests and external
 /// callers reference `gold_digger::tls::cert_utils::load_ca_certificates`;

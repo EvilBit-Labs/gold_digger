@@ -268,6 +268,7 @@ pub(crate) fn classify_mysql_pool_error(mysql_error: mysql::Error) -> TlsError {
 /// existing test harnesses) keep compiling. All the redaction logic now
 /// lives in [`crate::utils`] so the three previously-divergent redactors
 /// share one pattern set and one placeholder.
+#[deprecated(since = "0.2.6", note = "use gold_digger::utils::redact_url instead")]
 pub fn redact_url(url: &str) -> String {
     crate::utils::redact_url(url)
 }
@@ -347,6 +348,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)] // Intentionally exercises the deprecated wrapper
     fn test_redact_url() {
         // Test URL with password
         let url = "mysql://user:password@localhost:3306/db";
