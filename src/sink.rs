@@ -31,12 +31,15 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use csv::{QuoteStyle, WriterBuilder};
 
+use crate::OUTPUT_BUFFER_CAPACITY;
 use crate::exit::GoldDiggerError;
 use crate::output::create_output_file;
 
 /// 64 KiB write buffer — same size the non-streaming writers used so per-row
-/// write overhead stays comparable under the new pipeline.
-const WRITE_BUFFER_BYTES: usize = 64 * 1024;
+/// write overhead stays comparable under the new pipeline. Re-exported from
+/// [`crate::OUTPUT_BUFFER_CAPACITY`] (todo #059) so the sink path tracks the
+/// canonical knob.
+const WRITE_BUFFER_BYTES: usize = OUTPUT_BUFFER_CAPACITY;
 
 /// Outcome returned by a completed [`RowSink::finalize`] call.
 ///
@@ -280,6 +283,9 @@ pub fn tsv_sink(output: &Path, force: bool) -> Result<Box<dyn RowSink>> {
 /// comma is emitted between rows. `--pretty` inserts a newline between
 /// rows and serialises each row object with `to_writer_pretty`. The
 /// closing `]}` is written in [`RowSink::finalize`].
+/// `column_names` is populated once from the `on_headers` hook and
+/// shared across every row via `Arc<str>`, so per-row JSON conversion
+/// no longer re-allocates the column-name strings (todo #069).
 struct JsonSink {
     writer: BufWriter<File>,
     tmp_path: PathBuf,
@@ -287,6 +293,7 @@ struct JsonSink {
     pretty: bool,
     rows_written: u64,
     committed: bool,
+    column_names: Vec<std::sync::Arc<str>>,
 }
 
 impl JsonSink {
@@ -299,6 +306,7 @@ impl JsonSink {
             pretty,
             rows_written: 0,
             committed: false,
+            column_names: Vec::new(),
         })
     }
 }
@@ -312,11 +320,16 @@ impl Drop for JsonSink {
 }
 
 impl RowSink for JsonSink {
-    fn on_headers(&mut self, _columns: &[String]) -> Result<()> {
-        // JSON object keys come from the row itself (via row.columns_ref())
-        // so we only need to emit the envelope preamble here. Storing
-        // `columns` is unnecessary — row conversion uses the per-row
-        // metadata.
+    fn on_headers(&mut self, columns: &[String]) -> Result<()> {
+        // Extract column names once into shared `Arc<str>`s so per-row
+        // JSON conversion does not re-allocate them (todo #069). The
+        // BTreeMap keys produced by `row_to_json_with_columns` are
+        // still owned `String`s — the win is that we no longer call
+        // `name_str().to_string()` on the row's metadata per row.
+        self.column_names = columns
+            .iter()
+            .map(|name| std::sync::Arc::<str>::from(name.as_str()))
+            .collect();
         write!(self.writer, "{{\"data\":[").context("Failed to write JSON preamble")?;
         Ok(())
     }
@@ -325,10 +338,11 @@ impl RowSink for JsonSink {
         if self.rows_written > 0 {
             write!(self.writer, ",").context("Failed to write JSON row separator")?;
         }
-        // Clone the row: TypeTransformer::row_to_json takes it by value
-        // to reuse the existing API. The clone is cheap relative to the
-        // conversion itself (the row already holds owned Values).
-        let map = crate::TypeTransformer::row_to_json(row.clone())
+        // Use the shared column-name list captured in `on_headers` so
+        // we avoid the per-row `name_str().to_string()` cost the legacy
+        // `row_to_json` path incurs (todo #069). The new helper takes
+        // the row by reference, so no `row.clone()` is needed either.
+        let map = crate::TypeTransformer::row_to_json_with_columns(row, &self.column_names)
             .map_err(|e| wrap_conversion_error(self.rows_written, e))?;
         if self.pretty {
             serde_json::to_writer_pretty(&mut self.writer, &map)

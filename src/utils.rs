@@ -37,54 +37,104 @@ pub const REDACTED_URL_PLACEHOLDER: &str = "***REDACTED_URL***";
 /// Each entry is a (pattern, replacement) tuple compiled once on first use.
 static REDACTION_PATTERNS: OnceLock<Vec<(Regex, &'static str)>> = OnceLock::new();
 
-/// Returns the pre-compiled redaction regex patterns, initializing them on
+/// Source-of-truth list of redaction `(pattern, replacement)` tuples.
+///
+/// Kept as a plain slice (not a `OnceLock`) so [`EXPECTED_REDACTION_PATTERN_COUNT`]
+/// and the fail-closed initialiser can both reference the same definition.
+const REDACTION_PATTERN_DEFS: &[(&str, &str)] = &[
+    // Common key=value / key:value secret pairs (English).
+    (r"(?i)password\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+    (r"(?i)passwd\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+    (r"(?i)\bpwd\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+    (r"(?i)pass\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+    (r"(?i)identified\s+by\s+\S+", REDACTION_PLACEHOLDER),
+    (
+        r"(?i)identified\s+with\s+\S+\s+by\s+\S+",
+        REDACTION_PLACEHOLDER,
+    ),
+    (r"(?i)token\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+    (r"(?i)token\s+\S+", REDACTION_PLACEHOLDER),
+    (r"(?i)api[_-]?key\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+    (r"(?i)secret\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+    (r"(?i)secret\s+\S+", REDACTION_PLACEHOLDER),
+    // GRANT ... IDENTIFIED BY '<pw>' (already covered by identified_by, kept for clarity).
+    // SET PASSWORD = 'x' / SET PASSWORD FOR user = 'x'.
+    (
+        r"(?i)set\s+password\s+(?:for\s+\S+\s+)?=\s*\S+",
+        REDACTION_PLACEHOLDER,
+    ),
+    // Non-English secret labels we have observed in production logs.
+    (r"(?i)kennwort\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+    (
+        r"(?i)mot[_-]?de[_-]?passe\s*[=:]\s*\S+",
+        REDACTION_PLACEHOLDER,
+    ),
+    (r"(?i)contrase[nñ]a\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
+    // URL userinfo (any scheme).
+    (r"(?i)://[^:/\s]+:[^@\s]+@", "://***:***@"),
+];
+
+/// Number of redaction patterns the `redact_sql_error` pipeline expects to
+/// have available. A test pins this to the slice length so a contributor
+/// who silently drops a pattern (or a `Regex::new` that fails on a future
+/// regex-crate breaking change) is caught at test time.
+#[cfg(test)]
+pub(crate) const EXPECTED_REDACTION_PATTERN_COUNT: usize = REDACTION_PATTERN_DEFS.len();
+
+/// Returns the pre-compiled redaction regex patterns, initialising them on
 /// first call.
+///
+/// # Fail-closed semantics (todo #066)
+///
+/// A pattern in [`REDACTION_PATTERN_DEFS`] that fails to compile is a
+/// programmer bug, not a runtime condition we can recover from: the
+/// silently-dropped pattern leaves a credential class un-scrubbed. We
+/// therefore:
+///
+///   - **Debug builds**: panic with the offending pattern + regex
+///     compile error. CI / `cargo test` always uses debug profile, so
+///     any future edit that breaks a pattern fails the build.
+///   - **Release builds**: emit a `tracing::error!` and continue with
+///     the surviving patterns. Refusing to start the binary on a
+///     redaction-pattern bug would be worse than running with reduced
+///     coverage; the error log is durable enough to flag the regression
+///     to operators.
+///
+/// The `EXPECTED_REDACTION_PATTERN_COUNT` test in the same module pins
+/// the post-compile count so the silent-drop case is also caught at
+/// test time.
 fn get_redaction_patterns() -> &'static Vec<(Regex, &'static str)> {
     REDACTION_PATTERNS.get_or_init(|| {
-        let pattern_defs: &[(&str, &str)] = &[
-            // Common key=value / key:value secret pairs (English).
-            (r"(?i)password\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
-            (r"(?i)passwd\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
-            (r"(?i)\bpwd\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
-            (r"(?i)pass\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
-            (r"(?i)identified\s+by\s+\S+", REDACTION_PLACEHOLDER),
-            (
-                r"(?i)identified\s+with\s+\S+\s+by\s+\S+",
-                REDACTION_PLACEHOLDER,
-            ),
-            (r"(?i)token\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
-            (r"(?i)token\s+\S+", REDACTION_PLACEHOLDER),
-            (r"(?i)api[_-]?key\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
-            (r"(?i)secret\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
-            (r"(?i)secret\s+\S+", REDACTION_PLACEHOLDER),
-            // GRANT ... IDENTIFIED BY '<pw>' (already covered by identified_by, kept for clarity).
-            // SET PASSWORD = 'x' / SET PASSWORD FOR user = 'x'.
-            (
-                r"(?i)set\s+password\s+(?:for\s+\S+\s+)?=\s*\S+",
-                REDACTION_PLACEHOLDER,
-            ),
-            // Non-English secret labels we have observed in production logs.
-            (r"(?i)kennwort\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
-            (
-                r"(?i)mot[_-]?de[_-]?passe\s*[=:]\s*\S+",
-                REDACTION_PLACEHOLDER,
-            ),
-            (r"(?i)contrase[nñ]a\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
-            // URL userinfo (any scheme).
-            (r"(?i)://[^:/\s]+:[^@\s]+@", "://***:***@"),
-        ];
-
-        pattern_defs
+        // `filter_map` is intentional even though the debug-build arm
+        // panics: `cfg(not(debug_assertions))` returns `None` so a
+        // failed `Regex::new` is dropped from the live pattern set
+        // (release builds prefer partial coverage to a crash). Clippy
+        // can't see across the `cfg` boundary so we suppress its
+        // "could be `map`" hint locally.
+        #[allow(clippy::unnecessary_filter_map)]
+        REDACTION_PATTERN_DEFS
             .iter()
             .filter_map(|(pattern, replacement)| match Regex::new(pattern) {
                 Ok(re) => Some((re, *replacement)),
-                Err(_e) => {
+                Err(e) => {
+                    // Fail-closed in debug / test builds so a regression
+                    // surfaces immediately. Release builds log loudly
+                    // and skip the broken pattern (better partial
+                    // coverage than aborting the binary).
                     #[cfg(debug_assertions)]
-                    eprintln!(
-                        "Warning: Failed to compile regex pattern '{}': {}",
-                        pattern, _e
+                    panic!(
+                        "Redaction regex failed to compile (todo #066): pattern={:?} error={}",
+                        pattern, e
                     );
-                    None
+                    #[cfg(not(debug_assertions))]
+                    {
+                        tracing::error!(
+                            pattern = %pattern,
+                            error = %e,
+                            "Redaction regex failed to compile; this leaves a credential class un-scrubbed"
+                        );
+                        None
+                    }
                 }
             })
             .collect()
@@ -190,6 +240,22 @@ pub fn redact_dump_query(query: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Pins the number of compiled redaction patterns to
+    /// [`EXPECTED_REDACTION_PATTERN_COUNT`]. Catches the silent-drop
+    /// case where a pattern fails `Regex::new` in release builds — the
+    /// debug fail-closed path would already panic, but this guards
+    /// against the release-mode `filter_map(...)` skip path going
+    /// unnoticed in test runs that happen to use a release profile
+    /// (todo #066).
+    #[test]
+    fn redaction_pattern_count_matches_expected() {
+        assert_eq!(
+            get_redaction_patterns().len(),
+            EXPECTED_REDACTION_PATTERN_COUNT,
+            "fail-closed regex validation: a pattern silently failed to compile"
+        );
+    }
 
     #[test]
     fn test_redact_sql_error_password_keyvalue() {

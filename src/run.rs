@@ -22,10 +22,18 @@
 use mysql::prelude::Queryable;
 
 use crate::cli::Cli;
-use crate::config::{resolve_database_query, resolve_database_url, resolve_output_file};
+use crate::config::{
+    EnvSnapshot, resolve_database_query_with_env, resolve_database_url_with_env,
+    resolve_output_file_with_env,
+};
 use crate::connection::create_database_connection;
 use crate::exit::{exit_no_rows, exit_success, exit_with_error};
 use crate::logging::make_progress;
+use crate::mysql_errors::{
+    CR_CONN_HOST_ERROR, CR_CONNECTION_ERROR, CR_SERVER_GONE_ERROR, CR_SERVER_LOST,
+    ER_ACCESS_DENIED_ERROR, ER_BAD_DB_ERROR, ER_BAD_FIELD_ERROR, ER_COLUMNACCESS_DENIED_ERROR,
+    ER_DBACCESS_DENIED_ERROR, ER_NO_SUCH_TABLE, ER_PARSE_ERROR, ER_TABLEACCESS_DENIED_ERROR,
+};
 use crate::output::build_sink;
 use crate::utils::redact_sql_error;
 
@@ -36,16 +44,23 @@ use crate::utils::redact_sql_error;
 /// [`crate::exit`] helpers so the binary always exits with a stable,
 /// documented code (0 success, 1 no rows, 2 config, 3 auth, 4 query, 5 I/O).
 pub fn run(cli: Cli) -> ! {
-    // Resolve configuration with precedence: CLI flags > environment variables
-    let database_url = match resolve_database_url(&cli) {
+    // Read every env-var fallback exactly once into an immutable
+    // snapshot (todo #068, S15). Downstream resolvers consume the
+    // snapshot rather than calling `std::env::var` again, so a hostile
+    // parent process that mutates the environment between resolution
+    // steps cannot influence the values gold_digger uses.
+    let env_snapshot = EnvSnapshot::from_process_env();
+
+    // Resolve configuration with precedence: CLI flags > snapshot env > error.
+    let database_url = match resolve_database_url_with_env(&cli, &env_snapshot) {
         Ok(url) => url,
         Err(e) => exit_with_error(e, Some("Database URL resolution failed")),
     };
-    let database_query = match resolve_database_query(&cli) {
+    let database_query = match resolve_database_query_with_env(&cli, &env_snapshot) {
         Ok(query) => query,
         Err(e) => exit_with_error(e, Some("Database query resolution failed")),
     };
-    let output_file = match resolve_output_file(&cli) {
+    let output_file = match resolve_output_file_with_env(&cli, &env_snapshot) {
         Ok(file) => file,
         Err(e) => exit_with_error(e, Some("Output file resolution failed")),
     };
@@ -215,27 +230,54 @@ fn handle_empty_result(cli: &Cli, sink: Box<dyn crate::sink::RowSink>) {
 /// `anyhow::Error`. Known MySQL error codes are translated into
 /// operator-facing messages; the underlying error is always appended
 /// (via [`redact_sql_error`]) so the caller can diagnose the failure.
+///
+/// # Authentication errors (todo #064, S9)
+///
+/// Codes 1045 (`ER_ACCESS_DENIED_ERROR`) and 1044
+/// (`ER_DBACCESS_DENIED_ERROR`) fire with a server-side message of the
+/// form `"Access denied for user 'alice'@'10.0.0.5' (using password:
+/// YES)"`. That string leaks the database username, the *client source
+/// IP* the server saw the connection from, and a confirmation that a
+/// password was supplied (CWE-209 — sensitive information in an error
+/// message). The username and IP are not under the redactor's control
+/// (`redact_sql_error` only scrubs `password=`, `token=`, URL userinfo,
+/// etc.), so we discard the server message wholesale on those codes
+/// and emit a static, action-oriented sentence instead. The original
+/// (redacted) error still flows to `tracing::debug!` for operators
+/// running with `-vv` who genuinely need to triage.
 fn map_query_error(e: &mysql::Error) -> anyhow::Error {
-    // Structured error matching on mysql::Error variants
+    // Authentication-class MySQL errors get a hard-coded, leak-free
+    // message. Everything else falls through to the general path below.
+    // Codes are routed through `crate::mysql_errors` so contributors can
+    // grep for the canonical `ER_*` symbol (todo #054).
+    if let mysql::Error::MySqlError(mysql_err) = e
+        && matches!(
+            mysql_err.code,
+            ER_ACCESS_DENIED_ERROR | ER_DBACCESS_DENIED_ERROR
+        )
+    {
+        // Route the original (redacted) error to debug-level so it is
+        // available with `-vv` but never reaches the default
+        // user-facing log/exit path. The substrings "authentication" /
+        // "access denied" must stay in the public message so
+        // `crate::exit` still classifies this as EXIT_DB_AUTH_ERROR (3).
+        tracing::debug!(
+            code = mysql_err.code,
+            detail = redact_sql_error(&e.to_string()),
+            "MySQL authentication error (full server message redacted)"
+        );
+        return anyhow::anyhow!(
+            "Database authentication failed: access denied. \
+             Verify credentials via your secret manager."
+        );
+    }
+
+    // Structured error matching on mysql::Error variants. Numeric codes
+    // are routed through `crate::mysql_errors` so contributors can grep
+    // for the canonical `ER_*` / `CR_*` symbol instead of decoding bare
+    // numeric literals (todo #054).
     let context = match e {
-        mysql::Error::MySqlError(mysql_err) => {
-            // Map known MySQL error codes to contextual messages
-            match mysql_err.code {
-                1064 => "SQL syntax error in query", // ER_PARSE_ERROR
-                1146 => "Table does not exist",      // ER_NO_SUCH_TABLE
-                1054 => "Column does not exist or is ambiguous", // ER_BAD_FIELD_ERROR
-                1045 => "Access denied - invalid credentials", // ER_ACCESS_DENIED_ERROR
-                1044 => "Access denied to database", // ER_DBACCESS_DENIED_ERROR
-                1142 => "Insufficient privileges for query execution", // ER_TABLEACCESS_DENIED_ERROR
-                1143 => "Insufficient column privileges", // ER_COLUMNACCESS_DENIED_ERROR
-                1049 => "Unknown database",               // ER_BAD_DB_ERROR
-                2002 => "Connection failed - server not reachable", // CR_CONNECTION_ERROR
-                2003 => "Connection failed - server not responding", // CR_CONN_HOST_ERROR
-                2006 => "Connection lost - server has gone away", // CR_SERVER_GONE_ERROR
-                2013 => "Connection lost during query",   // CR_SERVER_LOST
-                _ => "Query execution failed",
-            }
-        }
+        mysql::Error::MySqlError(mysql_err) => classify_mysql_error_code(mysql_err.code),
         mysql::Error::IoError(_) => "Network I/O error during query execution",
         mysql::Error::UrlError(_) => "Invalid database URL format",
         mysql::Error::DriverError(_) => "Database driver error",
@@ -247,4 +289,74 @@ fn map_query_error(e: &mysql::Error) -> anyhow::Error {
     // (todo #016 / P1-C); any credential embedded in the mysql
     // crate's error string is scrubbed before it reaches the log.
     anyhow::anyhow!("{}: {}", context, redact_sql_error(&e.to_string()))
+}
+
+/// Maps a MySQL/MariaDB error code to an operator-facing context message.
+///
+/// Extracted from [`map_query_error`] so the named constants in
+/// [`crate::mysql_errors`] keep their grep-ability and the call site
+/// stays readable (todo #054). Returns a fallback message for codes the
+/// classifier does not recognise.
+///
+/// `ER_ACCESS_DENIED_ERROR` / `ER_DBACCESS_DENIED_ERROR` are handled
+/// upstream in [`map_query_error`] with a static, leak-free message
+/// (todo #064) and never reach this function in practice.
+fn classify_mysql_error_code(code: u16) -> &'static str {
+    match code {
+        ER_PARSE_ERROR => "SQL syntax error in query",
+        ER_NO_SUCH_TABLE => "Table does not exist",
+        ER_BAD_FIELD_ERROR => "Column does not exist or is ambiguous",
+        ER_TABLEACCESS_DENIED_ERROR => "Insufficient privileges for query execution",
+        ER_COLUMNACCESS_DENIED_ERROR => "Insufficient column privileges",
+        ER_BAD_DB_ERROR => "Unknown database",
+        CR_CONNECTION_ERROR => "Connection failed - server not reachable",
+        CR_CONN_HOST_ERROR => "Connection failed - server not responding",
+        CR_SERVER_GONE_ERROR => "Connection lost - server has gone away",
+        CR_SERVER_LOST => "Connection lost during query",
+        _ => "Query execution failed",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn classify_known_server_errors() {
+        assert_eq!(
+            classify_mysql_error_code(ER_PARSE_ERROR),
+            "SQL syntax error in query"
+        );
+        assert_eq!(
+            classify_mysql_error_code(ER_NO_SUCH_TABLE),
+            "Table does not exist"
+        );
+        assert_eq!(
+            classify_mysql_error_code(ER_BAD_FIELD_ERROR),
+            "Column does not exist or is ambiguous"
+        );
+    }
+
+    #[test]
+    fn classify_known_client_errors() {
+        assert_eq!(
+            classify_mysql_error_code(CR_SERVER_LOST),
+            "Connection lost during query"
+        );
+        assert_eq!(
+            classify_mysql_error_code(CR_SERVER_GONE_ERROR),
+            "Connection lost - server has gone away"
+        );
+        assert_eq!(
+            classify_mysql_error_code(CR_CONNECTION_ERROR),
+            "Connection failed - server not reachable"
+        );
+    }
+
+    #[test]
+    fn classify_unknown_error_falls_back() {
+        // 9999 is not a documented MySQL/MariaDB error code; fallback
+        // message must be returned rather than an empty / panicking arm.
+        assert_eq!(classify_mysql_error_code(9999), "Query execution failed");
+    }
 }

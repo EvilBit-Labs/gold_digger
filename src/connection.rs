@@ -10,7 +10,19 @@ use crate::cli::Cli;
 use crate::tls::create_tls_connection;
 
 /// Creates a database connection pool with rustls-only TLS configuration from CLI.
+///
+/// Installs the rustls default crypto provider on first call (todo #169).
+/// Previously this happened unconditionally at the top of `main()`, which
+/// charged the ~5-10 ms install cost to every invocation — including
+/// `--help`, `--version`, `completion`, and `--dump-config`. Moving it
+/// here means only paths that actually open a database connection pay
+/// that cost.
 pub fn create_database_connection(database_url: &str, cli: &Cli) -> Result<Pool> {
+    // Lazy crypto-provider install. `init_crypto_provider` is idempotent
+    // (guarded by an `OnceLock`) so repeated calls within a process are
+    // safe — only the first does any work.
+    crate::init_crypto_provider();
+
     // Create TLS configuration from CLI options
     let tls_config = if cli.tls_options.tls_ca_file.is_some()
         || cli.tls_options.insecure_skip_hostname_verify

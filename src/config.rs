@@ -4,6 +4,16 @@
 //! are wrapped in [`GoldDiggerError::Config`] (or [`GoldDiggerError::Io`] for
 //! filesystem interactions) so the exit-code classifier can identify them
 //! via downcast, independent of error-message text.
+//!
+//! # Single-read environment snapshot (todo #068)
+//!
+//! [`EnvSnapshot::from_process_env`] reads every supported `DATABASE_URL` /
+//! `DATABASE_QUERY` / `OUTPUT_FILE` value from the process environment
+//! exactly once at startup. Downstream code should consult that snapshot
+//! rather than calling `std::env::var` again — this guarantees the
+//! resolved values are stable for the lifetime of the run even if a
+//! parent process mutates the environment mid-execution (CWE-284), and
+//! makes [`dump_configuration`] deterministic against the same inputs.
 
 use std::env;
 use std::path::{Path, PathBuf};
@@ -13,6 +23,54 @@ use anyhow::Result;
 use crate::cli::Cli;
 use crate::exit::GoldDiggerError;
 use crate::utils::redact_dump_query;
+
+/// Frozen view of the three legacy environment-variable fallbacks
+/// (`DATABASE_URL`, `DATABASE_QUERY`, `OUTPUT_FILE`).
+///
+/// Constructed once at startup via [`EnvSnapshot::from_process_env`] so
+/// downstream resolvers see a consistent set of values regardless of
+/// concurrent mutations to the process environment (todo #068).
+#[derive(Debug, Clone, Default)]
+pub struct EnvSnapshot {
+    /// Value of `DATABASE_URL`, if set at snapshot time.
+    pub database_url: Option<String>,
+    /// Value of `DATABASE_QUERY`, if set at snapshot time.
+    pub database_query: Option<String>,
+    /// Value of `OUTPUT_FILE`, if set at snapshot time.
+    pub output_file: Option<String>,
+}
+
+impl EnvSnapshot {
+    /// Reads the supported env vars exactly once and returns the frozen
+    /// snapshot. Subsequent mutations to the environment do not affect
+    /// the returned struct.
+    pub fn from_process_env() -> Self {
+        Self {
+            database_url: env::var("DATABASE_URL").ok(),
+            database_query: env::var("DATABASE_QUERY").ok(),
+            output_file: env::var("OUTPUT_FILE").ok(),
+        }
+    }
+}
+
+/// Generic CLI > env > error resolver shared by the three legacy
+/// resolvers below (todo #101).
+///
+/// Returns the CLI value when present; otherwise the env value;
+/// otherwise a [`GoldDiggerError::Config`] with `missing_msg`.
+fn resolve_or_missing<T: Clone>(
+    cli_value: Option<&T>,
+    env_value: Option<&T>,
+    missing_msg: &str,
+) -> Result<T> {
+    if let Some(v) = cli_value {
+        return Ok(v.clone());
+    }
+    if let Some(v) = env_value {
+        return Ok(v.clone());
+    }
+    Err(GoldDiggerError::Config(missing_msg.into()).into())
+}
 
 /// Maximum accepted size for a `--query-file` payload, in bytes. A query
 /// file larger than this is refused at resolve time to cap DoS risk from
@@ -35,18 +93,25 @@ pub const REFUSED_QUERY_FILE_EXTENSIONS: &[&str] =
 /// Errors are wrapped in [`GoldDiggerError::Config`] so the exit-code
 /// classifier can identify them via downcast (stable across message text
 /// refactors).
+///
+/// Reads `DATABASE_URL` from the process environment as a fallback. New
+/// code should prefer [`resolve_database_url_with_env`] with a snapshot
+/// captured at startup so the resolution is deterministic against env
+/// mutations during the run (todo #068).
 pub fn resolve_database_url(cli: &Cli) -> Result<String> {
-    if let Some(url) = &cli.db_url {
-        Ok(url.clone())
-    } else {
-        std::env::var("DATABASE_URL").map_err(|_| {
-            GoldDiggerError::Config(
-                "Missing database URL. Provide --db-url or set DATABASE_URL environment variable"
-                    .into(),
-            )
-            .into()
-        })
-    }
+    let snapshot = EnvSnapshot::from_process_env();
+    resolve_database_url_with_env(cli, &snapshot)
+}
+
+/// Snapshot-aware variant of [`resolve_database_url`] that reads the
+/// `DATABASE_URL` fallback from a frozen [`EnvSnapshot`] instead of
+/// `std::env`. (todo #068, #101)
+pub fn resolve_database_url_with_env(cli: &Cli, env: &EnvSnapshot) -> Result<String> {
+    resolve_or_missing(
+        cli.db_url.as_ref(),
+        env.database_url.as_ref(),
+        "Missing database URL. Provide --db-url or set DATABASE_URL environment variable",
+    )
 }
 
 /// Validates a `--query-file` path (todo #023).
@@ -123,26 +188,34 @@ pub fn validate_query_file_path(path: &Path) -> Result<PathBuf> {
 /// filesystem failures map to [`GoldDiggerError::Io`] (exit 5); missing
 /// configuration maps to [`GoldDiggerError::Config`] (exit 2).
 pub fn resolve_database_query(cli: &Cli) -> Result<String> {
+    let snapshot = EnvSnapshot::from_process_env();
+    resolve_database_query_with_env(cli, &snapshot)
+}
+
+/// Snapshot-aware variant of [`resolve_database_query`]. Reads the
+/// `DATABASE_QUERY` fallback from the supplied [`EnvSnapshot`] rather
+/// than the process environment so the resolution is deterministic
+/// against env mutations (todo #068).
+pub fn resolve_database_query_with_env(cli: &Cli, env: &EnvSnapshot) -> Result<String> {
     if let Some(query) = &cli.query {
-        Ok(query.clone())
-    } else if let Some(query_file) = &cli.query_file {
+        return Ok(query.clone());
+    }
+    if let Some(query_file) = &cli.query_file {
         let canonical = validate_query_file_path(query_file)?;
-        std::fs::read_to_string(&canonical).map_err(|e| {
+        return std::fs::read_to_string(&canonical).map_err(|e| {
             // Preserve both the typed I/O classification and the original
             // path context that previous integration tests assert on.
             anyhow::Error::from(GoldDiggerError::Io(e)).context(format!(
                 "Failed to read query file {}",
                 query_file.display()
             ))
-        })
-    } else {
-        std::env::var("DATABASE_QUERY").map_err(|_| {
-            GoldDiggerError::Config(
-                "Missing database query. Provide --query, --query-file, or set DATABASE_QUERY environment variable".into(),
-            )
-            .into()
-        })
+        });
     }
+    env.database_query
+        .clone()
+        .ok_or_else(|| GoldDiggerError::Config(
+            "Missing database query. Provide --query, --query-file, or set DATABASE_QUERY environment variable".into(),
+        ).into())
 }
 
 /// Resolves the output file path from CLI arguments or environment variables.
@@ -150,22 +223,36 @@ pub fn resolve_database_query(cli: &Cli) -> Result<String> {
 /// Errors are wrapped in [`GoldDiggerError::Config`] for stable exit-code
 /// classification.
 pub fn resolve_output_file(cli: &Cli) -> Result<PathBuf> {
-    if let Some(output) = &cli.output {
-        Ok(output.clone())
-    } else {
-        std::env::var("OUTPUT_FILE")
-            .map(PathBuf::from)
-            .map_err(|_| {
-                GoldDiggerError::Config(
-                    "Missing output file. Provide --output or set OUTPUT_FILE environment variable"
-                        .into(),
-                )
-                .into()
-            })
-    }
+    let snapshot = EnvSnapshot::from_process_env();
+    resolve_output_file_with_env(cli, &snapshot)
 }
 
-/// Dumps current configuration as JSON with proper credential redaction.
+/// Snapshot-aware variant of [`resolve_output_file`].
+pub fn resolve_output_file_with_env(cli: &Cli, env: &EnvSnapshot) -> Result<PathBuf> {
+    if let Some(output) = &cli.output {
+        return Ok(output.clone());
+    }
+    env.output_file.as_ref().map(PathBuf::from).ok_or_else(|| {
+        GoldDiggerError::Config(
+            "Missing output file. Provide --output or set OUTPUT_FILE environment variable".into(),
+        )
+        .into()
+    })
+}
+
+/// Builds the configuration-dump JSON value for `--dump-config`.
+///
+/// Returns a [`serde_json::Value`] so callers can serialise wherever they
+/// need (stdout, a string buffer, a unit test) instead of being forced
+/// through `println!` (todo #062, T-C3). The binary entry point in
+/// `src/main.rs` writes the pretty-printed result to stdout; tests
+/// inspect the value directly.
+///
+/// Reads `DATABASE_QUERY` and `OUTPUT_FILE` from the supplied
+/// [`EnvSnapshot`] (a one-shot read taken at startup, todo #068). Missing
+/// CLI / env values surface as JSON `null` rather than the empty string
+/// so consumers can distinguish "explicitly empty" from "unresolved"
+/// (todo #057).
 ///
 /// The query (whether from `--query` or `DATABASE_QUERY`) is routed
 /// through [`redact_dump_query`], which delegates to the same regex set
@@ -173,7 +260,7 @@ pub fn resolve_output_file(cli: &Cli) -> Result<PathBuf> {
 /// the codebase ([`crate::utils`]) so a fix to a missed pattern
 /// (e.g. `passwd=`, `pwd=`, `Kennwort=`, `mot_de_passe=`) lands in every
 /// surface at once.
-pub fn dump_configuration(cli: &Cli) -> Result<()> {
+pub fn build_configuration_dump(cli: &Cli, env: &EnvSnapshot) -> serde_json::Value {
     use serde_json::json;
 
     // Route the query through the canonical redactor. The previous
@@ -183,19 +270,30 @@ pub fn dump_configuration(cli: &Cli) -> Result<()> {
     // non-English labels, and erased the legitimate query when it
     // matched. The shared regex set in `utils::redact_sql_error` covers
     // all of those and only redacts the offending substrings.
-    let query_from_env = env::var("DATABASE_QUERY").ok();
-    let redacted_query = cli
+    let redacted_query: serde_json::Value = cli
         .query
         .as_ref()
-        .or(query_from_env.as_ref())
-        .map(|q| redact_dump_query(q))
-        .unwrap_or_default();
+        .or(env.database_query.as_ref())
+        .map(|q| serde_json::Value::String(redact_dump_query(q)))
+        .unwrap_or(serde_json::Value::Null);
 
-    let config = json!({
+    // Output: prefer CLI, fall back to env snapshot, otherwise JSON null
+    // so dumps stay distinguishable from "explicitly the empty string"
+    // (todo #057).
+    let output_value: serde_json::Value = match cli.output.as_ref() {
+        Some(p) => serde_json::Value::String(p.display().to_string()),
+        None => env
+            .output_file
+            .clone()
+            .map(serde_json::Value::String)
+            .unwrap_or(serde_json::Value::Null),
+    };
+
+    json!({
         "database_url": "***REDACTED***", // Always redact database URLs
         "query": redacted_query,
         "query_file": cli.query_file.as_ref().map(|p| p.display().to_string()),
-        "output": cli.output.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| env::var("OUTPUT_FILE").unwrap_or_default()),
+        "output": output_value,
         "format": cli.format.as_ref().map(|f| f.as_str()),
         "verbose": cli.verbose,
         "quiet": cli.quiet,
@@ -206,13 +304,26 @@ pub fn dump_configuration(cli: &Cli) -> Result<()> {
             // (todo #011 removed the vestigial feature flags).
             "json": true,
             "csv": true,
-            "verbose": cfg!(feature = "verbose"),
+            // The `verbose` feature was removed (todo #180) — verbosity is
+            // a runtime flag, not a build-time toggle. Reported as
+            // `false` so older callers still see a stable schema.
+            "verbose": false,
             "additional_mysql_types": cfg!(feature = "additional_mysql_types"),
             "tls": true  // TLS is always available (rustls-only implementation)
         }
-    });
+    })
+}
 
-    println!("{}", serde_json::to_string_pretty(&config)?);
+/// Backwards-compatible entry point that prints the dump JSON to stdout.
+///
+/// Internally delegates to [`build_configuration_dump`] so unit tests can
+/// inspect the JSON without spawning a subprocess. The binary entry
+/// point uses [`build_configuration_dump`] directly to control where the
+/// JSON is written.
+pub fn dump_configuration(cli: &Cli) -> Result<()> {
+    let snapshot = EnvSnapshot::from_process_env();
+    let value = build_configuration_dump(cli, &snapshot);
+    println!("{}", serde_json::to_string_pretty(&value)?);
     Ok(())
 }
 

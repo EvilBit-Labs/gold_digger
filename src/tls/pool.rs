@@ -73,9 +73,19 @@ pub fn create_tls_connection(
 ) -> Result<Pool, TlsError> {
     use mysql::{Opts, OptsBuilder};
 
-    // Parse the database URL first to validate format
-    let opts = Opts::from_url(database_url)
-        .map_err(|e| TlsError::connection_failed(format!("Invalid database URL format: {}", e)))?;
+    // Parse the database URL first to validate format. The mysql crate's
+    // `UrlError` Display often quotes the offending URL back at us,
+    // including any embedded credentials (CWE-532). Route the URL
+    // through `redact_url` and the error string through
+    // `redact_sql_error` so user:password@host pairs are scrubbed
+    // before they hit stderr (todo #065).
+    let opts = Opts::from_url(database_url).map_err(|e| {
+        TlsError::connection_failed(format!(
+            "Invalid database URL format ({}): {}",
+            crate::utils::redact_url(database_url),
+            crate::utils::redact_sql_error(&e.to_string())
+        ))
+    })?;
 
     let mut opts_builder = OptsBuilder::from_opts(opts);
 

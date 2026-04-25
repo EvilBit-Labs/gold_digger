@@ -12,6 +12,8 @@ use std::{
     io::{BufWriter, Write},
 };
 
+use crate::OUTPUT_BUFFER_CAPACITY;
+
 /// Writes pre-converted JSON maps to the provided output.
 ///
 /// This function accepts maps that have already been converted from MySQL rows
@@ -34,7 +36,7 @@ pub fn write<W: Write>(
     output: W,
     pretty: bool,
 ) -> anyhow::Result<()> {
-    let mut writer = BufWriter::with_capacity(64 * 1024, output);
+    let mut writer = BufWriter::with_capacity(OUTPUT_BUFFER_CAPACITY, output);
 
     if maps.is_empty() {
         write!(writer, "{{\"data\":[]}}")?;

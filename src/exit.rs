@@ -173,6 +173,15 @@ pub fn map_error_to_exit_code(error: &Error) -> i32 {
     // produced by sites that have not yet migrated to `GoldDiggerError`.
     // Slated for removal once all construction sites are typed
     // (see todos #017, #031, #165).
+    //
+    // The `to_lowercase()` + repeated `contains(..)` pattern is an
+    // intentional cold-path design choice (todo #072). This branch only
+    // executes when the typed downcast above failed, which on the
+    // happy-path is never; on the error path it runs exactly once per
+    // process before `process::exit`. The architectural fix is the
+    // typed classifier ([C2] / `GoldDiggerError`), not perf tuning
+    // here — micro-optimising the substring matcher would just delay
+    // its eventual removal.
     let error_string = error.to_string().to_lowercase();
 
     // Check for specific error patterns

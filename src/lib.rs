@@ -15,19 +15,30 @@
 //! before opening a connection pool so rustls has a default crypto provider.
 //! Exit codes follow the 0-5 contract defined in [`exit`].
 
-use std::{env, ffi::OsStr, path::Path, sync::Once};
+use std::{env, ffi::OsStr, path::Path, sync::OnceLock};
 
 use anyhow::{Context, Result};
 use mysql::Row;
 
-static INIT: Once = Once::new();
+/// Default buffer capacity (64 KiB) for output writers.
+///
+/// Used by streaming sinks (`src/sink.rs`) and the legacy non-streaming
+/// writers (`src/csv.rs`, `src/tab.rs`, `src/json.rs`) so a single tuning
+/// knob covers every output path. Sized to amortise syscall cost on
+/// modern filesystems while keeping memory pressure modest for very wide
+/// rows (todo #059).
+pub const OUTPUT_BUFFER_CAPACITY: usize = 64 * 1024;
+
+static INIT: OnceLock<()> = OnceLock::new();
 
 /// Install the ring crypto provider as rustls's process-wide default.
 ///
 /// Must be called exactly once, before any `Pool::new`, `Opts::from_url`,
 /// or other code path that constructs a rustls `ClientConfig`. The
-/// [`Once`] guard makes repeated calls safe — only the first call does
-/// anything, later calls are no-ops.
+/// [`OnceLock`] guard makes repeated calls safe — only the first call does
+/// anything, later calls are no-ops. Migrated from `std::sync::Once` so
+/// the initialiser is consistent with the [`OnceLock`] used by
+/// [`crate::utils`] (todo #106).
 ///
 /// # Silent error swallowing
 ///
@@ -43,7 +54,7 @@ static INIT: Once = Once::new();
 /// See todo #P3 `init-crypto-provider-must-surface-or-panic-on-install-error`
 /// for a stricter alternative.
 pub fn init_crypto_provider() {
-    INIT.call_once(|| {
+    INIT.get_or_init(|| {
         let _ = rustls::crypto::ring::default_provider().install_default();
     });
 }
@@ -58,12 +69,16 @@ pub mod config;
 pub mod connection;
 /// CSV output module.
 pub mod csv;
+/// Shared delimited-output helper used by CSV and TSV writers.
+pub mod delimited;
 /// Exit code helper module.
 pub mod exit;
 /// JSON output module.
 pub mod json;
 /// Structured logging, colour, and progress helpers.
 pub mod logging;
+/// Named constants for MySQL/MariaDB server and client error codes.
+pub mod mysql_errors;
 /// Output format dispatch and safe output-file creation.
 pub mod output;
 /// Query-execution pipeline (binary entry point glue).
@@ -86,13 +101,28 @@ pub use type_transformer::TypeTransformer;
 /// This function safely handles all MySQL data types including NULL values without panicking.
 /// It uses safe iteration over row values instead of indexed access to prevent runtime panics.
 ///
+/// # Empty input
+///
+/// When `rows` is empty, this function returns `Ok(Vec::new())` — column
+/// names are not available at this layer, so no header row is emitted.
+/// Live query execution does **not** flow through this function: the
+/// streaming pipeline in [`crate::run`] reads column metadata directly
+/// from the streaming `mysql::QueryResult` and feeds it to the sink's
+/// `on_headers` hook so headers are always written even on empty
+/// result sets. The empty-vector outcome here only affects snapshot
+/// tests / benchmarks that drive the legacy materialised path
+/// (todo #056). JSON callers that need a `{"data":[]}` envelope should
+/// use [`crate::sink::json_sink`] which always emits the envelope
+/// regardless of row count.
+///
 /// # Arguments
 ///
 /// * `rows` - A vector of MySQL rows.
 ///
 /// # Returns
 ///
-/// A Result containing a vector of string vectors, or an error.
+/// A Result containing a vector of string vectors (header row first when
+/// non-empty), or an error.
 ///
 /// # Safety
 ///
@@ -100,9 +130,13 @@ pub use type_transformer::TypeTransformer;
 /// which can panic on NULL values or type mismatches. Instead, it uses safe iteration
 /// over `row.as_ref()` to handle all value types gracefully.
 pub fn rows_to_strings(mut rows: Vec<Row>) -> anyhow::Result<Vec<Vec<String>>> {
-    if rows.is_empty() {
+    // Use `first()` rather than `rows[0]` so the workspace
+    // `clippy::indexing_slicing` lint stays clean (todo #149); the
+    // `let-else` short-circuit also makes the empty-input branch
+    // explicit instead of relying on a separate `is_empty` guard.
+    let Some(first_row) = rows.first() else {
         return Ok(Vec::new());
-    }
+    };
 
     // Pre-allocate with known capacity for better performance.
     // +1 accounts for the header row prepended below.
@@ -110,7 +144,7 @@ pub fn rows_to_strings(mut rows: Vec<Row>) -> anyhow::Result<Vec<Vec<String>>> {
 
     // Extract headers from the first row before draining so we retain access
     // to column metadata while the row values are still owned by `rows`.
-    let header_row: Vec<String> = rows[0]
+    let header_row: Vec<String> = first_row
         .columns_ref()
         .iter()
         .map(|column| column.name_str().to_string())
@@ -121,24 +155,20 @@ pub fn rows_to_strings(mut rows: Vec<Row>) -> anyhow::Result<Vec<Vec<String>>> {
     // representation has been extracted. This halves peak memory during
     // conversion compared to `rows.iter()` which kept every source row live
     // alongside the fully-materialised result set.
+    //
+    // Delegate per-row conversion to [`TypeTransformer::row_to_strings`]
+    // so the inner column-level error message ("Failed to convert column
+    // N to string") is consistent across the streaming sink path and
+    // this legacy bulk path (todo #063). The outer `.context()` adds the
+    // row index — `TypeTransformer` only sees one row at a time so the
+    // row context has to be supplied here.
     for (row_index, row) in rows.drain(..).enumerate() {
-        let mut data_row = Vec::with_capacity(row.len());
-        for i in 0..row.len() {
-            match row.as_ref(i) {
-                Some(value) => match TypeTransformer::value_to_string(value) {
-                    Ok(string_value) => data_row.push(string_value),
-                    Err(e) => {
-                        return Err(e.context(format!(
-                            "Type conversion failed at row {} column {}",
-                            row_index + 1,
-                            i + 1
-                        )));
-                    }
-                },
-                // Within 0..row.len(), None indicates a SQL NULL
-                None => data_row.push(String::new()),
+        let data_row = match TypeTransformer::row_to_strings(row) {
+            Ok(values) => values,
+            Err(e) => {
+                return Err(e.context(format!("Type conversion failed at row {}", row_index + 1)));
             }
-        }
+        };
         result_rows.push(data_row);
     }
 

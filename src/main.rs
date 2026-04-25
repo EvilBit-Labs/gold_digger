@@ -10,7 +10,7 @@ use clap::Parser;
 
 use gold_digger::cli::{Cli, Commands};
 use gold_digger::completion::generate_completion;
-use gold_digger::config::dump_configuration;
+use gold_digger::config::{EnvSnapshot, build_configuration_dump};
 use gold_digger::exit::exit_with_error;
 use gold_digger::logging::init_tracing;
 use gold_digger::run::run;
@@ -20,8 +20,12 @@ use gold_digger::run::run;
 /// Parses CLI arguments and environment variables, executes a database
 /// query, and writes the output in the specified format.
 fn main() {
-    // Initialize crypto provider for rustls
-    gold_digger::init_crypto_provider();
+    // NOTE (todo #169): the rustls crypto provider is intentionally
+    // *not* installed here. Subcommands like `--help`, `--version`,
+    // `completion`, and `--dump-config` never touch TLS, so paying the
+    // ~5-10 ms install cost on every invocation is pure waste. The
+    // provider is installed lazily inside `create_database_connection`
+    // immediately before the connection pool is constructed.
 
     let cli = Cli::parse();
 
@@ -32,20 +36,37 @@ fn main() {
     // reporting routes through `tracing::error!` even in those branches.
     init_tracing(cli.verbose, cli.quiet);
 
-    // Handle subcommands first
+    // Handle subcommands first.
+    //
+    // `Commands` is `#[non_exhaustive]` (todo #177) for downstream
+    // semver future-proofing; the wildcard arm reports a clear error
+    // for any subcommand variant a future build of this binary doesn't
+    // yet handle, instead of silently falling through.
     if let Some(command) = cli.command {
         match command {
             Commands::Completion { shell } => {
                 generate_completion(shell);
                 return;
             }
+            #[allow(unreachable_patterns, clippy::wildcard_enum_match_arm)]
+            _ => {
+                eprintln!(
+                    "error: unhandled subcommand; this gold_digger build does not support it"
+                );
+                std::process::exit(2);
+            }
         }
     }
 
-    // Handle --dump-config flag
+    // Handle --dump-config flag. The `build_configuration_dump` helper
+    // returns the JSON value so it can be unit-tested without spawning a
+    // subprocess (todo #062). main.rs is responsible for the actual I/O.
     if cli.dump_config {
-        if let Err(e) = dump_configuration(&cli) {
-            exit_with_error(e, Some("Configuration dump failed"));
+        let snapshot = EnvSnapshot::from_process_env();
+        let value = build_configuration_dump(&cli, &snapshot);
+        match serde_json::to_string_pretty(&value) {
+            Ok(json) => println!("{}", json),
+            Err(e) => exit_with_error(e.into(), Some("Configuration dump failed")),
         }
         return;
     }
