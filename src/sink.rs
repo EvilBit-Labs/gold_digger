@@ -10,9 +10,18 @@
 //! Streaming + ahead-of-time output truncation would violate the project's
 //! atomic-output guarantee: a type-conversion error on row N would leave
 //! rows 0..N-1 visible on disk at the target path. The sinks therefore
-//! always write to a sibling `<output>.tmp` file and rename on success.
-//! On error, the sink deletes the `.tmp` file so the filesystem either
-//! has the complete output at `<output>` or no file at all.
+//! always write to a sibling `<output>.tmp` file and atomically commit on
+//! success. The atomic commit uses per-platform fail-on-clobber primitives
+//! (CRITICAL #2 — TOCTOU rename race): `renameat2(RENAME_NOREPLACE)` on
+//! Linux, `hard_link` + unlink on macOS / non-Linux Unix, and `create_new`
+//! + copy on Windows. See [`commit_tmp`] for the full rationale.
+//!
+//! On error from `on_row` (or any other pre-finalize step), the sink's
+//! `Drop` deletes the `.tmp` so the filesystem has either the complete
+//! output at `<output>` or no file at all. **Exception** (HIGH #13): if
+//! the atomic commit itself fails (e.g. cross-device rename, target
+//! directory read-only), the `.tmp` is preserved for user recovery and
+//! the error message names the `.tmp` path.
 //!
 //! # Error-class routing
 //!
@@ -50,6 +59,24 @@ pub struct WriteOutcome {
     pub rows_written: u64,
 }
 
+/// One-bit state guard ensuring `on_headers` runs before any `on_row`
+/// (HIGH #11 / Type-design #4).
+///
+/// JSON sinks write a `{"data":[` preamble in `on_headers`; if a future
+/// contributor accidentally invoked `on_row` first, the sink would emit
+/// a row before the preamble and the resulting `.tmp` would not be valid
+/// JSON. CSV/TSV sinks would emit an unlabelled record. Rather than
+/// document the protocol and hope, we enforce it at runtime via this
+/// state field on every concrete sink.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SinkState {
+    /// Initial state: `on_row` is rejected until `on_headers` has been
+    /// invoked.
+    NeedsHeaders,
+    /// `on_headers` has run; rows may flow.
+    InRows,
+}
+
 /// Streaming consumer of MySQL rows.
 ///
 /// Each sink owns its destination file handle (buffered, writing to a
@@ -57,22 +84,30 @@ pub struct WriteOutcome {
 /// [`Self::finalize`]. Conversion errors propagate out of [`Self::on_row`]
 /// without touching the target path — the caller's `Drop` impl on the
 /// concrete sink cleans the `.tmp` up.
+///
+/// Protocol: `on_headers` MUST be called exactly once before any
+/// `on_row`. The state guard inside each concrete sink rejects out-of-order
+/// calls with [`GoldDiggerError::Query`] so the failure is a typed error
+/// rather than silently-malformed output.
 pub trait RowSink {
     /// Called exactly once before any rows. `columns` holds the column
     /// names in query order. CSV/TSV sinks write this as the header line;
     /// JSON emits the opening `{"data":[` marker and remembers the names
     /// for the per-row object keys.
+    #[must_use = "header-write errors must be propagated; ignoring them leaves a partial .tmp file"]
     fn on_headers(&mut self, columns: &[String]) -> Result<()>;
 
     /// Called once per row in query order. The sink is responsible for
     /// converting the row via `TypeTransformer` and writing it to its
     /// buffered `.tmp` file.
+    #[must_use = "row-write errors must be propagated; ignoring them leaves a partial .tmp file"]
     fn on_row(&mut self, row: &mysql::Row) -> Result<()>;
 
     /// Called exactly once after all rows (or immediately after
     /// [`Self::on_headers`] if the stream was empty). Flushes the
     /// buffered writer, closes the file, and renames the `.tmp` onto the
     /// target path. Returns the number of data rows written.
+    #[must_use = "finalize errors signal incomplete output; the .tmp will linger if ignored"]
     fn finalize(self: Box<Self>) -> Result<WriteOutcome>;
 }
 
@@ -100,11 +135,25 @@ fn temp_path_for(output: &Path) -> PathBuf {
 /// The pre-check for the target is deliberate: without `--force`,
 /// `fs::rename` on a path that already exists would *overwrite* the file
 /// silently. We refuse early so the contract matches the non-streaming
-/// behaviour documented on [`create_output_file`].
+/// behaviour documented on [`create_output_file`]. The pre-check is NOT
+/// the security guarantee — that is enforced atomically inside
+/// [`commit_tmp`] via per-platform fail-on-clobber rename primitives. The
+/// pre-check is here so the user gets a clean error before any I/O work
+/// happens, instead of after writing megabytes of data to `.tmp`.
+///
+/// HIGH #9: the `.tmp` file is *also* opened with no-clobber semantics
+/// (`force = false` → `O_EXCL | O_CREAT`). A predictable sibling at
+/// `<output>.tmp` planted by a co-tenant cannot be silently truncated;
+/// instead the user gets [`ConfigError::StaleTempFile`] and is told to
+/// remove it manually. This is symmetric with the no-clobber default for
+/// the target path.
 fn open_tmp_for(output: &Path, force: bool) -> Result<(PathBuf, BufWriter<File>)> {
     // Pre-flight: if the target exists and `--force` is not set, refuse
     // now — otherwise a successful `.tmp` write followed by `fs::rename`
-    // would clobber the existing file.
+    // would clobber the existing file. The atomic enforcement happens
+    // inside `commit_tmp` (per-platform fail-on-clobber); this pre-flight
+    // is a friendliness optimisation so we don't waste work writing
+    // megabytes to `.tmp` before discovering the target is taken.
     if !force && output.exists() {
         return Err(GoldDiggerError::Config(ConfigError::OutputExists {
             path: output.to_path_buf(),
@@ -113,11 +162,34 @@ fn open_tmp_for(output: &Path, force: bool) -> Result<(PathBuf, BufWriter<File>)
     }
 
     let tmp_path = temp_path_for(output);
-    // Always truncate the `.tmp` file: a leftover from a previous crash
-    // is meaningless to us, and `--force` semantics apply to the *target*,
-    // not the transient sibling. Using `force=true` here is safe because
-    // `create_output_file` still enforces `O_NOFOLLOW` on the `.tmp` path.
-    let file = create_output_file(&tmp_path, true)?;
+    // Always refuse to truncate a pre-existing `.tmp` (HIGH #9): a co-tenant
+    // can plant a file at the predictable `<output>.tmp` path and have its
+    // contents silently destroyed every run. We translate the
+    // `OutputExists` signal from `create_output_file` into the more
+    // specific `StaleTempFile` variant so the operator sees actionable
+    // guidance ("remove it manually before retrying") rather than the
+    // less-applicable `--force` hint.
+    let file = match create_output_file(&tmp_path, false) {
+        Ok(f) => f,
+        Err(e) => {
+            // Inspect the error chain for the typed `OutputExists` so we
+            // can re-route to `StaleTempFile`. Any other error (genuine
+            // filesystem failure, symlink-at-tmp from `O_NOFOLLOW`, etc.)
+            // passes through unchanged.
+            let is_exists = e.chain().any(|cause| {
+                matches!(
+                    cause.downcast_ref::<GoldDiggerError>(),
+                    Some(GoldDiggerError::Config(ConfigError::OutputExists { .. }))
+                )
+            });
+            if is_exists {
+                return Err(
+                    GoldDiggerError::Config(ConfigError::StaleTempFile { path: tmp_path }).into(),
+                );
+            }
+            return Err(e);
+        }
+    };
     Ok((tmp_path, BufWriter::with_capacity(WRITE_BUFFER_BYTES, file)))
 }
 
@@ -130,20 +202,175 @@ fn remove_tmp(tmp_path: &Path) {
     let _ = std::fs::remove_file(tmp_path);
 }
 
-/// Renames `tmp_path` onto `output` on successful flush, removing the
-/// `.tmp` if the rename itself fails.
-fn commit_tmp(tmp_path: &Path, output: &Path) -> Result<()> {
-    match std::fs::rename(tmp_path, output) {
+/// Atomically commits `tmp_path` onto `output`, with fail-on-clobber
+/// semantics by default and overwrite semantics under `force = true`.
+///
+/// CRITICAL #2 (TOCTOU rename race): plain `std::fs::rename` unconditionally
+/// clobbers any file at the destination; the pre-flight existence check in
+/// [`open_tmp_for`] is racy by construction. An attacker who plants a file
+/// at the target path between the pre-check and the rename wins the race
+/// and gets their content silently overwritten by query results
+/// (information disclosure). The atomic guarantee comes from the rename
+/// primitive itself, not the pre-check.
+///
+/// Per-platform strategy when `force = false`:
+///
+/// * **Linux:** `renameat2(2)` with `RENAME_NOREPLACE` — single syscall,
+///   atomic, returns `EEXIST` on collision. Available since Linux 3.15
+///   (≈2014); gold_digger's MSRV implies a kernel newer than that on any
+///   supported deployment.
+/// * **macOS / non-Linux Unix:** no `RENAME_NOREPLACE` equivalent in the
+///   stable libc surface, so we use `std::fs::hard_link` (returns
+///   `EEXIST` atomically on collision) followed by `std::fs::remove_file`
+///   on the original `.tmp`. The `hard_link` step is the atomic
+///   commit point — if it fails, nothing has changed and the `.tmp` still
+///   holds the data. If `hard_link` succeeds but `remove_file` fails the
+///   user has the data at the target plus a leftover `.tmp`; we surface a
+///   warning rather than rolling back, since the primary goal (data at
+///   target) is met.
+/// * **Windows:** no POSIX `link(2)` equivalent on the stable surface that
+///   works across volumes consistently. We pre-acquire exclusive
+///   ownership of the target via `OpenOptions::create_new(true)`, then
+///   `fs::copy` from `.tmp` to the (already-owned) target, then
+///   `fs::remove_file` on the `.tmp`. The `create_new` step is the atomic
+///   commit point — collision returns `AlreadyExists`. (We accept the
+///   double-write cost on Windows as a tradeoff for correctness.)
+///
+/// When `force = true`, all platforms fall back to plain `std::fs::rename`
+/// since clobbering is the documented intent.
+///
+/// On rename failure (HIGH #13), we DO NOT delete `.tmp` — the user is told
+/// to recover from `.tmp` manually. The caller's `committed_or_aborted`
+/// flag prevents the sink's `Drop` impl from deleting the `.tmp` on this
+/// path either.
+fn commit_tmp(tmp_path: &Path, output: &Path, force: bool) -> Result<()> {
+    if force {
+        // Documented intent: overwrite. Plain rename is correct and
+        // atomic in the presence of a collision.
+        return atomic_force_rename(tmp_path, output);
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        commit_tmp_linux(tmp_path, output)
+    }
+
+    #[cfg(all(unix, not(target_os = "linux")))]
+    {
+        commit_tmp_unix_via_hardlink(tmp_path, output)
+    }
+
+    #[cfg(windows)]
+    {
+        commit_tmp_windows(tmp_path, output)
+    }
+}
+
+/// `force = true` rename. Plain `fs::rename` IS atomic with respect to a
+/// concurrent reader observing one or the other version; it just doesn't
+/// give us a fail-on-clobber signal. With `--force` the caller has opted
+/// into clobbering, so that's the desired behaviour.
+fn atomic_force_rename(tmp_path: &Path, output: &Path) -> Result<()> {
+    std::fs::rename(tmp_path, output).map_err(|e| rename_failure(e, tmp_path, output))
+}
+
+/// Linux fast path: `renameat2(RENAME_NOREPLACE)` — single syscall, atomic,
+/// returns `EEXIST` on collision.
+#[cfg(target_os = "linux")]
+fn commit_tmp_linux(tmp_path: &Path, output: &Path) -> Result<()> {
+    use nix::fcntl::{RenameFlags, renameat2};
+
+    // `None` for both directory fds means the paths are interpreted
+    // relative to CWD (same as plain `rename(2)`); we always pass
+    // absolute or CWD-relative paths from the call sites in this module.
+    match renameat2(
+        None::<std::os::fd::BorrowedFd>,
+        tmp_path,
+        None::<std::os::fd::BorrowedFd>,
+        output,
+        RenameFlags::RENAME_NOREPLACE,
+    ) {
         Ok(()) => Ok(()),
-        Err(e) => {
-            remove_tmp(tmp_path);
-            Err(anyhow::Error::from(GoldDiggerError::Io(e)).context(format!(
-                "Failed to rename temporary output {} to {}",
-                tmp_path.display(),
-                output.display()
-            )))
+        Err(errno) => {
+            // `nix::errno::Errno` implements `From` for `std::io::Error`,
+            // so we don't need an `as i32` cast (which would trip the
+            // workspace's `as_conversions` clippy lint).
+            let io_err: std::io::Error = errno.into();
+            Err(rename_failure(io_err, tmp_path, output))
         }
     }
+}
+
+/// macOS / non-Linux Unix path: `hard_link` is atomic and returns `EEXIST`
+/// on collision, then unlink the source `.tmp`. The `hard_link` is the
+/// commit point.
+#[cfg(all(unix, not(target_os = "linux")))]
+fn commit_tmp_unix_via_hardlink(tmp_path: &Path, output: &Path) -> Result<()> {
+    std::fs::hard_link(tmp_path, output).map_err(|e| rename_failure(e, tmp_path, output))?;
+
+    // The link succeeded — the data is now visible at `output`. Unlink
+    // the original `.tmp`. If unlink fails (highly unusual: same dir,
+    // we just opened it for write), surface a non-fatal warning but do
+    // NOT roll back the link — the user has the data at the target,
+    // which is the outcome they asked for.
+    if let Err(e) = std::fs::remove_file(tmp_path) {
+        tracing::warn!(
+            "Output committed to {} but failed to remove temporary file {}: {}",
+            output.display(),
+            tmp_path.display(),
+            e
+        );
+    }
+    Ok(())
+}
+
+/// Windows path: pre-acquire exclusive ownership of the target via
+/// `create_new`, then copy the `.tmp` into it. The `create_new` is the
+/// atomic commit point — `AlreadyExists` indicates the race lost.
+#[cfg(windows)]
+fn commit_tmp_windows(tmp_path: &Path, output: &Path) -> Result<()> {
+    // Stake an exclusive claim on the target. If something else is at
+    // the path we get `AlreadyExists` here, atomically.
+    let target = match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(output)
+    {
+        Ok(f) => f,
+        Err(e) => return Err(rename_failure(e, tmp_path, output)),
+    };
+    // Drop the handle before copying so `fs::copy` can re-open the file
+    // for write without sharing-mode conflicts.
+    drop(target);
+
+    if let Err(e) = std::fs::copy(tmp_path, output) {
+        // Best-effort: try to undo the empty target we just created so
+        // the user isn't left with a 0-byte file.
+        let _ = std::fs::remove_file(output);
+        return Err(rename_failure(e, tmp_path, output));
+    }
+    if let Err(e) = std::fs::remove_file(tmp_path) {
+        tracing::warn!(
+            "Output committed to {} but failed to remove temporary file {}: {}",
+            output.display(),
+            tmp_path.display(),
+            e
+        );
+    }
+    Ok(())
+}
+
+/// HIGH #13: format a rename/commit failure that PRESERVES the `.tmp`
+/// path so the user can recover their data manually. The caller MUST set
+/// `committed_or_aborted = true` so the sink's `Drop` does not delete
+/// the `.tmp` after this error returns.
+fn rename_failure(e: std::io::Error, tmp_path: &Path, output: &Path) -> anyhow::Error {
+    anyhow::Error::from(GoldDiggerError::Io(e)).context(format!(
+        "Failed to commit output to {}. Your data is preserved at {}; \
+         move it manually if the target path becomes writable.",
+        output.display(),
+        tmp_path.display()
+    ))
 }
 
 /// Routes a `TypeTransformer` conversion failure through the typed
@@ -156,6 +383,20 @@ fn wrap_conversion_error(row_index: u64, err: anyhow::Error) -> anyhow::Error {
         row_index + 1,
         err
     )))
+}
+
+/// HIGH #11 / Type-design #4: enforce the `on_headers → on_row` ordering
+/// invariant at runtime. Returns a typed `Query` error (exit 4) on
+/// violation so out-of-order callers fail fast with a stable exit code,
+/// instead of producing silently-malformed output (e.g. a JSON row written
+/// before the `{"data":[` preamble).
+fn ensure_row_state_or_err(state: SinkState) -> Result<()> {
+    match state {
+        SinkState::InRows => Ok(()),
+        SinkState::NeedsHeaders => Err(anyhow::Error::from(GoldDiggerError::Query(
+            "on_row called before on_headers — sink protocol violation".to_string(),
+        ))),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -174,7 +415,23 @@ struct DelimitedSink {
     tmp_path: PathBuf,
     output: PathBuf,
     rows_written: u64,
+    /// `--force` policy in effect for this sink. Threaded through to
+    /// [`commit_tmp`] so the per-platform fail-on-clobber path is
+    /// chosen when the user did NOT pass `--force`, and a plain
+    /// overwrite-rename is chosen when they did.
+    force: bool,
+    /// True iff `commit_tmp` succeeded and the `.tmp` was consumed by
+    /// the rename / hardlink / copy step. When this is set, `Drop` does
+    /// no work (the `.tmp` is already gone).
     committed: bool,
+    /// True iff `finalize` was entered (success OR failure). HIGH #13:
+    /// when `commit_tmp` fails we leave the `.tmp` on disk for the user
+    /// to recover; the `Drop` impl must not undo that by deleting it.
+    /// Distinguishes "sink dropped without finalize" (Drop deletes
+    /// `.tmp`) from "finalize failed" (Drop preserves `.tmp`).
+    committed_or_aborted: bool,
+    /// HIGH #11 / Type-design #4: enforces `on_headers → on_row` order.
+    state: SinkState,
 }
 
 impl DelimitedSink {
@@ -189,7 +446,10 @@ impl DelimitedSink {
             tmp_path,
             output: output.to_path_buf(),
             rows_written: 0,
+            force,
             committed: false,
+            committed_or_aborted: false,
+            state: SinkState::NeedsHeaders,
         })
     }
 
@@ -206,7 +466,14 @@ impl DelimitedSink {
 
 impl Drop for DelimitedSink {
     fn drop(&mut self) {
-        if !self.committed {
+        // HIGH #13: only delete the `.tmp` when finalize was NOT entered.
+        // - committed = true   → rename consumed the .tmp; nothing to do.
+        // - committed_or_aborted = true (but not committed) → finalize
+        //   failed and we explicitly preserved .tmp for user recovery;
+        //   Drop must not undo that.
+        // - both false → sink dropped before finalize (panic / error path
+        //   before commit); Drop SHOULD delete the partial .tmp.
+        if !self.committed_or_aborted {
             // Drop the writer first so any buffered bytes flush before
             // we unlink the file (flush errors here are irrelevant — we
             // are removing the file anyway).
@@ -221,10 +488,12 @@ impl RowSink for DelimitedSink {
         self.writer_mut()?
             .write_record(columns)
             .context("Failed to write header row")?;
+        self.state = SinkState::InRows;
         Ok(())
     }
 
     fn on_row(&mut self, row: &mysql::Row) -> Result<()> {
+        ensure_row_state_or_err(self.state)?;
         let mut record: Vec<String> = Vec::with_capacity(row.len());
         for i in 0..row.len() {
             match row.as_ref(i) {
@@ -251,7 +520,12 @@ impl RowSink for DelimitedSink {
             .context("Internal error: CSV/TSV sink writer already finalized")?;
         writer.flush().context("Failed to flush CSV/TSV writer")?;
         drop(writer);
-        commit_tmp(&self.tmp_path, &self.output)?;
+        // HIGH #13: mark "finalize entered" before the commit attempt so
+        // `Drop` preserves the `.tmp` if the commit fails. Without this,
+        // a rename failure would return the typed error AND silently
+        // delete the only complete copy of the data.
+        self.committed_or_aborted = true;
+        commit_tmp(&self.tmp_path, &self.output, self.force)?;
         self.committed = true;
         Ok(WriteOutcome {
             rows_written: self.rows_written,
@@ -291,7 +565,15 @@ struct JsonSink {
     output: PathBuf,
     pretty: bool,
     rows_written: u64,
+    /// `--force` policy in effect; threaded through to [`commit_tmp`].
+    force: bool,
+    /// True iff `commit_tmp` succeeded; see [`DelimitedSink::committed`].
     committed: bool,
+    /// True iff `finalize` was entered (success OR failure); see
+    /// [`DelimitedSink::committed_or_aborted`]. HIGH #13.
+    committed_or_aborted: bool,
+    /// HIGH #11 / Type-design #4: enforces `on_headers → on_row` order.
+    state: SinkState,
     column_names: Vec<std::sync::Arc<str>>,
 }
 
@@ -304,7 +586,10 @@ impl JsonSink {
             output: output.to_path_buf(),
             pretty,
             rows_written: 0,
+            force,
             committed: false,
+            committed_or_aborted: false,
+            state: SinkState::NeedsHeaders,
             column_names: Vec::new(),
         })
     }
@@ -312,7 +597,8 @@ impl JsonSink {
 
 impl Drop for JsonSink {
     fn drop(&mut self) {
-        if !self.committed {
+        // HIGH #13: see DelimitedSink::drop for the rationale.
+        if !self.committed_or_aborted {
             remove_tmp(&self.tmp_path);
         }
     }
@@ -330,10 +616,12 @@ impl RowSink for JsonSink {
             .map(|name| std::sync::Arc::<str>::from(name.as_str()))
             .collect();
         write!(self.writer, "{{\"data\":[").context("Failed to write JSON preamble")?;
+        self.state = SinkState::InRows;
         Ok(())
     }
 
     fn on_row(&mut self, row: &mysql::Row) -> Result<()> {
+        ensure_row_state_or_err(self.state)?;
         if self.rows_written > 0 {
             write!(self.writer, ",").context("Failed to write JSON row separator")?;
         }
@@ -357,7 +645,9 @@ impl RowSink for JsonSink {
     fn finalize(mut self: Box<Self>) -> Result<WriteOutcome> {
         write!(self.writer, "]}}").context("Failed to write JSON terminator")?;
         self.writer.flush().context("Failed to flush JSON writer")?;
-        commit_tmp(&self.tmp_path, &self.output)?;
+        // HIGH #13: see DelimitedSink::finalize.
+        self.committed_or_aborted = true;
+        commit_tmp(&self.tmp_path, &self.output, self.force)?;
         self.committed = true;
         Ok(WriteOutcome {
             rows_written: self.rows_written,
@@ -546,6 +836,178 @@ mod tests {
         assert_eq!(
             crate::exit::map_error_to_exit_code(&err),
             crate::exit::EXIT_QUERY_ERROR
+        );
+    }
+
+    /// HIGH #11 / Type-design #4: invoking `on_row` before `on_headers`
+    /// must fail with a typed `Query` error (exit 4) rather than emit a
+    /// silently-malformed `.tmp` (e.g. a JSON row before the `{"data":[`
+    /// preamble). This is the runtime side of the protocol the
+    /// `SinkState` field encodes.
+    #[test]
+    fn json_sink_rejects_on_row_before_on_headers() {
+        let dir = tempdir().expect("tempdir");
+        let out = dir.path().join("out.json");
+        let mut sink = json_sink(&out, false, false).expect("sink");
+        let row = build_row(&["a"], vec![Value::Bytes(b"x".to_vec())]);
+        let err = sink.on_row(&row).expect_err("must reject pre-header row");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("on_row called before on_headers"),
+            "err msg should name the violation, got: {}",
+            msg
+        );
+        assert_eq!(
+            crate::exit::map_error_to_exit_code(&err),
+            crate::exit::EXIT_QUERY_ERROR,
+            "protocol-violation must route to query-class exit (4)"
+        );
+    }
+
+    /// Same protocol guard for the CSV/TSV path.
+    #[test]
+    fn csv_sink_rejects_on_row_before_on_headers() {
+        let dir = tempdir().expect("tempdir");
+        let out = dir.path().join("out.csv");
+        let mut sink = csv_sink(&out, false).expect("sink");
+        let row = build_row(&["a"], vec![Value::Bytes(b"x".to_vec())]);
+        let err = sink.on_row(&row).expect_err("must reject pre-header row");
+        assert!(
+            err.to_string().contains("on_row called before on_headers"),
+            "err={}",
+            err
+        );
+    }
+
+    /// HIGH #9: a co-tenant cannot silently destroy a planted
+    /// `<output>.tmp` — the sink refuses to truncate it and surfaces a
+    /// typed `StaleTempFile` error directing the user to remove it
+    /// manually. Asserts (a) the error message names the path, (b) the
+    /// pre-existing `.tmp` content is still on disk after the failure
+    /// (no truncation happened).
+    #[test]
+    fn sink_refuses_to_truncate_pre_existing_tmp() {
+        let dir = tempdir().expect("tempdir");
+        let out = dir.path().join("out.csv");
+        let tmp = temp_path_for(&out);
+        std::fs::write(&tmp, "co-tenant content").expect("seed tmp");
+
+        let result = csv_sink(&out, false);
+        let err = result.err().expect("must refuse stale tmp");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("Stale temporary output file"),
+            "err msg should mention StaleTempFile, got: {}",
+            msg
+        );
+        assert!(
+            msg.contains(&tmp.display().to_string()),
+            "err msg should include the .tmp path, got: {}",
+            msg
+        );
+
+        // The planted content must still be on disk — the sink MUST NOT
+        // have truncated it.
+        let still_there = std::fs::read_to_string(&tmp).expect("tmp still readable");
+        assert_eq!(
+            still_there, "co-tenant content",
+            "co-tenant content must not be truncated"
+        );
+
+        // And the typed routing must be config-class (exit 2).
+        assert_eq!(
+            crate::exit::map_error_to_exit_code(&err),
+            crate::exit::EXIT_CONFIG_ERROR,
+        );
+    }
+
+    /// HIGH #13: when `commit_tmp` fails, the sink MUST preserve the
+    /// `.tmp` file so the user can recover their data. The error message
+    /// MUST include the `.tmp` path verbatim. We simulate the rename
+    /// failure by removing write permission from the parent directory
+    /// after the `.tmp` is fully written but before `finalize` runs.
+    ///
+    /// On Unix this works because the rename target is a *new entry* in
+    /// the parent directory, which requires write permission on the
+    /// parent. The existing `.tmp` file's data is untouched.
+    #[cfg(unix)]
+    #[test]
+    fn finalize_failure_preserves_tmp_with_recovery_message() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempdir().expect("tempdir");
+        let out = dir.path().join("out.csv");
+
+        let mut sink = csv_sink(&out, false).expect("sink");
+        sink.on_headers(&["a".into()]).expect("headers");
+        let row = build_row(&["a"], vec![Value::Bytes(b"recovery-data".to_vec())]);
+        sink.on_row(&row).expect("row");
+
+        // Snapshot the .tmp path before finalize.
+        let tmp = temp_path_for(&out);
+
+        // Strip write/exec on the parent directory so the
+        // hardlink/rename creating a NEW entry in the directory fails
+        // with EACCES. The existing .tmp inode is untouched: data is
+        // still readable inode-wise once we restore perms, and as far
+        // as the kernel is concerned the file's contents are preserved.
+        let dir_path = dir.path().to_path_buf();
+        let original_perms = std::fs::metadata(&dir_path).expect("perms").permissions();
+        std::fs::set_permissions(&dir_path, std::fs::Permissions::from_mode(0o500))
+            .expect("strip write perm");
+
+        let finalize_result = sink.finalize();
+
+        // Restore perms BEFORE asserting so we can read the .tmp file
+        // and so the tempdir cleanup works regardless of test outcome.
+        std::fs::set_permissions(&dir_path, original_perms).expect("restore perms");
+
+        let err = finalize_result
+            .err()
+            .expect("commit must fail under EACCES");
+
+        // The error MUST mention the .tmp path so the user can recover.
+        let chained = err
+            .chain()
+            .map(|c| c.to_string())
+            .collect::<Vec<_>>()
+            .join(": ");
+        assert!(
+            chained.contains(&tmp.display().to_string()),
+            "error chain must reference the .tmp path for recovery: {}",
+            chained
+        );
+        assert!(
+            chained.contains("preserved"),
+            "error chain should explain that data is preserved: {}",
+            chained
+        );
+        // Top-level message also mentions the target so the operator
+        // can correlate.
+        assert!(
+            chained.contains(&out.display().to_string()),
+            "error chain must reference the target path: {}",
+            chained
+        );
+
+        // Critical assertion: the .tmp must still exist on disk.
+        assert!(
+            tmp.exists(),
+            "HIGH #13: .tmp must survive a finalize failure for user recovery"
+        );
+
+        // And the target must NOT have been created.
+        assert!(
+            !out.exists(),
+            "target must not appear when commit fails (no half-written state)"
+        );
+
+        // The .tmp must contain the data we wrote (not be truncated).
+        let preserved = std::fs::read_to_string(&tmp).expect("read preserved tmp");
+        assert!(
+            preserved.contains("recovery-data"),
+            ".tmp content must be intact: {}",
+            preserved
         );
     }
 }

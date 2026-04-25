@@ -199,6 +199,16 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 url = "2.5.8"
 
+# Linux-only: provides `renameat2(2)` with `RENAME_NOREPLACE` for an atomic
+# fail-on-clobber rename in `sink::commit_tmp` (CRITICAL #2 — TOCTOU rename
+# race). Plain `std::fs::rename` would unconditionally overwrite a target
+# planted in the window between the pre-flight `output.exists()` check and
+# the rename. macOS / non-Linux Unix use `std::fs::hard_link` for the same
+# guarantee; Windows uses `OpenOptions::create_new` to acquire exclusive
+# ownership of the target.
+[target.'cfg(target_os = "linux")'.dependencies]
+nix = { version = "0.31", default-features = false, features = ["fs"] }
+
 # Unix-only: provides `O_NOFOLLOW` for O_NOFOLLOW path-safety on output
 # file creation (todo #024). Used only via `OpenOptions::custom_flags`.
 [target.'cfg(unix)'.dependencies]
