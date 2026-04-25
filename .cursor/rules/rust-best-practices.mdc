@@ -17,7 +17,7 @@ alwaysApply: true
 - Each output format (CSV, JSON, Tab) should have its own module with a `write` function that takes rows and an output writer.
 - Follow the established pattern: `csv.rs`, `json.rs`, `tab.rs` with consistent `write<R, F, W>(rows: R, output: W) -> anyhow::Result<()> where R: IntoIterator<Item = F>, F: IntoIterator<Item = String>, W: Write` interface.
 - Import `std::io::Write` in all output format modules to enable generic writer support.
-- The writer is consumed by value (not borrowed); callers wrap a `File` or `Stdout` in `std::io::BufWriter` inside the module.
+- The writer is consumed by value (not borrowed). For CSV/TSV the `csv::Writer` (built via `csv::WriterBuilder`) supplies its own internal buffer — do **not** wrap the caller's writer in an extra `BufWriter` in `csv.rs` / `tab.rs` (that double-buffer was deleted in todo #058 and `src/delimited.rs` keeps the single-buffer contract). The JSON sink wraps its `<output>.tmp` writer in a `BufWriter` because `serde_json::to_writer` is per-row and benefits from explicit buffering at the boundary.
 - Use iterable parameters for rows to accept slices or owned `Vec<Vec<String>>` produced by `rows_to_strings`.
 - CLI module [`cli.rs`](mdc:src/cli.rs) contains Clap-based CLI definitions and configuration.
 - Public functions in modules should be documented with doc comments (`///`).
@@ -38,8 +38,8 @@ where
 This API accepts:
 
 - **Rows**: Any iterable of iterables yielding owned `String` values (typically `Vec<Vec<String>>` from `rows_to_strings`).
-- **Output**: Any `Write` implementation, consumed by value. The writer is wrapped in `BufWriter` inside the module so callers can pass a raw `File` or `Stdout` directly.
-- **Streaming**: Supported only by `JsonWriter` today (see `src/json.rs`); `csv` and `tab` require a fully materialised row vector.
+- **Output**: Any `Write` implementation, consumed by value. CSV/TSV rely on `csv::WriterBuilder`'s built-in buffer (no extra `BufWriter` wrap — todo #058); JSON wraps the writer in a `BufWriter` because `serde_json::to_writer` writes per-row.
+- **Streaming**: The live binary path uses the `RowSink` trait in `src/sink.rs` (`DelimitedSink` for CSV/TSV, `JsonSink` for JSON), driven by `conn.query_iter` in `src/run.rs::stream_query`. All three formats stream row-by-row; the legacy `write` free functions are retained only for snapshot/unit tests that drive a fully-materialised `Vec<Vec<String>>`.
 
 ## Code Quality Standards
 

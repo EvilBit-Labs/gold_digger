@@ -32,20 +32,23 @@
 //! `tests/end_to_end_type_conversion.rs` when Docker is available.
 
 use assert_cmd::Command;
-use assert_cmd::cargo;
 use std::path::{Path, PathBuf};
 use tempfile::tempdir;
 
-/// Clap-bound env vars stripped from each test child binary so a
-/// developer's shell exports cannot leak in.
-const ENV_VARS_TO_REMOVE: &[&str] = &["DATABASE_URL", "DATABASE_QUERY", "OUTPUT_FILE", "NO_COLOR"];
+// `mod integration;` is required because `tests/test_support/containers.rs`
+// and `tests/test_support/parsing.rs` re-export from `crate::integration::*`.
+// Each integration-test crate (= each `tests/*.rs` file) needs both modules
+// declared even when this file only directly uses `test_support::cli`.
+mod integration;
+mod test_support;
 
+/// Wraps the canonical [`test_support::cli::clean_cmd`] so the rest of
+/// this file can call `clean_cmd()` directly. The shared helper strips
+/// the four Clap-bound env vars (`DATABASE_URL`, `DATABASE_QUERY`,
+/// `OUTPUT_FILE`, `NO_COLOR`) that would otherwise leak from a
+/// developer's shell into the test child process.
 fn clean_cmd() -> Command {
-    let mut cmd = cargo::cargo_bin_cmd!("gold_digger");
-    for var in ENV_VARS_TO_REMOVE {
-        cmd.env_remove(var);
-    }
-    cmd
+    test_support::cli::clean_cmd()
 }
 
 /// Returns the sibling `<output>.tmp` path the streaming sinks write

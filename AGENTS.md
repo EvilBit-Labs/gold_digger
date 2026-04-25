@@ -215,7 +215,7 @@ Gold Digger uses CLI-first configuration with environment variable fallbacks:
 
 - Resolves config via CLI flags first, then `DATABASE_URL` / `DATABASE_QUERY` / `OUTPUT_FILE` env fallbacks
 - Exits with `EXIT_CONFIG_ERROR` (2) when required config is missing (see `src/exit.rs` for the full 0-5 contract)
-- Creates MySQL connection pool, fetches ALL rows into memory (streaming tracked under F007)
+- Creates MySQL connection pool and streams rows directly into the chosen output sink via `conn.query_iter` (`src/run.rs::stream_query`); the full result set is no longer materialised in memory (F007 resolved — see Closed gaps below)
 - Exits with code 1 (`EXIT_NO_ROWS`) if the result set is empty unless `--allow-empty` is set
 - Dispatches to writer based on `--format` flag, then file extension
 

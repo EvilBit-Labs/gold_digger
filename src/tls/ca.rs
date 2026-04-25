@@ -33,9 +33,14 @@ impl CaFile {
     /// Performs three checks in order so the caller gets the most
     /// specific error possible:
     ///
-    /// 1. **Canonicalise.** Resolves `..` and symlinks; failure yields
-    ///    [`TlsError::CaFileNotFound`] (broken paths look identical to
-    ///    missing ones from a UX perspective).
+    /// 1. **Canonicalise.** Resolves `..` and symlinks. The error kind
+    ///    is preserved on failure: `NotFound` (missing file or broken
+    ///    symlink target) yields [`TlsError::CaFileNotFound`] so the
+    ///    user sees the obvious message; every other kind
+    ///    (`PermissionDenied`, `NotADirectory`, mount failures, etc.)
+    ///    yields [`TlsError::InvalidCaFormat`] carrying the OS error
+    ///    text so operators get an actionable diagnostic instead of a
+    ///    misleading "not found".
     /// 2. **Open and parse PEM.** I/O failures map to
     ///    [`TlsError::InvalidCaFormat`] with the OS error text;
     ///    parse failures map to the same variant with the rustls-pki
@@ -49,10 +54,17 @@ impl CaFile {
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, TlsError> {
         let raw = path.as_ref();
 
-        // 1. Canonicalise. Missing files / broken symlinks fail here.
-        let canonical = raw
-            .canonicalize()
-            .map_err(|_| TlsError::ca_file_not_found(raw.display().to_string()))?;
+        // 1. Canonicalise. Distinguish "missing" from other I/O failures
+        //    (PermissionDenied, NotADirectory, etc.) so operators don't
+        //    chase a misleading "not found" when the real cause is a
+        //    permission or mount problem.
+        let canonical = raw.canonicalize().map_err(|e| match e.kind() {
+            std::io::ErrorKind::NotFound => TlsError::ca_file_not_found(raw.display().to_string()),
+            _ => TlsError::invalid_ca_format(
+                raw.display().to_string(),
+                format!("Cannot resolve certificate path: {}", e),
+            ),
+        })?;
 
         // 2. Open + parse PEM. Each failure mode carries the path so
         //    operators can tell which file is wrong even when several

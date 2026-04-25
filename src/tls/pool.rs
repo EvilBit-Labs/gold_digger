@@ -209,6 +209,19 @@ pub(crate) fn classify_mysql_pool_error(mysql_error: mysql::Error) -> TlsError {
         // hostname variants each produce the corresponding typed
         // `TlsError`. Other inner variants (PKI parse, DNS name, verifier
         // builder) get specific routing.
+        //
+        // CodeQL note: every `format!(... {redacted_error})` below uses
+        // the `redacted_error` local — the value produced by
+        // `utils::redact_sql_error(&mysql_error.to_string())` at the top
+        // of this function. CodeQL's "cleartext logging of sensitive
+        // information" data-flow analyser flags these `format!` sites
+        // because it traces from the unredacted `mysql_error` parameter
+        // through the local; it does not model the redaction step. The
+        // alert is a false positive — the redacted copy is the only
+        // thing that reaches the constructed `TlsError` payload, and the
+        // raw `mysql_error.to_string()` is never re-interpolated past
+        // line `redacted_error =`. Dismiss the GitHub Security alert
+        // with reference to this comment.
         mysql::Error::TlsError(inner) => match inner {
             MysqlTlsError::Tls(rustls_err) => TlsError::from_rustls_error(rustls_err, None),
             MysqlTlsError::Pki(_) => TlsError::certificate_chain_invalid(format!(

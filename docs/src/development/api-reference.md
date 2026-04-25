@@ -149,6 +149,6 @@ fn example_function() -> Result<()> {
 
 CSV and JSON output are built into the binary unconditionally -- the former `csv` and `json` feature flags were vestigial markers that never actually gated compilation and were removed in todo #011. Remaining Cargo features:
 
-- `verbose` (default) - enables additional diagnostic output via `println!` / `eprintln!` paths guarded by `#[cfg(feature = "verbose")]`.
+- `verbose` (default) - retained as a default feature flag for backward compatibility with downstream consumers that pin it; runtime verbosity is now driven by the `-v` / `-vv` / `-vvv` CLI flags and `RUST_LOG`, which feed `tracing-subscriber` (`src/logging.rs::init_tracing`) — there are no remaining `println!`/`eprintln!` paths in `src/`.
 - `additional_mysql_types` (default) - pulls in `mysql_common` with `bigdecimal`, `rust_decimal`, `time`, and `frunk` support for extended MySQL column types.
 - `integration_tests` - opt-in flag used only by heavy integration tests that require a live database container.

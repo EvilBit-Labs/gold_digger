@@ -173,15 +173,23 @@ gold_digger --db-url "mysql://user:pass@test.db:3306/mydb" \
 
 **Note**: TLS flags are mutually exclusive - use only one at a time. `--allow-invalid-certificate` disables both certificate chain and hostname validation (full MITM exposure); see [SECURITY.md](SECURITY.md#--allow-invalid-certificate-mitm-exposure) before using it.
 
-## Known Limits
+## Memory Profile
 
-Gold Digger currently materialises the full result set in memory before writing — there is no row-by-row streaming yet (tracked as F007 / v0.4.0). Plan around that constraint when sizing queries:
+Gold Digger streams rows directly from the MySQL/MariaDB result set into the chosen output sink (CSV, TSV, JSON) via `conn.query_iter` (F007). The full result set is no longer materialised in memory before writing, so resident memory is dominated by the current row plus output buffering rather than total row count.
 
-- A SELECT returning ~1M rows of ~10 columns at ~64 bytes per cell already consumes ~640 MB of resident memory before serialisation; the working set roughly doubles during JSON encoding due to the intermediate `BTreeMap<String, Value>` per row.
-- On a 16 GB host, expect OOM somewhere between 2M and 3M rows depending on column count, value width, and output format. CSV/TSV are cheaper than JSON.
-- Mitigations until streaming lands: add `LIMIT` to queries, paginate via `WHERE id > ? LIMIT ?` in a wrapping script, or split exports per partition/date range.
+- Memory should stay roughly flat as row count grows; for very large exports, total runtime and disk space dominate, not RAM.
+- Peak memory still rises with **row width** (number of columns × per-cell size), large `BLOB`/`TEXT` values, pretty-printed JSON, and downstream filesystem/shell-pipeline buffering.
+- For very large exports, prefer writing directly to a file rather than piping through a shell, and benchmark with production-shaped rows if you need tight resource guarantees.
 
-For a full memory-vs-rows table see [`docs/src/usage/configuration.md`](docs/src/usage/configuration.md#memory-profile-f007).
+For detailed working-set guidance and per-format notes, see [`docs/src/usage/configuration.md`](docs/src/usage/configuration.md#memory-profile-f007).
+
+### Legacy (pre-streaming) numbers
+
+These figures applied before F007 streaming was implemented, when Gold Digger buffered the full result set in memory before serialisation. Retained for context when reading older issues, benchmarks, or release notes.
+
+- A SELECT returning ~1M rows of ~10 columns at ~64 bytes per cell consumed ~640 MB of resident memory before serialisation; the working set roughly doubled during JSON encoding due to the intermediate `BTreeMap<String, Value>` per row.
+- On a 16 GB host, OOM landed somewhere between 2M and 3M rows depending on column count, value width, and output format. CSV/TSV were cheaper than JSON.
+- Typical mitigations in the pre-streaming era were `LIMIT`, paginate via `WHERE id > ? LIMIT ?` in a wrapping script, or split exports per partition/date range.
 
 ### Subcommands
 

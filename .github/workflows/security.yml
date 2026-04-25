@@ -48,8 +48,9 @@ jobs:
                   path: gold_digger.cdx.json
 
             - name: Vulnerability scan with Grype
-              run: grype sbom:gold_digger.cdx.json --fail-on critical -o sarif --file
-                  grype-results.sarif
+              run:
+                  grype sbom:gold_digger.cdx.json --fail-on critical -o sarif
+                  --file=grype-results.sarif
 
             - name: Upload Grype SARIF
               if: always() && (github.event_name != 'workflow_run' ||

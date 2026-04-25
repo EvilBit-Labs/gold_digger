@@ -42,8 +42,8 @@ jobs:
               run: just lint-rust
 
             - name: Run clippy (minimal features)
-              run: cargo clippy --no-default-features --features "json csv
-                  additional_mysql_types" -- -D warnings
+              run: cargo clippy --no-default-features --features
+                  "additional_mysql_types" -- -D warnings
 
     # Test TLS functionality (always available)
     test-tls:
