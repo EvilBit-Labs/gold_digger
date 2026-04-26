@@ -124,6 +124,7 @@ fn time_boundaries_stable() {
     // transformer aggregates to total hours for the `HH:MM:SS.mmmmmm`
     // format (microseconds are always emitted, padded to six digits).
     let cases: &[(bool, u32, u8, u8, u8, u32, &str)] = &[
+        // Midnight / zero duration (lower bound for non-negative range).
         (false, 0, 0, 0, 0, 0, "00:00:00.000000"),
         (false, 0, 1, 2, 3, 0, "01:02:03.000000"),
         (false, 0, 23, 59, 59, 0, "23:59:59.000000"),
@@ -133,6 +134,10 @@ fn time_boundaries_stable() {
         (false, 0, 1, 0, 0, 500_000, "01:00:00.500000"),
         // Days + hours -> aggregated hours (1*24 + 14 = 38).
         (false, 1, 14, 0, 0, 0, "38:00:00.000000"),
+        // MySQL TIME upper bound: 838:59:59 (34 days * 24h + 22h = 838h).
+        (false, 34, 22, 59, 59, 0, "838:59:59.000000"),
+        // MySQL TIME lower bound: -838:59:59.
+        (true, 34, 22, 59, 59, 0, "-838:59:59.000000"),
     ];
 
     for &(neg, days, h, m, s, us, expected) in cases {
@@ -179,7 +184,10 @@ fn extended_types_null_paths_converge() {
     // Use Value::NULL — the unifying shape MySQL returns for any
     // unset extended-type column.
     let v = Value::NULL;
-    assert_eq!(TypeTransformer::value_to_string(&v).unwrap(), "");
+    assert_eq!(
+        TypeTransformer::value_to_string(&v).expect("NULL TIME should convert to empty string"),
+        ""
+    );
     assert_eq!(
         TypeTransformer::value_to_json(&v).expect("value_to_json"),
         serde_json::Value::Null

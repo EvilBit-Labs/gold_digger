@@ -17,7 +17,14 @@ use predicates::prelude::*;
 /// bound to a MySQL server) should produce `EXIT_DB_AUTH_ERROR` (3) per
 /// `src/exit.rs::tls_exit_code` / typed `GoldDiggerError::DbAuth` mapping.
 #[test]
-fn test_exit_code_3_unreachable_host() {
+fn test_exit_code_3_unreachable_host() -> anyhow::Result<()> {
+    // Per-run tempdir keeps the output path unique across repeated runs and
+    // works on every platform (Windows / Linux / macOS) -- a hardcoded
+    // `/tmp/...` shadows the DB-connection failure on non-Unix runners and
+    // can collide with a previous run.
+    let temp_dir = tempfile::tempdir()?;
+    let output_path = temp_dir.path().join("exit_3_unreachable.csv");
+
     let mut cmd = cargo::cargo_bin_cmd!("gold_digger");
     cmd.env_remove("DATABASE_URL")
         .env_remove("DATABASE_QUERY")
@@ -29,9 +36,9 @@ fn test_exit_code_3_unreachable_host() {
             "--query",
             "SELECT 1",
             "--output",
-            // Point at a path that exists & is writable so the failure is
+            // Point at a path inside a writable tempdir so the failure is
             // unambiguously a DB-connection issue, not an output-write one.
-            "/tmp/gold_digger_exit_3_test.csv",
+            output_path.to_str().expect("utf-8 path"),
         ])
         .assert()
         .code(3)
@@ -42,13 +49,18 @@ fn test_exit_code_3_unreachable_host() {
                 .or(predicate::str::contains("MySQL"))
                 .or(predicate::str::contains("mysql")),
         );
+
+    Ok(())
 }
 
 /// A syntactically-malformed `mysql://` URL still routes through the typed
 /// `GoldDiggerError::DbAuth` path because connection-establishment fails;
 /// either way the code must be 3, never 0/1/4/5/255.
 #[test]
-fn test_exit_code_3_bad_credentials_unreachable() {
+fn test_exit_code_3_bad_credentials_unreachable() -> anyhow::Result<()> {
+    let temp_dir = tempfile::tempdir()?;
+    let output_path = temp_dir.path().join("exit_3_bad_creds.csv");
+
     let mut cmd = cargo::cargo_bin_cmd!("gold_digger");
     cmd.env_remove("DATABASE_URL")
         .env_remove("DATABASE_QUERY")
@@ -60,8 +72,10 @@ fn test_exit_code_3_bad_credentials_unreachable() {
             "--query",
             "SELECT 1",
             "--output",
-            "/tmp/gold_digger_exit_3_creds_test.csv",
+            output_path.to_str().expect("utf-8 path"),
         ])
         .assert()
         .code(3);
+
+    Ok(())
 }

@@ -107,8 +107,8 @@ fn rcgen_bad_pem_is_rejected_by_cert_utils() {
     let mut tmp = NamedTempFile::new().unwrap();
     tmp.write_all(pem.as_bytes()).unwrap();
 
-    let err = cert_utils::load_ca_certificates(&tmp.path().to_path_buf())
-        .expect_err("corrupted PEM should not parse");
+    let err =
+        cert_utils::load_ca_certificates(tmp.path()).expect_err("corrupted PEM should not parse");
     assert!(matches!(err, TlsError::InvalidCaFormat { .. }));
     let rendered = err.to_string();
     assert!(

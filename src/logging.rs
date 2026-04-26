@@ -46,7 +46,7 @@ use std::io::IsTerminal;
 use std::time::Duration;
 
 use indicatif::{ProgressBar, ProgressStyle};
-use owo_colors::{OwoColorize, Stream};
+use owo_colors::{OwoColorize, Stream, Style};
 use tracing_subscriber::{EnvFilter, fmt};
 
 /// Default tick interval for indeterminate spinners. Short enough to feel
@@ -154,8 +154,14 @@ pub fn stderr_supports_color() -> bool {
 /// only a styling helper, not a print helper.
 pub fn warn_banner(message: &str) -> String {
     if stderr_supports_color() {
+        // Single allocation: the closure returns a borrowed `Display` wrapper
+        // (`FgColorDisplay`) and the outer `to_string` writes the styled escape
+        // codes directly into the result. Returning `t.yellow().to_string()`
+        // from the closure would allocate twice — once inside the closure to
+        // build the styled string, and again when the outer wrapper's `Display`
+        // impl re-emits it.
         message
-            .if_supports_color(Stream::Stderr, |t| t.yellow().to_string())
+            .if_supports_color(Stream::Stderr, |t| t.yellow())
             .to_string()
     } else {
         message.to_owned()
@@ -170,8 +176,15 @@ pub fn warn_banner(message: &str) -> String {
 /// mysql-crate chatter.
 pub fn danger_banner(message: &str) -> String {
     if stderr_supports_color() {
+        // Single allocation — see `warn_banner` for rationale. We compose the
+        // two effects via `Style` so the closure can return a `Styled<&str>`
+        // value (no nested borrow into a temporary), which the outer
+        // `to_string` writes directly into the result. The naive
+        // `t.red().bold().to_string()` form inside the closure would allocate
+        // twice.
+        let style = Style::new().red().bold();
         message
-            .if_supports_color(Stream::Stderr, |t| t.red().bold().to_string())
+            .if_supports_color(Stream::Stderr, |t| style.style(t))
             .to_string()
     } else {
         message.to_owned()

@@ -118,12 +118,18 @@ fn missing_config_error_routes_to_stderr_only() {
 /// Connection failure (unreachable host) routes the error message to
 /// stderr; stdout is empty because the run never produced output.
 /// Validates the same contract for the runtime-error path.
+///
+/// We pin a substring of the connection-failure breadcrumb on stderr
+/// (not just `stdout.is_empty()` and the exit code) so a future
+/// refactor that silently routes the diagnostic to stdout — or eats
+/// it entirely — fails this test instead of silently breaking the
+/// "diagnostics on stderr" contract.
 #[test]
 fn connection_error_routes_to_stderr_only() {
     let temp = tempdir().expect("tempdir");
     let out = temp.path().join("data.csv");
 
-    fresh_cmd()
+    let assert = fresh_cmd()
         .args([
             "--db-url",
             "mysql://baduser:badpass@127.0.0.1:1/db",
@@ -133,8 +139,24 @@ fn connection_error_routes_to_stderr_only() {
             out.to_str().expect("utf-8 path"),
         ])
         .assert()
-        .code(3)
-        .stdout(predicate::str::is_empty());
+        .code(3);
+
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout);
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr);
+
+    assert!(
+        stdout.is_empty(),
+        "connection failure must not leak to stdout, got: {stdout:?}"
+    );
+    // The "Database connection failed" context is added in
+    // `src/run.rs` when `create_database_connection` errors. It's the
+    // stable, non-URL-specific breadcrumb for the connect-failure
+    // path; if logging ever routes it to stdout (or drops it), this
+    // assertion fails loudly.
+    assert!(
+        stderr.contains("Database connection failed"),
+        "connection failure breadcrumb must appear on stderr, got: {stderr:?}"
+    );
 }
 
 /// `--allow-invalid-certificate` emits a `[DANGER]` banner to stderr.

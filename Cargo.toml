@@ -258,7 +258,12 @@ harness = false
 strip = true
 codegen-units = 1
 lto = "fat"
-panic = "abort"
+# Keep unwinding on panic. The streaming sinks in `src/sink.rs` and the
+# `ProgressGuard` in `src/run.rs` rely on `Drop` to clean up partial
+# `<output>.tmp` files and to clear the progress bar. `panic = "abort"`
+# would skip those `Drop` impls and leak partial output to disk if an
+# unexpected panic ever escapes the streaming path.
+panic = "unwind"
 
 # The profile that 'dist' will build with
 [profile.dist]

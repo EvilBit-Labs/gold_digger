@@ -3,7 +3,7 @@ name: Security
 on:
     workflow_run:
         workflows: [ CI ]
-        types: [ completed ]
+        types: [completed]
     schedule:
         - cron: "0 6 * * *"
     workflow_dispatch:
@@ -48,9 +48,7 @@ jobs:
                   path: gold_digger.cdx.json
 
             - name: Vulnerability scan with Grype
-              run:
-                  grype sbom:gold_digger.cdx.json --fail-on critical -o sarif
-                  --file=grype-results.sarif
+              run: grype sbom:gold_digger.cdx.json --fail-on critical -o sarif --file=grype-results.sarif
 
             - name: Upload Grype SARIF
               if: always() && (github.event_name != 'workflow_run' ||

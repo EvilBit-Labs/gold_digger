@@ -13,6 +13,19 @@ use crate::cli::{Cli, Shell};
 /// is multi-KB per shell) does not pollute `cargo test` / `nextest`
 /// output. The user-facing CLI entry point is [`generate_completion`],
 /// which delegates to this helper with `std::io::stdout()`.
+///
+/// # Arguments
+/// * `shell` - Target shell variant (Bash, Zsh, Fish, or PowerShell)
+/// * `writer` - Sink that receives the generated completion script bytes
+///
+/// # Example
+///
+///     use gold_digger::cli::Shell;
+///     use gold_digger::completion::generate_completion_to;
+///
+///     let mut buf: Vec<u8> = Vec::new();
+///     generate_completion_to(Shell::Bash, &mut buf);
+///     assert!(!buf.is_empty());
 pub fn generate_completion_to<W: Write>(shell: Shell, writer: &mut W) {
     let mut cmd = Cli::command();
     let bin_name = "gold_digger";
@@ -30,6 +43,17 @@ pub fn generate_completion_to<W: Write>(shell: Shell, writer: &mut W) {
 /// Public CLI entry point invoked from `gold_digger completion <SHELL>`.
 /// Tests should call [`generate_completion_to`] with an in-memory
 /// writer to keep test output quiet.
+///
+/// # Arguments
+/// * `shell` - Target shell variant (Bash, Zsh, Fish, or PowerShell)
+///
+/// # Example
+///
+///     use gold_digger::cli::Shell;
+///     use gold_digger::completion::generate_completion;
+///
+///     // Writes the Bash completion script to stdout.
+///     generate_completion(Shell::Bash);
 pub fn generate_completion(shell: Shell) {
     generate_completion_to(shell, &mut std::io::stdout());
 }

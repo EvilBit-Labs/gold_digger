@@ -7,9 +7,9 @@ name: Cargo Audit (PR gate)
 
 on:
     pull_request:
-        branches: [ main ]
+        branches: [main]
     push:
-        branches: [ main ]
+        branches: [main]
     workflow_dispatch:
 
 permissions:

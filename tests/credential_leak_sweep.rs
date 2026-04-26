@@ -43,6 +43,10 @@ const PW_SENTINEL: &str = "SeNtInEl_pw_29c4f7";
 /// Generic credential-leak markers. Any one of these in stdout or stderr
 /// is a regression — they signal a parser, dump-config, or error-wrap
 /// path that did not run through the redactor.
+///
+/// `bearer ` / `Bearer ` cover HTTP `Authorization: Bearer <token>` headers
+/// and the lowercase variant that some tooling logs. `auth=` covers the
+/// URL query parameter / form field convention.
 const LEAK_MARKERS: &[&str] = &[
     "password=",
     "password:",
@@ -50,6 +54,9 @@ const LEAK_MARKERS: &[&str] = &[
     "secret=",
     "token=",
     "api_key=",
+    "auth=",
+    "bearer ",
+    "Bearer ",
 ];
 
 /// Build a `mysql://` URL embedding the password sentinel. Pointing

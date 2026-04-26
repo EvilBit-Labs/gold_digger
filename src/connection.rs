@@ -125,20 +125,24 @@ mod tests {
 
     #[test]
     fn test_create_database_connection() {
-        // Test that the function exists and handles errors properly
+        // Test that the function exists and handles errors properly.
+        // Use 127.0.0.1:1 (tcpmux) -- a guaranteed-unbound localhost port that
+        // fails fast without live DNS resolution, keeping the test offline-friendly.
         let tls = TlsConfig::Platform;
         let result =
-            create_database_connection("mysql://invalid:invalid@nonexistent:3306/test", &tls, 0);
+            create_database_connection("mysql://invalid:invalid@127.0.0.1:1/test", &tls, 0);
         // Should fail due to invalid connection details, but not panic
         assert!(result.is_err());
     }
 
     #[test]
     fn test_create_database_connection_with_tls_options() {
-        // Test TLS configuration path
+        // Test TLS configuration path.
+        // Use 127.0.0.1:1 (tcpmux) -- a guaranteed-unbound localhost port that
+        // fails fast without live DNS resolution, keeping the test offline-friendly.
         let tls = TlsConfig::SkipHostnameVerification;
         let result =
-            create_database_connection("mysql://invalid:invalid@nonexistent:3306/test", &tls, 0);
+            create_database_connection("mysql://invalid:invalid@127.0.0.1:1/test", &tls, 0);
         // Should fail due to invalid connection details, but TLS config should be processed
         assert!(result.is_err());
     }

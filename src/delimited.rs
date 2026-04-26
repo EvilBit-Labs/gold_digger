@@ -16,6 +16,7 @@
 
 use std::io::Write;
 
+use anyhow::Context;
 use csv::{QuoteStyle, WriterBuilder};
 
 use crate::OUTPUT_BUFFER_CAPACITY;
@@ -57,10 +58,22 @@ where
         .buffer_capacity(OUTPUT_BUFFER_CAPACITY)
         .from_writer(output);
 
+    // Track 1-based row index so write failures point operators at the
+    // offending record. The streaming `RowSink` path in `src/sink.rs`
+    // already does this; we mirror the breadcrumb here for the
+    // non-streaming `csv::write` / `tab::write` callers.
+    let mut row_index: u64 = 0;
     for row in rows {
-        wtr.write_record(row)?;
+        row_index = row_index.saturating_add(1);
+        wtr.write_record(row)
+            .with_context(|| format!("Failed to write delimited row {}", row_index))?;
     }
 
-    wtr.flush()?;
+    wtr.flush().with_context(|| {
+        format!(
+            "Failed to flush delimited writer after {} row(s)",
+            row_index
+        )
+    })?;
     Ok(())
 }

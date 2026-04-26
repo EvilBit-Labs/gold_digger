@@ -48,7 +48,15 @@ mod unix {
         let query_path = dir.path().join("query.sql");
         fs::write(&query_path, "SELECT 1").expect("write query");
 
-        // Lock the directory so the binary cannot open the query file.
+        // Output goes into a *separate* tempdir so the query-file dir can
+        // be chmod 0o000 without taking the output path down with it.
+        // A hardcoded `/tmp/...` would collide across runs and fail outright
+        // on Windows runners that have no `/tmp`, masking the real I/O
+        // classification we are asserting.
+        let output_dir = tempdir().expect("create output tempdir");
+        let output_path = output_dir.path().join("exit_5_unreadable_query.csv");
+
+        // Lock the query-file directory so the binary cannot open the query file.
         let mut perms = fs::metadata(dir.path())
             .expect("stat tempdir")
             .permissions();
@@ -67,7 +75,7 @@ mod unix {
                 "--query-file",
                 query_path.to_str().expect("utf-8 path"),
                 "--output",
-                "/tmp/gold_digger_exit_5_test.csv",
+                output_path.to_str().expect("utf-8 path"),
             ])
             .assert();
 

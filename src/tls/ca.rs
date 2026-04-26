@@ -119,21 +119,33 @@ impl CaFile {
 ///
 /// Prefer [`CaFile::load`] in new code; this free function is retained
 /// for backward compatibility with existing callers and tests that
-/// expect the raw `Vec<CertificateDer<'static>>` payload.
-pub fn load_ca_certificates(
-    ca_file_path: &PathBuf,
-) -> Result<Vec<CertificateDer<'static>>, TlsError> {
-    // Check if file exists
-    if !ca_file_path.exists() {
-        return Err(TlsError::ca_file_not_found(
+/// expect the raw `Vec<CertificateDer<'static>>` payload. The
+/// implementation now mirrors [`CaFile::load`]'s hardened path
+/// resolution (canonicalise first, then open the canonical handle) so
+/// both APIs offer the same TOCTOU posture.
+pub fn load_ca_certificates(ca_file_path: &Path) -> Result<Vec<CertificateDer<'static>>, TlsError> {
+    // Canonicalise first. This single syscall handles existence,
+    // permission, and symlink resolution, and avoids the TOCTOU window
+    // an explicit `Path::exists()` precheck would introduce. Error-kind
+    // mapping mirrors `CaFile::load`: `NotFound` becomes `CaFileNotFound`
+    // so the user sees the obvious message; every other I/O failure
+    // becomes `InvalidCaFormat` carrying the OS error text.
+    let canonical = ca_file_path.canonicalize().map_err(|e| match e.kind() {
+        std::io::ErrorKind::NotFound => {
+            TlsError::ca_file_not_found(ca_file_path.display().to_string())
+        }
+        _ => TlsError::invalid_ca_format(
             ca_file_path.display().to_string(),
-        ));
-    }
+            format!("Cannot resolve certificate path: {}", e),
+        ),
+    })?;
 
-    // Open and read the file
-    let file = File::open(ca_file_path).map_err(|e| {
+    // Open the canonical path. Working from the canonical handle removes
+    // the path-vs-fd race window that the prior `exists()`+`open()`
+    // sequence had.
+    let file = File::open(&canonical).map_err(|e| {
         TlsError::invalid_ca_format(
-            ca_file_path.display().to_string(),
+            canonical.display().to_string(),
             format!("Cannot read certificate file: {}", e),
         )
     })?;
@@ -145,14 +157,14 @@ pub fn load_ca_certificates(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| {
             TlsError::invalid_ca_format(
-                ca_file_path.display().to_string(),
+                canonical.display().to_string(),
                 format!("Failed to parse PEM certificates: {}", e),
             )
         })?;
 
     if certs.is_empty() {
         return Err(TlsError::invalid_ca_format(
-            ca_file_path.display().to_string(),
+            canonical.display().to_string(),
             "No valid certificates found in file".to_string(),
         ));
     }
@@ -164,7 +176,7 @@ pub fn load_ca_certificates(
 ///
 /// Prefer [`CaFile::load`] in new code; this is retained for backward
 /// compatibility with the historical `validate_ca_file(&PathBuf)` API.
-pub fn validate_ca_file(ca_file_path: &PathBuf) -> Result<(), TlsError> {
+pub fn validate_ca_file(ca_file_path: &Path) -> Result<(), TlsError> {
     load_ca_certificates(ca_file_path)?;
     Ok(())
 }
@@ -195,7 +207,7 @@ mod tests {
         let mut temp_file = NamedTempFile::new().unwrap();
         writeln!(temp_file, "This is not a valid PEM certificate").unwrap();
 
-        let result = load_ca_certificates(&temp_file.path().to_path_buf());
+        let result = load_ca_certificates(temp_file.path());
         assert!(result.is_err());
         assert!(
             result
@@ -212,7 +224,7 @@ mod tests {
         // Create an empty temporary file
         let temp_file = NamedTempFile::new().unwrap();
 
-        let result = load_ca_certificates(&temp_file.path().to_path_buf());
+        let result = load_ca_certificates(temp_file.path());
         assert!(result.is_err());
         assert!(
             result

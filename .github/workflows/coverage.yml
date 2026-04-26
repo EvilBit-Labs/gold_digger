@@ -2,9 +2,9 @@ name: Coverage
 
 on:
     push:
-        branches: [ main ]
+        branches: [main]
     pull_request:
-        branches: [ main ]
+        branches: [main]
     workflow_dispatch:
 
 permissions:
@@ -45,8 +45,7 @@ jobs:
             # drops below the threshold. Keep in sync with codecov config and
             # the target documented in AGENTS.md.
             - name: Generate coverage with 80% floor
-              run: cargo llvm-cov --workspace --lcov --output-path lcov.info
-                  --fail-under-lines 80
+              run: cargo llvm-cov --workspace --lcov --output-path lcov.info --fail-under-lines 80
 
             - name: Upload lcov.info artifact
               if: always()

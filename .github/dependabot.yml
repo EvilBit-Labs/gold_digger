@@ -12,8 +12,8 @@ updates:
           # Batch all minor/patch action bumps into a single PR to reduce noise.
           # Major bumps still come through as individual PRs for review.
           github-actions:
-              patterns: [ "*" ]
-              update-types: [ "minor", "patch" ]
+              patterns: ["*"]
+              update-types: ["minor", "patch"]
     - package-ecosystem: "devcontainers"
       directory: "/"
       schedule:
@@ -27,24 +27,18 @@ updates:
       commit-message:
           prefix: "chore(deps)"
       groups:
-          # Security-sensitive crates ship as individual PRs so each can be
-          # reviewed in isolation and held back if needed.
-          security-sensitive:
-              patterns:
-                  - "mysql*"
-                  - "rustls*"
-                  - "clap*"
-                  - "tokio*"
-                  - "serde*"
-              update-types: [ "patch" ]
+          # Security-sensitive crates (mysql*, rustls*, clap*, tokio*, serde*)
+          # are intentionally excluded from grouping below so each ships as an
+          # individual PR — letting us review in isolation and hold any one
+          # back without rejecting the entire batch.
           # Everything else (non-security-sensitive) groups together for a
           # single weekly PR — cuts the 4-of-5 individual-bump commit noise.
           rust-deps:
-              patterns: [ "*" ]
+              patterns: ["*"]
               exclude-patterns:
                   - "mysql*"
                   - "rustls*"
                   - "clap*"
                   - "tokio*"
                   - "serde*"
-              update-types: [ "minor", "patch" ]
+              update-types: ["minor", "patch"]

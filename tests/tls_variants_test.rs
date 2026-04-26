@@ -6,6 +6,7 @@
 use anyhow::Result;
 mod fixtures;
 mod integration;
+mod test_support;
 
 use integration::{TestDatabasePlain, TestDatabaseTls, TlsContainerConfig};
 

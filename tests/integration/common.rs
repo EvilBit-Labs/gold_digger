@@ -7,7 +7,6 @@
 
 use anyhow::{Context, Result};
 use assert_cmd::Command;
-use assert_cmd::cargo;
 use predicates::prelude::*;
 use serde_json;
 use std::collections::HashMap;
@@ -21,22 +20,17 @@ use super::{GoldDiggerResult, OutputFormat, TestCase};
 
 // TempFileManager is defined in this module, no need to re-export
 
-/// Environment variables that Clap reads via `#[arg(env = "...")]`. These
-/// must be removed from any spawned binary so that user-shell exports do not
-/// leak into integration tests. Mirrors `tests::test_support::cli::ENV_VARS_TO_REMOVE`
-/// (kept local because each integration test file is its own crate).
-const ENV_VARS_TO_REMOVE: &[&str] = &["DATABASE_URL", "DATABASE_QUERY", "OUTPUT_FILE", "NO_COLOR"];
-
 /// Build the binary `Command` with all Clap-bound env vars removed. Use in
 /// every site that invokes `gold_digger`; never call `Command::cargo_bin`
-/// directly from this module. Uses the `cargo::cargo_bin_cmd!` macro
-/// (assert_cmd 2.1+); the `Command::cargo_bin` function is deprecated.
-fn fresh_cmd() -> anyhow::Result<Command> {
-    let mut cmd = cargo::cargo_bin_cmd!("gold_digger");
-    for var in ENV_VARS_TO_REMOVE {
-        cmd.env_remove(var);
-    }
-    Ok(cmd)
+/// directly from this module.
+///
+/// This delegates to `crate::test_support::cli::clean_cmd`, which is the
+/// single source of truth for the env-isolation list. Keeping the list in
+/// one place prevents drift when a new Clap `#[arg(env = "...")]` binding
+/// is added — otherwise the canonical list and any module-local copy can
+/// silently fall out of sync.
+fn fresh_cmd() -> Command {
+    crate::test_support::cli::clean_cmd()
 }
 
 /// Enhanced CLI execution utilities for Gold Digger using assert_cmd and predicates
@@ -129,7 +123,7 @@ impl GoldDiggerCli {
         let start_time = Instant::now();
 
         // Build command using assert_cmd
-        let mut cmd = fresh_cmd()?;
+        let mut cmd = fresh_cmd();
 
         // Set database URL (never log the actual URL for security)
         cmd.arg("--db-url").arg(db_url);
@@ -199,7 +193,7 @@ impl GoldDiggerCli {
         let start_time = Instant::now();
 
         // Build command using assert_cmd
-        let mut cmd = fresh_cmd()?;
+        let mut cmd = fresh_cmd();
 
         // Set database URL (never log the actual URL for security)
         cmd.arg("--db-url").arg(db_url);
@@ -323,7 +317,7 @@ impl GoldDiggerCli {
         db_url: &str,
         output_path: &Path,
     ) -> Result<Output> {
-        let mut cmd = fresh_cmd()?;
+        let mut cmd = fresh_cmd();
 
         cmd.arg("--db-url")
             .arg(db_url)
@@ -363,7 +357,7 @@ impl GoldDiggerCli {
         stdout_contains: Option<&str>,
         stderr_contains: Option<&str>,
     ) -> Result<GoldDiggerResult> {
-        let mut cmd = fresh_cmd()?;
+        let mut cmd = fresh_cmd();
 
         // Set database URL (never log the actual URL for security)
         cmd.arg("--db-url").arg(db_url);
@@ -505,7 +499,7 @@ impl GoldDiggerCli {
         db_url: &str,
         output_path: &Path,
     ) -> Result<GoldDiggerResult> {
-        let mut cmd = fresh_cmd()?;
+        let mut cmd = fresh_cmd();
 
         // Set database URL (never log the actual URL for security)
         cmd.arg("--db-url").arg(db_url);
@@ -1033,7 +1027,7 @@ impl AssertCmdIntegration {
         let output_file = temp_manager.create_output_file(&test_case.expected_format)?;
 
         // Build command
-        let mut cmd = fresh_cmd()?;
+        let mut cmd = fresh_cmd();
 
         cmd.arg("--db-url")
             .arg(db_url)
@@ -1077,7 +1071,7 @@ impl AssertCmdIntegration {
         let output_file = temp_manager.create_output_file(output_format)?;
 
         // Build command
-        let mut cmd = fresh_cmd()?;
+        let mut cmd = fresh_cmd();
 
         cmd.arg("--db-url")
             .arg(db_url)
@@ -1104,7 +1098,7 @@ impl AssertCmdIntegration {
         let output_file = temp_manager.create_output_file(&test_case.expected_format)?;
 
         // Build command
-        let mut cmd = fresh_cmd()?;
+        let mut cmd = fresh_cmd();
 
         cmd.arg("--db-url")
             .arg(db_url)

@@ -126,7 +126,7 @@ cargo build --no-default-features --features "additional_mysql_types verbose"  #
 
 ## Project Overview
 
-Gold Digger is a production-ready Rust CLI tool for MySQL/MariaDB database queries with structured output (CSV, JSON, TSV). It features comprehensive CLI interface, rustls-only TLS, and safe data type handling.
+Gold Digger is a production-ready Rust CLI tool for MySQL/MariaDB database queries with structured output (CSV, JSON, TSV). It features a comprehensive CLI, rustls-only TLS, and safe data type handling.
 
 **Current Architecture:**
 
@@ -141,7 +141,7 @@ Gold Digger is a production-ready Rust CLI tool for MySQL/MariaDB database queri
 **Command Examples:**
 
 ```bash
-# CLI interface (preferred)
+# CLI (preferred)
 gold_digger --db-url "mysql://user:pass@host:3306/db" \
             --query "SELECT id, name FROM users" \
             --output results.json --pretty

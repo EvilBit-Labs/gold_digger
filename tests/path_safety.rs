@@ -156,7 +156,8 @@ fn query_file_over_size_cap_rejected() {
     let big_path = dir.path().join("huge.sql");
 
     // 10 MiB + 1 byte — just over the cap.
-    let size = (10 * 1024 * 1024) + 1;
+    const CAP_BYTES: u64 = 10 * 1024 * 1024;
+    const EXPECTED_SIZE: u64 = CAP_BYTES + 1;
     // Build without actually materialising 10MiB in Rust memory: write a
     // 1 MiB buffer 10 times plus one extra byte.
     let chunk = vec![b'-'; 1024 * 1024];
@@ -167,11 +168,12 @@ fn query_file_over_size_cap_rejected() {
             f.write_all(&chunk).expect("write chunk");
         }
         f.write_all(b"\n").expect("write trailing newline");
-        // Double-check we are over the limit.
+        // Pin exact fixture size: 10 MiB of '-' plus one '\n' = CAP + 1.
         let meta = fs::metadata(&big_path).expect("stat huge.sql");
-        assert!(
-            meta.len() > (10 * 1024 * 1024),
-            "test fixture smaller than cap: {} bytes (size_target={size})",
+        assert_eq!(
+            meta.len(),
+            EXPECTED_SIZE,
+            "fixture size must be exactly cap+1 ({EXPECTED_SIZE} bytes); got {} bytes",
             meta.len()
         );
     }
