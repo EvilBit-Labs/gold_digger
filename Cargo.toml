@@ -178,7 +178,7 @@ regex = "1.12.3"
 # TLS dependencies
 rustls = { version = "0.23.40", features = ["ring"] }
 rustls-native-certs = "0.8.3"
-rustls-pki-types = "1.14.0"
+rustls-pki-types = "1.14.1"
 serde_json = "1.0.149"
 thiserror = "2.0.18"
 url = "2.5.8"
