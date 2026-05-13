@@ -189,7 +189,7 @@ criterion = { version = "0.8.2", features = ["html_reports"] }
 insta = "1.47.2"
 predicates = "3.1.4"
 process_control = "5.2.0"
-rcgen = "0.14.7"
+rcgen = "0.14.8"
 regex = "1.12.3"
 rstest = "0.26.1"
 sysinfo = "0.38.4"
