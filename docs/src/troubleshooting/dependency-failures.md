@@ -138,7 +138,7 @@ error: TLS connection failed: certificate validation error
      "rustls-tls",
    ], default-features = false }
    rustls = "0.23.40"
-   rustls-native-certs = "0.8.1"
+   rustls-native-certs = "0.8.4"
    rustls-pemfile = "2.2.0"
 
    # TLS is built-in, no feature toggling required
@@ -174,7 +174,7 @@ error: Package does not have feature `missing_feature`
      "rustls-tls",
    ] }
    rustls = "0.23.40"
-   rustls-native-certs = "0.8.1"
+   rustls-native-certs = "0.8.4"
    rustls-pemfile = "2.2.0"
    serde = { version = "1.0", features = ["derive"] }
    ```
@@ -312,7 +312,7 @@ error: unable to get packages from source
      "rustls-tls",
    ], default-features = false }
    rustls = "0.23.40"
-   rustls-native-certs = "0.8.1"
+   rustls-native-certs = "0.8.4"
    ```
 
    **Note:** Gold Digger uses rustls exclusively. No OpenSSL dependencies are required.
@@ -619,7 +619,7 @@ Edit the generated `deny.toml` to customize license policies, vulnerability chec
      "rustls-tls",
    ], default-features = false }
    rustls = "0.23.40"
-   rustls-native-certs = "0.8.1"
+   rustls-native-certs = "0.8.4"
    rustls-pemfile = "2.2.0"
    ```
 
