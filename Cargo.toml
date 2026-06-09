@@ -174,7 +174,7 @@ clap_complete = "4.6.5"
 csv = "1.4.0"
 mysql = { version = "28.0.0", default-features = false, features = ["rustls-tls", "minimal"] }
 mysql_common = { version = "0.37.2", optional = true }
-regex = "1.12.3"
+regex = "1.12.4"
 # TLS dependencies
 rustls = { version = "0.23.40", features = ["ring"] }
 rustls-native-certs = "0.8.4"
@@ -190,7 +190,7 @@ insta = "1.47.2"
 predicates = "3.1.4"
 process_control = "5.2.0"
 rcgen = "0.14.8"
-regex = "1.12.3"
+regex = "1.12.4"
 rstest = "0.26.1"
 sysinfo = "0.39.3"
 temp-env = "0.3.6"
