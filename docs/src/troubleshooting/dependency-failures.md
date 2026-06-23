@@ -137,7 +137,7 @@ error: TLS connection failed: certificate validation error
    mysql = { version = "26.0.1", features = [
      "rustls-tls",
    ], default-features = false }
-   rustls = "0.23.40"
+   rustls = "0.23.41"
    rustls-native-certs = "0.8.4"
    rustls-pemfile = "2.2.0"
 
@@ -173,7 +173,7 @@ error: Package does not have feature `missing_feature`
    mysql = { version = "26.0.1", default-features = false, features = [
      "rustls-tls",
    ] }
-   rustls = "0.23.40"
+   rustls = "0.23.41"
    rustls-native-certs = "0.8.4"
    rustls-pemfile = "2.2.0"
    serde = { version = "1.0", features = ["derive"] }
@@ -311,7 +311,7 @@ error: unable to get packages from source
    mysql = { version = "26.0.1", features = [
      "rustls-tls",
    ], default-features = false }
-   rustls = "0.23.40"
+   rustls = "0.23.41"
    rustls-native-certs = "0.8.4"
    ```
 
@@ -618,7 +618,7 @@ Edit the generated `deny.toml` to customize license policies, vulnerability chec
    mysql = { version = "26.0.1", features = [
      "rustls-tls",
    ], default-features = false }
-   rustls = "0.23.40"
+   rustls = "0.23.41"
    rustls-native-certs = "0.8.4"
    rustls-pemfile = "2.2.0"
    ```
