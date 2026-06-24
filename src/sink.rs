@@ -560,7 +560,12 @@ pub fn tsv_sink(output: &Path, force: bool) -> Result<Box<dyn RowSink>> {
 /// shared across every row via `Arc<str>`, so per-row JSON conversion
 /// no longer re-allocates the column-name strings (todo #069).
 struct JsonSink {
-    writer: BufWriter<File>,
+    /// Wrapped in `Option` so `finalize`/`drop` can `take()` it and close
+    /// the file handle *before* renaming or unlinking the `.tmp`. On Windows
+    /// `remove_file` fails on an open handle, so dropping the writer first is
+    /// required to avoid leaving a partial `.tmp` behind (mirrors
+    /// [`DelimitedSink`]).
+    writer: Option<BufWriter<File>>,
     tmp_path: PathBuf,
     output: PathBuf,
     pretty: bool,
@@ -581,7 +586,7 @@ impl JsonSink {
     fn new(output: &Path, force: bool, pretty: bool) -> Result<Self> {
         let (tmp_path, writer) = open_tmp_for(output, force)?;
         Ok(Self {
-            writer,
+            writer: Some(writer),
             tmp_path,
             output: output.to_path_buf(),
             pretty,
@@ -593,12 +598,24 @@ impl JsonSink {
             column_names: Vec::new(),
         })
     }
+
+    /// Returns a mutable reference to the writer, or an error if it has
+    /// already been taken by `finalize`/`drop`.
+    fn writer_mut(&mut self) -> Result<&mut BufWriter<File>> {
+        self.writer
+            .as_mut()
+            .context("Internal error: JSON sink writer already finalized")
+    }
 }
 
 impl Drop for JsonSink {
     fn drop(&mut self) {
         // HIGH #13: see DelimitedSink::drop for the rationale.
         if !self.committed_or_aborted {
+            // Drop the writer first so the file handle is closed before we
+            // unlink the .tmp — `remove_file` fails on an open handle on
+            // Windows, which would otherwise leave a partial .tmp behind.
+            self.writer.take();
             remove_tmp(&self.tmp_path);
         }
     }
@@ -615,36 +632,45 @@ impl RowSink for JsonSink {
             .iter()
             .map(|name| std::sync::Arc::<str>::from(name.as_str()))
             .collect();
-        write!(self.writer, "{{\"data\":[").context("Failed to write JSON preamble")?;
+        write!(self.writer_mut()?, "{{\"data\":[").context("Failed to write JSON preamble")?;
         self.state = SinkState::InRows;
         Ok(())
     }
 
     fn on_row(&mut self, row: &mysql::Row) -> Result<()> {
         ensure_row_state_or_err(self.state)?;
-        if self.rows_written > 0 {
-            write!(self.writer, ",").context("Failed to write JSON row separator")?;
-        }
         // Use the shared column-name list captured in `on_headers` so
         // we avoid the per-row `name_str().to_string()` cost the legacy
         // `row_to_json` path incurs (todo #069). The new helper takes
         // the row by reference, so no `row.clone()` is needed either.
         let map = crate::TypeTransformer::row_to_json_with_columns(row, &self.column_names)
             .map_err(|e| wrap_conversion_error(self.rows_written, e))?;
-        if self.pretty {
-            serde_json::to_writer_pretty(&mut self.writer, &map)
+        let pretty = self.pretty;
+        let needs_separator = self.rows_written > 0;
+        let writer = self.writer_mut()?;
+        if needs_separator {
+            write!(writer, ",").context("Failed to write JSON row separator")?;
+        }
+        if pretty {
+            serde_json::to_writer_pretty(&mut *writer, &map)
                 .context("Failed to serialise pretty JSON row")?;
         } else {
-            serde_json::to_writer(&mut self.writer, &map)
-                .context("Failed to serialise JSON row")?;
+            serde_json::to_writer(&mut *writer, &map).context("Failed to serialise JSON row")?;
         }
         self.rows_written = self.rows_written.saturating_add(1);
         Ok(())
     }
 
     fn finalize(mut self: Box<Self>) -> Result<WriteOutcome> {
-        write!(self.writer, "]}}").context("Failed to write JSON terminator")?;
-        self.writer.flush().context("Failed to flush JSON writer")?;
+        let mut writer = self
+            .writer
+            .take()
+            .context("Internal error: JSON sink writer already finalized")?;
+        write!(writer, "]}}").context("Failed to write JSON terminator")?;
+        writer.flush().context("Failed to flush JSON writer")?;
+        // Close the file handle before renaming the .tmp (Windows requires the
+        // handle be closed before `commit_tmp`'s rename/copy).
+        drop(writer);
         // HIGH #13: see DelimitedSink::finalize.
         self.committed_or_aborted = true;
         commit_tmp(&self.tmp_path, &self.output, self.force)?;
