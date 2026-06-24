@@ -69,9 +69,16 @@ const REDACTION_PATTERN_DEFS: &[(&str, &str)] = &[
     (r"(?i)\bpasswd\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
     (r"(?i)\bpwd\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
     (r"(?i)\bpass\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
-    (r"(?i)\bidentified\s+by\s+\S+", REDACTION_PLACEHOLDER),
+    // The secret token may be a single-quoted SQL string literal containing
+    // spaces (e.g. IDENTIFIED BY 'pass word'); `\S+` alone would stop at the
+    // first space and leak the remainder, so match a quoted literal OR a bare
+    // token.
     (
-        r"(?i)\bidentified\s+with\s+\S+\s+by\s+\S+",
+        r"(?i)\bidentified\s+by\s+(?:'[^']*'|\S+)",
+        REDACTION_PLACEHOLDER,
+    ),
+    (
+        r"(?i)\bidentified\s+with\s+\S+\s+by\s+(?:'[^']*'|\S+)",
         REDACTION_PLACEHOLDER,
     ),
     (r"(?i)\btoken\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
@@ -80,7 +87,7 @@ const REDACTION_PATTERN_DEFS: &[(&str, &str)] = &[
     // GRANT ... IDENTIFIED BY '<pw>' (already covered by identified_by, kept for clarity).
     // SET PASSWORD = 'x' / SET PASSWORD FOR user = 'x'.
     (
-        r"(?i)\bset\s+password\s+(?:for\s+\S+\s+)?=\s*\S+",
+        r"(?i)\bset\s+password\s+(?:for\s+\S+\s+)?=\s*(?:'[^']*'|\S+)",
         REDACTION_PLACEHOLDER,
     ),
     // Non-English secret labels we have observed in production logs.
@@ -93,11 +100,14 @@ const REDACTION_PATTERN_DEFS: &[(&str, &str)] = &[
     // URL userinfo (any scheme). Replacement uses REDACTION_PLACEHOLDER
     // for both user and password components so a chained pass through
     // redact_sql_error after redact_url is a no-op (MEDIUM idempotence).
-    (
-        r"(?i)://[^:/\s]+:[^@\s]+@",
-        "://***REDACTED***:***REDACTED***@",
-    ),
+    (r"(?i)://[^:/\s]+:[^@\s]+@", URL_USERINFO_REPLACEMENT),
 ];
+
+/// Replacement for matched URL userinfo (`scheme://user:pass@`). Kept as a
+/// literal because [`REDACTION_PATTERN_DEFS`] is `const` and `format!` is not
+/// available there; the `url_userinfo_replacement_uses_shared_placeholder`
+/// test pins it to [`REDACTION_PLACEHOLDER`] so the two cannot silently drift.
+const URL_USERINFO_REPLACEMENT: &str = "://***REDACTED***:***REDACTED***@";
 
 /// Number of redaction patterns the `redact_sql_error` pipeline expects to
 /// have available. A test pins this to the slice length so a contributor
@@ -300,11 +310,33 @@ mod tests {
     }
 
     #[test]
+    fn url_userinfo_replacement_uses_shared_placeholder() {
+        // The URL-userinfo replacement is a literal (const array can't call
+        // format!). Pin it to REDACTION_PLACEHOLDER so a rename or value change
+        // of the constant fails CI instead of silently leaving the URL path
+        // un-synced.
+        let expected = format!("://{p}:{p}@", p = REDACTION_PLACEHOLDER);
+        assert_eq!(URL_USERINFO_REPLACEMENT, expected);
+    }
+
+    #[test]
     fn test_redact_sql_error_identified_by() {
         let error = "Error: CREATE USER failed with identified by 'secret123'";
         let redacted = redact_sql_error(error);
         assert!(redacted.contains(REDACTION_PLACEHOLDER));
         assert!(!redacted.contains("'secret123'"));
+    }
+
+    #[test]
+    fn test_redact_sql_error_identified_by_quoted_password_with_spaces() {
+        // Regression: `\S+` stopped at the first space and leaked the tail of a
+        // quoted, space-containing password. The quoted-literal alternation now
+        // consumes the whole `'...'` value.
+        let error = "CREATE USER 'u'@'%' IDENTIFIED BY 'pass word with spaces'";
+        let redacted = redact_sql_error(error);
+        assert!(redacted.contains(REDACTION_PLACEHOLDER));
+        assert!(!redacted.contains("pass word with spaces"));
+        assert!(!redacted.contains("word with spaces"));
     }
 
     #[test]
