@@ -290,10 +290,12 @@ fn map_query_error(e: &mysql::Error) -> anyhow::Error {
         )
     {
         // Route the original (redacted) error to debug-level so it is
-        // available with `-vv` but never reaches the default
-        // user-facing log/exit path. The substrings "authentication" /
-        // "access denied" must stay in the public message so
-        // `crate::exit` still classifies this as EXIT_DB_AUTH_ERROR (3).
+        // available with `-vv` but never reaches the default user-facing
+        // log/exit path. Returning a typed `GoldDiggerError::DbAuth` makes
+        // `crate::exit` classify this as EXIT_DB_AUTH_ERROR (3) via downcast,
+        // independent of message text -- the static, leak-free message below
+        // deliberately drops the server text (CWE-209: it would leak the
+        // username and client source IP).
         tracing::debug!(
             code = mysql_err.code,
             detail = redact_sql_error(&e.to_string()),
@@ -330,10 +332,11 @@ fn map_query_error(e: &mysql::Error) -> anyhow::Error {
     // error text contains user-controlled SQL fragments (table/column
     // names like `connection_log` or `missing_partition`), so substring
     // classification could misroute a query failure to the auth/connection
-    // or config exit code. Connection-class server/client codes are
-    // auth/connection failures (exit 3); everything else is a query
-    // failure (exit 4). This matches the previous substring behaviour
-    // exactly while making it immune to message wording.
+    // or config exit code. Connection-class errors (transport dropped or
+    // server unreachable mid-query) are classified as auth/connection
+    // failures (exit 3); everything else is a query failure (exit 4). This
+    // fixes the substring path's wording-dependent misroutes while keeping
+    // genuine connection failures on exit 3, all independent of message text.
     if is_connection_class_error(e) {
         GoldDiggerError::DbAuth(detail).into()
     } else {
@@ -341,12 +344,29 @@ fn map_query_error(e: &mysql::Error) -> anyhow::Error {
     }
 }
 
-/// Returns `true` for MySQL/MariaDB client error codes that indicate a
-/// connection-level failure (server unreachable or the connection dropped),
-/// which classify as [`GoldDiggerError::DbAuth`] (exit 3) rather than a
-/// query-execution failure. Kept in sync with the connection-class arms of
-/// [`classify_mysql_error_code`].
+/// Returns `true` for errors that indicate a connection-level failure
+/// (server unreachable, or the transport dropped mid-query) rather than a
+/// query-execution failure, so they classify as [`GoldDiggerError::DbAuth`]
+/// (exit 3) instead of [`GoldDiggerError::Query`] (exit 4).
+///
+/// In mysql 28.x, client-side connection failures surface as
+/// `DriverError(CouldNotConnect | ConnectTimeout)` or `IoError` (a transport
+/// read failure mid-query) -- never as a `MySqlError` carrying a `CR_*` code.
+/// `MySqlError` is built only from server-sent error packets, so it always
+/// holds an `ER_*` server code. The `CR_*` arm below is defensive
+/// belt-and-suspenders in case a future driver routes those codes through
+/// `MySqlError`; it is unreachable today (as is the `CR_*` half of
+/// [`classify_mysql_error_code`]).
 fn is_connection_class_error(e: &mysql::Error) -> bool {
+    if matches!(
+        e,
+        mysql::Error::IoError(_)
+            | mysql::Error::DriverError(
+                mysql::DriverError::CouldNotConnect(_) | mysql::DriverError::ConnectTimeout
+            )
+    ) {
+        return true;
+    }
     matches!(
         e,
         mysql::Error::MySqlError(mysql_err)
@@ -453,11 +473,47 @@ mod tests {
     }
 
     #[test]
-    fn connection_class_error_routes_to_exit_3() {
-        let err = mysql_server_error(CR_CONNECTION_ERROR, "Can't connect to MySQL server");
-        let mapped = map_query_error(&err);
+    fn connection_class_mysqlerror_codes_route_to_exit_3() {
+        // Defensive path: a MySqlError carrying a CR_* code. mysql 28.x does
+        // not actually produce these (CR_* surface as DriverError/IoError, see
+        // the real-path tests below), but is_connection_class_error keeps the
+        // CR_* arm as belt-and-suspenders, so pin all four codes to exit 3.
+        for code in [
+            CR_CONNECTION_ERROR,
+            CR_CONN_HOST_ERROR,
+            CR_SERVER_GONE_ERROR,
+            CR_SERVER_LOST,
+        ] {
+            let err = mysql_server_error(code, "Can't connect to MySQL server");
+            assert_eq!(
+                crate::exit::map_error_to_exit_code(&map_query_error(&err)),
+                crate::exit::EXIT_DB_AUTH_ERROR,
+                "CR_* code {code} should route to exit 3"
+            );
+        }
+    }
+
+    #[test]
+    fn io_error_during_query_routes_to_exit_3() {
+        // The real production path for a transport drop mid-query: mysql
+        // surfaces it as IoError, which is a connection-class failure (exit 3),
+        // not a query failure (exit 4).
+        let err = mysql::Error::IoError(std::io::Error::new(
+            std::io::ErrorKind::ConnectionReset,
+            "connection reset by peer",
+        ));
         assert_eq!(
-            crate::exit::map_error_to_exit_code(&mapped),
+            crate::exit::map_error_to_exit_code(&map_query_error(&err)),
+            crate::exit::EXIT_DB_AUTH_ERROR
+        );
+    }
+
+    #[test]
+    fn driver_could_not_connect_routes_to_exit_3() {
+        // The real production path for an unreachable server: DriverError.
+        let err = mysql::Error::DriverError(mysql::DriverError::CouldNotConnect(None));
+        assert_eq!(
+            crate::exit::map_error_to_exit_code(&map_query_error(&err)),
             crate::exit::EXIT_DB_AUTH_ERROR
         );
     }
@@ -473,8 +529,13 @@ mod tests {
             crate::exit::map_error_to_exit_code(&mapped),
             crate::exit::EXIT_DB_AUTH_ERROR
         );
-        // The server message (which leaks user/IP) must not survive.
-        let rendered = mapped.to_string();
+        // The server message (which leaks user/IP) must not survive anywhere
+        // in the rendered anyhow chain, not just the top-level message.
+        let rendered = mapped
+            .chain()
+            .map(|c| c.to_string())
+            .collect::<Vec<_>>()
+            .join(": ");
         assert!(!rendered.contains("alice"));
         assert!(!rendered.contains("10.0.0.5"));
     }
