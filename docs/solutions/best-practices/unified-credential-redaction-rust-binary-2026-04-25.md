@@ -1,6 +1,7 @@
 ---
 title: Unified credential redaction in Rust binaries
 date: 2026-04-25
+last_updated: 2026-06-23
 category: best-practices
 module: src/utils, src/tls/pool, src/connection
 problem_type: best_practice
@@ -95,13 +96,22 @@ The combination of (a) panic in debug, (b) a never-matching fallback in release,
 | `(?i)token\s+\S+`       | `(?i)\btoken\s*[=:]\s*\S+`  | The bare-space variant matches `JSON_TOKEN parser`. Real secret leaks use `=`/`:` as the separator. Drop the bare-space patterns entirely. |
 | `(?i)secret\s+\S+`      | `(?i)\bsecret\s*[=:]\s*\S+` | Same.                                                                                                                                      |
 
+There is a second axis: the **value** side, not just the label. `\S+` matches a non-whitespace run, so it stops at the first space *inside* a quoted SQL literal — `IDENTIFIED BY 'pass word'` redacts only `'pass` and leaks `word'`. SQL DDL/DCL credentials (`IDENTIFIED BY`, `IDENTIFIED WITH ... BY`, `SET PASSWORD = ...`) are single-quoted and may contain spaces, so the value matcher must accept a quoted literal OR a bare token:
+
+| Bad (leaks quoted tail)             | Good (consumes the quoted value)                 |
+| ----------------------------------- | ------------------------------------------------ |
+| `(?i)\bidentified\s+by\s+\S+`       | `(?i)\bidentified\s+by\s+(?:'[^']*'\|\S+)`       |
+| `(?i)\bset\s+password\s+...=\s*\S+` | `(?i)\bset\s+password\s+...=\s*(?:'[^']*'\|\S+)` |
+
+`(?:'[^']*'|\S+)` means "a single-quoted string (including internal spaces) OR a non-whitespace run." This matters most for `redact_dump_query`, which scrubs user SQL for `--dump-config` — a quoted password with spaces would otherwise have its tail printed to stdout.
+
 ### 4. Cross-redactor idempotence — placeholder consistency matters.
 
 If `redact_url("mysql://alice:secret@host/db")` returns `mysql://alice:***REDACTED***@host/db`, and that string then passes through `redact_sql_error`, the URL-userinfo regex must produce the same placeholder text. Otherwise operators grepping stderr for `***REDACTED***` see only some of the redacted lines.
 
 Two approaches:
 
-- **Single placeholder reused everywhere.** The URL-userinfo replacement in `redact_sql_error` becomes `format!("://{p}:{p}@", p = REDACTION_PLACEHOLDER)`. Then `redact_sql_error(redact_url(x)) == redact_url(x)` — fixed point.
+- **Single placeholder reused everywhere.** The URL-userinfo replacement in `redact_sql_error` becomes `format!("://{p}:{p}@", p = REDACTION_PLACEHOLDER)`. Then `redact_sql_error(redact_url(x)) == redact_url(x)` — fixed point. If the pattern set is a `const`/`static` array (no `format!` in const context), name the replacement as its own `const URL_USERINFO_REPLACEMENT: &str = "...";` and add a unit test pinning it to `format!("://{p}:{p}@", p = REDACTION_PLACEHOLDER)`, so the literal and the constant cannot silently drift.
 - **Make the second redactor a fixpoint over the first's output.** Each pattern in `redact_sql_error` checks "is this already redacted" and skips. More plumbing, less surprising — pick if your placeholder text is constrained.
 
 Add a regression test:
@@ -222,7 +232,7 @@ The pattern is overkill for a binary that has no errors carrying credentials —
 
 The full implementation in this repo:
 
-- **`src/utils.rs`** — `redact_sql_error`, `redact_url`, `redact_dump_query`, `REDACTION_PLACEHOLDER`, `REDACTED_URL_PLACEHOLDER`, `EXPECTED_REDACTION_PATTERN_COUNT`, the fail-closed compile, the word-boundary patterns, the corpus test.
+- **`src/utils.rs`** — `redact_sql_error`, `redact_url`, `redact_dump_query`, `REDACTION_PLACEHOLDER`, `REDACTED_URL_PLACEHOLDER`, `URL_USERINFO_REPLACEMENT` (named const pinned to `REDACTION_PLACEHOLDER` by `url_userinfo_replacement_uses_shared_placeholder`), `EXPECTED_REDACTION_PATTERN_COUNT`, the fail-closed compile, the word-boundary patterns, the quoted-value patterns `(?:'[^']*'|\S+)` for `IDENTIFIED BY` / `SET PASSWORD`, the corpus test, and `test_redact_sql_error_identified_by_quoted_password_with_spaces`.
 - **`src/tls/pool.rs::Pool::new` map_err** — every `mysql_error` interpolation goes through `redact_sql_error` BEFORE being embedded in a `TlsError` variant. The credential-redaction discipline lives at the wrap point, not the consumer.
 - **`src/run.rs::pool.get_conn()`** — connection errors route through the typed classifier (`classify_mysql_pool_error`) which internally redacts; the `?` site preserves typed errors via `anyhow::Error::from(typed).context(...)` so the redaction stays intact through context layers.
 - **`src/main.rs::dump_configuration`** — `--dump-config` query field routes through `redact_dump_query` (which delegates to `redact_sql_error`). The CLI long-help on `--dump-config` documents the "best-effort" caveat so users know the limits.
@@ -231,7 +241,7 @@ The full implementation in this repo:
   - `tests/credential_leak_sweep.rs` — sweep across every documented failure mode for the sentinel + literal markers.
   - `tests/redact_sql_error_truth_table.rs` — corpus-based per-pattern test (rstest one-row-per-pattern).
   - `tests/dump_config_redaction.rs` — adversarial test corpus (GRANT, SET PASSWORD, CREATE USER IDENTIFIED WITH...BY, kennwort, mot_de_passe, contraseña, URL with credentials).
-- **Commits**: `549f8e0` (consolidation + adversarial test suites), `5d6458e` (`\b` anchors, REDACTION_PLACEHOLDER consistency, cross-redactor idempotence test).
+- **Commits**: `549f8e0` (consolidation + adversarial test suites), `5d6458e` (`\b` anchors, REDACTION_PLACEHOLDER consistency, cross-redactor idempotence test), `641110f` (quoted-value `(?:'[^']*'|\S+)` for SQL DDL/DCL passwords + `URL_USERINFO_REPLACEMENT` const pinned by test).
 
 ### What this is NOT
 

@@ -1,6 +1,7 @@
 ---
 title: Drop-safe atomic file output in Rust binaries
 date: 2026-04-25
+last_updated: 2026-06-23
 category: best-practices
 module: src/run, src/sink, src/main
 problem_type: best_practice
@@ -27,10 +28,11 @@ tags:
 
 Rust binaries that produce a file as their primary output (CLI exporters, code generators, build tools) want an atomic-write contract: on success the target path holds a complete file; on failure either the target is untouched or no partial file is visible. The natural Rust idiom is "write to `<output>.tmp`, rename on success, let `Drop` clean up the `.tmp` on error."
 
-There are two traps in that idiom that bite under load and are not obvious from small examples:
+There are three traps in that idiom that bite under load and are not obvious from small examples:
 
 1. **`std::process::exit` skips stack unwinding entirely.** Any `Drop` impl that owns the `.tmp` cleanup never runs, and a crash mid-stream leaves a permanent `.tmp` orphan beside the target. Tests that assert on the target path pass; the user's filesystem accumulates `.tmp` files.
 2. **`std::fs::rename` is not TOCTOU-safe and silently clobbers the destination on Unix.** The pre-flight `if !force && output.exists()` check has a race window; an attacker (or a concurrent run) can plant a file at the target between the check and the rename, and the rename overwrites it.
+3. **An open file handle blocks rename/unlink on Windows.** `std::fs::rename` and `std::fs::remove_file` fail with `AccessDenied` while the `.tmp` is still open (Windows does not open handles with `FILE_SHARE_DELETE` by default). A buffered writer held by value in the sink — rather than dropped before commit/cleanup — flushes its *partial* contents on the final `Drop` and leaves a corrupt `.tmp` that trips the `create_new` stale-tmp guard on the next run. On Unix the same code is harmless (open handles can be renamed/unlinked), so this only surfaces on a first-class Windows target.
 
 Gold Digger's `RowSink` (`src/sink.rs`) hit both. The streaming refactor (F007) introduced the `.tmp → rename` pattern; the original `src/main.rs` called `exit_with_error(...)` (which calls `process::exit`) on every error path; and `commit_tmp` used `std::fs::rename`. Tests passed. Production runs left `.tmp` files behind on every connection-pool error and silently overwrote pre-existing target files.
 
@@ -108,7 +110,41 @@ On rename failure, return an error that includes the `.tmp` path verbatim:
 
 This converts data loss into an inconvenience.
 
-### 5. (Bonus) Type-state at the sink boundary.
+### 5. Close the writer before commit or cleanup (mandatory on Windows).
+
+Wrap the buffered writer in `Option` so both `finalize` and `Drop` can `take()` it — closing the OS file handle — *before* the `.tmp` is renamed or unlinked. On Windows `fs::rename`/`fs::remove_file` fail on an open handle; without the `take()` the failed removal is swallowed and the final `BufWriter` drop flushes partial output, leaving a corrupt `.tmp`.
+
+```rust
+struct JsonSink {
+    // Option so finalize()/drop() can take() and close the handle first.
+    writer: Option<BufWriter<File>>,
+    // ...
+}
+
+impl Drop for JsonSink {
+    fn drop(&mut self) {
+        if self.committed_or_aborted {
+            return;
+        }
+        self.writer.take();              // close handle BEFORE unlink (Windows)
+        let _ = std::fs::remove_file(&self.tmp_path);
+    }
+}
+
+fn finalize(mut self: Box<Self>) -> Result<WriteOutcome> {
+    let mut w = self.writer.take().context("writer already finalized")?;
+    write!(w, "]}}")?;
+    w.flush()?;
+    drop(w);                             // close handle BEFORE rename (Windows)
+    self.committed_or_aborted = true;
+    commit_tmp(&self.tmp_path, &self.output, self.force)?;
+    // ...
+}
+```
+
+The symmetric `DelimitedSink` already used `Option<csv::Writer<BufWriter<File>>>` and `writer.take()`; the JSON sink originally held its `BufWriter<File>` by value and skipped the close, which is what leaked the partial `.tmp` on Windows. Keep both sinks on the same `Option`-and-`take()` discipline.
+
+### 6. (Bonus) Type-state at the sink boundary.
 
 A one-bit `SinkState` field (`NeedsHeaders | InRows`) prevents `on_row` before `on_headers` — making invalid call orders unrepresentable at runtime. For the JSON sink, the alternative is a file containing a row before the `{"data":[` preamble. Pair with `#[must_use]` on the trait return values:
 
@@ -145,10 +181,10 @@ The pattern scales down — even a single-file `Write` is worth the ceremony if 
 
 The full implementation in this repo:
 
-- **`src/sink.rs`** — `commit_tmp` (the dispatch), the per-platform helpers (`commit_tmp_linux` using `renameat2`, `commit_tmp_unix_via_hardlink`, `commit_tmp_windows`), the `committed` / `committed_or_aborted` flags on `DelimitedSink` and `JsonSink`, the `Drop` impls, and the `SinkState` guard.
+- **`src/sink.rs`** — `commit_tmp` (the dispatch), the per-platform helpers (`commit_tmp_linux` using `renameat2`, `commit_tmp_unix_via_hardlink`, `commit_tmp_windows`), the `committed` / `committed_or_aborted` flags on `DelimitedSink` and `JsonSink`, the `Option`-wrapped writers (`take()`-before-commit/cleanup so the handle closes first — required on Windows), the `Drop` impls, and the `SinkState` guard.
 - **`src/run.rs`** — `run` and `stream_query` returning `Result`, `ProgressGuard` RAII wrapper for the indicatif spinner so `finish_and_clear` fires on every return path automatically.
 - **`src/main.rs`** — the single top-level `match` that converts the `Result` to an exit code via `exit_with_error`.
-- **Commits**: `1ea0c3d` (Result-returning run + foundation), `e3b9e7e` (per-platform atomic rename + state guard + .tmp preservation), `d42c7cb` (`ResolvedConfig` + `ProgressGuard`).
+- **Commits**: `1ea0c3d` (Result-returning run + foundation), `e3b9e7e` (per-platform atomic rename + state guard + .tmp preservation), `d42c7cb` (`ResolvedConfig` + `ProgressGuard`), `d8aab09` (`JsonSink` writer wrapped in `Option` + `take()` before commit/cleanup so the handle closes first — fixes a partial-`.tmp` leak on Windows).
 
 ### Trade-offs noted during implementation
 
