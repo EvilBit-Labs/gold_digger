@@ -7,6 +7,17 @@ updates:
       open-pull-requests-limit: 10
       commit-message:
           prefix: "chore(deps)"
+      # cargo-dist owns these actions in the generated .github/workflows/release.yml
+      # via [dist.github-action-commits] in dist-workspace.toml. Dependabot has no
+      # per-file scoping, so letting it bump them anywhere edits the generated file
+      # and breaks `dist plan` (which requires release.yml to match dist's pins).
+      # These are updated by bumping cargo-dist and running `dist generate` instead.
+      ignore:
+          - dependency-name: "actions/checkout"
+          - dependency-name: "actions/upload-artifact"
+          - dependency-name: "actions/download-artifact"
+          - dependency-name: "actions/attest"
+          - dependency-name: "actions/attest-build-provenance"
     - package-ecosystem: "devcontainers"
       directory: "/"
       schedule:
