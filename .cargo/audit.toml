@@ -17,4 +17,10 @@ ignore = [
     # Transitive via proptest (test-only) and bollard -> testcontainers (test-only).
     # We don't ship rand and don't install custom loggers in tests.
     "RUSTSEC-2026-0097",
+
+    # proc-macro-error2 is unmaintained (no patched version exists).
+    # Transitive via mysql_common -> mysql-common-derive (proc-macro); a
+    # build-time dependency we cannot directly control and which is not shipped
+    # in the binary. Waiting for mysql to drop it.
+    "RUSTSEC-2026-0173",
 ]
