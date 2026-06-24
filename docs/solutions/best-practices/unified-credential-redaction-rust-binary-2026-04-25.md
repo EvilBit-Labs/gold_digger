@@ -61,32 +61,33 @@ Other modules may keep convenience wrappers (e.g. `tls::redact_url`) *only* as `
 ### 2. Fail-closed regex compilation.
 
 ```rust
+// Source-of-truth defs live in a `const REDACTION_PATTERN_DEFS` slice so a
+// `#[cfg(test)]` count assertion can reference the same definition.
 fn get_redaction_patterns() -> &'static Vec<(Regex, &'static str)> {
     REDACTION_PATTERNS.get_or_init(|| {
-        let pattern_defs: &[(&str, &str)] = &[
-            (r"(?i)\bpassword\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
-            // ...
-        ];
-        let compiled: Vec<_> = pattern_defs.iter()
-            .map(|(p, r)| (Regex::new(p).unwrap_or_else(|e| {
-                // PANIC in debug, log+skip in release. Never silently drop.
-                #[cfg(debug_assertions)]
-                panic!("redaction pattern `{p}` failed to compile: {e}");
-                #[cfg(not(debug_assertions))]
-                {
-                    tracing::error!("redaction pattern `{p}` failed to compile: {e}");
-                    Regex::new("$.").expect("never matches anything")
+        REDACTION_PATTERN_DEFS
+            .iter()
+            .filter_map(|(p, r)| match Regex::new(p) {
+                Ok(re) => Some((re, *r)),
+                Err(e) => {
+                    // PANIC in debug so a broken pattern fails the build;
+                    // log + drop in release (partial coverage beats aborting
+                    // the binary on a redaction-pattern bug).
+                    #[cfg(debug_assertions)]
+                    panic!("redaction pattern `{p}` failed to compile: {e}");
+                    #[cfg(not(debug_assertions))]
+                    {
+                        tracing::error!("redaction pattern `{p}` failed to compile: {e}");
+                        None
+                    }
                 }
-            }), *r))
-            .collect();
-        // Independent count test catches accidental pattern deletion.
-        assert_eq!(compiled.len(), EXPECTED_REDACTION_PATTERN_COUNT);
-        compiled
+            })
+            .collect()
     })
 }
 ```
 
-The combination of (a) panic in debug, (b) a never-matching fallback in release, and (c) a length assertion against `EXPECTED_REDACTION_PATTERN_COUNT` catches three different ways the pattern set can degrade silently.
+The combination of (a) panic in debug, (b) a `filter_map` that drops the broken pattern in release, and (c) a separate `#[cfg(test)]` assertion that `get_redaction_patterns().len() == EXPECTED_REDACTION_PATTERN_COUNT` (= `REDACTION_PATTERN_DEFS.len()`) catches three different ways the pattern set can degrade silently — the release-mode `None` makes a dropped pattern show up as a length mismatch the test flags.
 
 ### 3. Word-boundary discipline on label patterns.
 
@@ -96,14 +97,14 @@ The combination of (a) panic in debug, (b) a never-matching fallback in release,
 | `(?i)token\s+\S+`       | `(?i)\btoken\s*[=:]\s*\S+`  | The bare-space variant matches `JSON_TOKEN parser`. Real secret leaks use `=`/`:` as the separator. Drop the bare-space patterns entirely. |
 | `(?i)secret\s+\S+`      | `(?i)\bsecret\s*[=:]\s*\S+` | Same.                                                                                                                                      |
 
-There is a second axis: the **value** side, not just the label. `\S+` matches a non-whitespace run, so it stops at the first space *inside* a quoted SQL literal — `IDENTIFIED BY 'pass word'` redacts only `'pass` and leaks `word'`. SQL DDL/DCL credentials (`IDENTIFIED BY`, `IDENTIFIED WITH ... BY`, `SET PASSWORD = ...`) are single-quoted and may contain spaces, so the value matcher must accept a quoted literal OR a bare token:
+There is a second axis: the **value** side, not just the label. `\S+` matches a non-whitespace run, so it stops at the first space *inside* a quoted SQL literal — `IDENTIFIED BY 'pass word'` redacts only `'pass` and leaks `word'`. SQL DDL/DCL credentials (`IDENTIFIED BY`, `IDENTIFIED WITH ... BY`, `SET PASSWORD = ...`) are quoted and may contain spaces, and MySQL accepts double quotes too (ANSI_QUOTES mode), so the value matcher must accept a single- OR double-quoted literal OR a bare token:
 
-| Bad (leaks quoted tail)             | Good (consumes the quoted value)                 |
-| ----------------------------------- | ------------------------------------------------ |
-| `(?i)\bidentified\s+by\s+\S+`       | `(?i)\bidentified\s+by\s+(?:'[^']*'\|\S+)`       |
-| `(?i)\bset\s+password\s+...=\s*\S+` | `(?i)\bset\s+password\s+...=\s*(?:'[^']*'\|\S+)` |
+| Bad (leaks quoted tail)             | Good (consumes the quoted value)                          |
+| ----------------------------------- | --------------------------------------------------------- |
+| `(?i)\bidentified\s+by\s+\S+`       | `(?i)\bidentified\s+by\s+(?:'[^']*'\|"[^"]*"\|\S+)`       |
+| `(?i)\bset\s+password\s+...=\s*\S+` | `(?i)\bset\s+password\s+...=\s*(?:'[^']*'\|"[^"]*"\|\S+)` |
 
-`(?:'[^']*'|\S+)` means "a single-quoted string (including internal spaces) OR a non-whitespace run." This matters most for `redact_dump_query`, which scrubs user SQL for `--dump-config` — a quoted password with spaces would otherwise have its tail printed to stdout.
+`(?:'[^']*'|"[^"]*"|\S+)` means "a single- or double-quoted string (including internal spaces) OR a non-whitespace run." In Rust write it as a `r#"..."#` raw string so the embedded `"` does not close the literal. This matters most for `redact_dump_query`, which scrubs user SQL for `--dump-config` — a quoted password with spaces would otherwise have its tail printed to stdout.
 
 ### 4. Cross-redactor idempotence — placeholder consistency matters.
 
@@ -232,7 +233,7 @@ The pattern is overkill for a binary that has no errors carrying credentials —
 
 The full implementation in this repo:
 
-- **`src/utils.rs`** — `redact_sql_error`, `redact_url`, `redact_dump_query`, `REDACTION_PLACEHOLDER`, `REDACTED_URL_PLACEHOLDER`, `URL_USERINFO_REPLACEMENT` (named const pinned to `REDACTION_PLACEHOLDER` by `url_userinfo_replacement_uses_shared_placeholder`), `EXPECTED_REDACTION_PATTERN_COUNT`, the fail-closed compile, the word-boundary patterns, the quoted-value patterns `(?:'[^']*'|\S+)` for `IDENTIFIED BY` / `SET PASSWORD`, the corpus test, and `test_redact_sql_error_identified_by_quoted_password_with_spaces`.
+- **`src/utils.rs`** — `redact_sql_error`, `redact_url`, `redact_dump_query`, `REDACTION_PLACEHOLDER`, `REDACTED_URL_PLACEHOLDER`, `URL_USERINFO_REPLACEMENT` (named const pinned to `REDACTION_PLACEHOLDER` by `url_userinfo_replacement_uses_shared_placeholder`), `EXPECTED_REDACTION_PATTERN_COUNT`, the fail-closed compile, the word-boundary patterns, the quoted-value patterns `(?:'[^']*'|"[^"]*"|\S+)` for `IDENTIFIED BY` / `IDENTIFIED WITH ... BY` / `SET PASSWORD` (single- and double-quoted), the corpus test, and `test_redact_sql_error_quoted_password_with_spaces`.
 - **`src/tls/pool.rs::Pool::new` map_err** — every `mysql_error` interpolation goes through `redact_sql_error` BEFORE being embedded in a `TlsError` variant. The credential-redaction discipline lives at the wrap point, not the consumer.
 - **`src/run.rs::pool.get_conn()`** — connection errors route through the typed classifier (`classify_mysql_pool_error`) which internally redacts; the `?` site preserves typed errors via `anyhow::Error::from(typed).context(...)` so the redaction stays intact through context layers.
 - **`src/main.rs::dump_configuration`** — `--dump-config` query field routes through `redact_dump_query` (which delegates to `redact_sql_error`). The CLI long-help on `--dump-config` documents the "best-effort" caveat so users know the limits.
@@ -241,7 +242,7 @@ The full implementation in this repo:
   - `tests/credential_leak_sweep.rs` — sweep across every documented failure mode for the sentinel + literal markers.
   - `tests/redact_sql_error_truth_table.rs` — corpus-based per-pattern test (rstest one-row-per-pattern).
   - `tests/dump_config_redaction.rs` — adversarial test corpus (GRANT, SET PASSWORD, CREATE USER IDENTIFIED WITH...BY, kennwort, mot_de_passe, contraseña, URL with credentials).
-- **Commits**: `549f8e0` (consolidation + adversarial test suites), `5d6458e` (`\b` anchors, REDACTION_PLACEHOLDER consistency, cross-redactor idempotence test), `641110f` (quoted-value `(?:'[^']*'|\S+)` for SQL DDL/DCL passwords + `URL_USERINFO_REPLACEMENT` const pinned by test).
+- **Commits**: `549f8e0` (consolidation + adversarial test suites), `5d6458e` (`\b` anchors, REDACTION_PLACEHOLDER consistency, cross-redactor idempotence test), `641110f` (quoted-value matching + `URL_USERINFO_REPLACEMENT` const pinned by test), and the follow-up that broadened the quoted-value matcher to double quotes `(?:'[^']*'|"[^"]*"|\S+)`.
 
 ### What this is NOT
 
@@ -251,9 +252,9 @@ The full implementation in this repo:
 
 ## Related
 
-- `src/utils.rs:38-90` — `get_redaction_patterns` (the fail-closed compile + length assertion).
-- `src/utils.rs:120-130` — `redact_sql_error` (the canonical entry point).
-- `src/utils.rs:143-167` — `redact_url` (fail-closed URL parsing).
+- `src/utils.rs::get_redaction_patterns` — the fail-closed compile + the `EXPECTED_REDACTION_PATTERN_COUNT` test.
+- `src/utils.rs::redact_sql_error` — the canonical entry point.
+- `src/utils.rs::redact_url` — fail-closed URL parsing.
 - `src/utils.rs::tests::each_pattern_actually_redacts_its_target` — corpus test.
 - `tests/credential_leak_regression.rs`, `tests/credential_leak_sweep.rs`, `tests/dump_config_redaction.rs`, `tests/redact_sql_error_truth_table.rs` — full test surface.
 - AGENTS.md "🚨 Critical Safety Rules" -> "Security" — the "NEVER log raw DATABASE_URL or credentials - always redact" rule this codifies.
