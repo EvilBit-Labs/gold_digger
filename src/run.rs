@@ -25,6 +25,7 @@ use mysql::prelude::Queryable;
 
 use crate::config::ResolvedConfig;
 use crate::connection::create_database_connection;
+use crate::exit::GoldDiggerError;
 use crate::logging::make_progress;
 use crate::mysql_errors::{
     CR_CONN_HOST_ERROR, CR_CONNECTION_ERROR, CR_SERVER_GONE_ERROR, CR_SERVER_LOST,
@@ -298,10 +299,12 @@ fn map_query_error(e: &mysql::Error) -> anyhow::Error {
             detail = redact_sql_error(&e.to_string()),
             "MySQL authentication error (full server message redacted)"
         );
-        return anyhow::anyhow!(
+        return GoldDiggerError::DbAuth(
             "Database authentication failed: access denied. \
              Verify credentials via your secret manager."
-        );
+                .to_string(),
+        )
+        .into();
     }
 
     // Structured error matching on mysql::Error variants. Numeric codes
@@ -320,7 +323,38 @@ fn map_query_error(e: &mysql::Error) -> anyhow::Error {
     // issues. `redact_sql_error` is the single canonical redactor
     // (todo #016 / P1-C); any credential embedded in the mysql
     // crate's error string is scrubbed before it reaches the log.
-    anyhow::anyhow!("{}: {}", context, redact_sql_error(&e.to_string()))
+    let detail = format!("{}: {}", context, redact_sql_error(&e.to_string()));
+
+    // Drive the exit code from a typed `GoldDiggerError` variant rather
+    // than letting `crate::exit` substring-match the message. The server
+    // error text contains user-controlled SQL fragments (table/column
+    // names like `connection_log` or `missing_partition`), so substring
+    // classification could misroute a query failure to the auth/connection
+    // or config exit code. Connection-class server/client codes are
+    // auth/connection failures (exit 3); everything else is a query
+    // failure (exit 4). This matches the previous substring behaviour
+    // exactly while making it immune to message wording.
+    if is_connection_class_error(e) {
+        GoldDiggerError::DbAuth(detail).into()
+    } else {
+        GoldDiggerError::Query(detail).into()
+    }
+}
+
+/// Returns `true` for MySQL/MariaDB client error codes that indicate a
+/// connection-level failure (server unreachable or the connection dropped),
+/// which classify as [`GoldDiggerError::DbAuth`] (exit 3) rather than a
+/// query-execution failure. Kept in sync with the connection-class arms of
+/// [`classify_mysql_error_code`].
+fn is_connection_class_error(e: &mysql::Error) -> bool {
+    matches!(
+        e,
+        mysql::Error::MySqlError(mysql_err)
+            if matches!(
+                mysql_err.code,
+                CR_CONNECTION_ERROR | CR_CONN_HOST_ERROR | CR_SERVER_GONE_ERROR | CR_SERVER_LOST
+            )
+    )
 }
 
 /// Maps a MySQL/MariaDB error code to an operator-facing context message.
@@ -390,5 +424,58 @@ mod tests {
         // 9999 is not a documented MySQL/MariaDB error code; fallback
         // message must be returned rather than an empty / panicking arm.
         assert_eq!(classify_mysql_error_code(9999), "Query execution failed");
+    }
+
+    fn mysql_server_error(code: u16, message: &str) -> mysql::Error {
+        mysql::Error::MySqlError(mysql::MySqlError {
+            state: "HY000".to_string(),
+            message: message.to_string(),
+            code,
+        })
+    }
+
+    #[test]
+    fn query_error_routes_to_exit_4_even_when_message_mentions_connection() {
+        // Regression: a syntax error referencing an identifier like
+        // `connection_log` previously had its server message substring-matched
+        // by `crate::exit`, returning EXIT_DB_AUTH_ERROR (3). The typed
+        // `GoldDiggerError::Query` path must classify it as a query failure (4)
+        // regardless of the (server-controlled) message text.
+        let err = mysql_server_error(
+            ER_PARSE_ERROR,
+            "You have an error in your SQL syntax near 'connection_log'",
+        );
+        let mapped = map_query_error(&err);
+        assert_eq!(
+            crate::exit::map_error_to_exit_code(&mapped),
+            crate::exit::EXIT_QUERY_ERROR
+        );
+    }
+
+    #[test]
+    fn connection_class_error_routes_to_exit_3() {
+        let err = mysql_server_error(CR_CONNECTION_ERROR, "Can't connect to MySQL server");
+        let mapped = map_query_error(&err);
+        assert_eq!(
+            crate::exit::map_error_to_exit_code(&mapped),
+            crate::exit::EXIT_DB_AUTH_ERROR
+        );
+    }
+
+    #[test]
+    fn access_denied_routes_to_exit_3_with_leak_free_message() {
+        let err = mysql_server_error(
+            ER_ACCESS_DENIED_ERROR,
+            "Access denied for user 'alice'@'10.0.0.5' (using password: YES)",
+        );
+        let mapped = map_query_error(&err);
+        assert_eq!(
+            crate::exit::map_error_to_exit_code(&mapped),
+            crate::exit::EXIT_DB_AUTH_ERROR
+        );
+        // The server message (which leaks user/IP) must not survive.
+        let rendered = mapped.to_string();
+        assert!(!rendered.contains("alice"));
+        assert!(!rendered.contains("10.0.0.5"));
     }
 }
