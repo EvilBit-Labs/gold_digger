@@ -69,16 +69,16 @@ const REDACTION_PATTERN_DEFS: &[(&str, &str)] = &[
     (r"(?i)\bpasswd\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
     (r"(?i)\bpwd\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
     (r"(?i)\bpass\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
-    // The secret token may be a single-quoted SQL string literal containing
-    // spaces (e.g. IDENTIFIED BY 'pass word'); `\S+` alone would stop at the
-    // first space and leak the remainder, so match a quoted literal OR a bare
-    // token.
+    // The secret token may be a quoted SQL string literal containing spaces
+    // (e.g. IDENTIFIED BY 'pass word', or IDENTIFIED BY "pass word" under
+    // ANSI_QUOTES); `\S+` alone would stop at the first space and leak the
+    // remainder, so match a single- OR double-quoted literal OR a bare token.
     (
-        r"(?i)\bidentified\s+by\s+(?:'[^']*'|\S+)",
+        r#"(?i)\bidentified\s+by\s+(?:'[^']*'|"[^"]*"|\S+)"#,
         REDACTION_PLACEHOLDER,
     ),
     (
-        r"(?i)\bidentified\s+with\s+\S+\s+by\s+(?:'[^']*'|\S+)",
+        r#"(?i)\bidentified\s+with\s+\S+\s+by\s+(?:'[^']*'|"[^"]*"|\S+)"#,
         REDACTION_PLACEHOLDER,
     ),
     (r"(?i)\btoken\s*[=:]\s*\S+", REDACTION_PLACEHOLDER),
@@ -87,7 +87,7 @@ const REDACTION_PATTERN_DEFS: &[(&str, &str)] = &[
     // GRANT ... IDENTIFIED BY '<pw>' (already covered by identified_by, kept for clarity).
     // SET PASSWORD = 'x' / SET PASSWORD FOR user = 'x'.
     (
-        r"(?i)\bset\s+password\s+(?:for\s+\S+\s+)?=\s*(?:'[^']*'|\S+)",
+        r#"(?i)\bset\s+password\s+(?:for\s+\S+\s+)?=\s*(?:'[^']*'|"[^"]*"|\S+)"#,
         REDACTION_PLACEHOLDER,
     ),
     // Non-English secret labels we have observed in production logs.
@@ -328,15 +328,36 @@ mod tests {
     }
 
     #[test]
-    fn test_redact_sql_error_identified_by_quoted_password_with_spaces() {
+    fn test_redact_sql_error_quoted_password_with_spaces() {
         // Regression: `\S+` stopped at the first space and leaked the tail of a
         // quoted, space-containing password. The quoted-literal alternation now
-        // consumes the whole `'...'` value.
-        let error = "CREATE USER 'u'@'%' IDENTIFIED BY 'pass word with spaces'";
-        let redacted = redact_sql_error(error);
-        assert!(redacted.contains(REDACTION_PLACEHOLDER));
-        assert!(!redacted.contains("pass word with spaces"));
-        assert!(!redacted.contains("word with spaces"));
+        // consumes the whole single- or double-quoted value across all three
+        // SQL DDL/DCL password patterns. Each pattern is an independent regex
+        // literal, so exercise them individually (a copy-paste regression in
+        // one would otherwise hide behind the others).
+        let cases = [
+            "CREATE USER 'u'@'%' IDENTIFIED BY 'pass word with spaces'",
+            r#"CREATE USER 'u'@'%' IDENTIFIED BY "pass word with spaces""#,
+            "CREATE USER 'u'@'%' IDENTIFIED WITH caching_sha2_password BY 'pass word with spaces'",
+            r#"CREATE USER 'u'@'%' IDENTIFIED WITH caching_sha2_password BY "pass word with spaces""#,
+            "SET PASSWORD FOR 'u'@'%' = 'pass word with spaces'",
+            r#"SET PASSWORD FOR 'u'@'%' = "pass word with spaces""#,
+        ];
+        for error in cases {
+            let redacted = redact_sql_error(error);
+            assert!(
+                redacted.contains(REDACTION_PLACEHOLDER),
+                "should redact: {error}"
+            );
+            assert!(
+                !redacted.contains("pass word with spaces"),
+                "leaked full password: {error} -> {redacted}"
+            );
+            assert!(
+                !redacted.contains("word with spaces"),
+                "leaked password tail: {error} -> {redacted}"
+            );
+        }
     }
 
     #[test]
