@@ -454,9 +454,9 @@ impl DelimitedSink {
     }
 
     /// Returns a mutable reference to the writer, or an error if it has
-    /// already been taken (should only happen post-finalize, which
-    /// callers are not allowed to do — the sink API consumes the box in
-    /// `finalize`).
+    /// already been taken (by `finalize`, which consumes the box, or by
+    /// `Drop` on the error path). Reaching this error from a `RowSink`
+    /// method would mean a use-after-finalize, which the API prevents.
     fn writer_mut(&mut self) -> Result<&mut csv::Writer<BufWriter<File>>> {
         self.writer
             .as_mut()
@@ -553,9 +553,11 @@ pub fn tsv_sink(output: &Path, force: bool) -> Result<Box<dyn RowSink>> {
 ///
 /// Writes the `{"data":[` preamble in [`RowSink::on_headers`] so the
 /// empty-result case still emits a valid envelope (`{"data":[]}`). A
-/// comma is emitted between rows. `--pretty` inserts a newline between
-/// rows and serialises each row object with `to_writer_pretty`. The
-/// closing `]}` is written in [`RowSink::finalize`].
+/// single `,` separates rows. Each row is serialised as a JSON object --
+/// compact via `to_writer` by default, or indented via `to_writer_pretty`
+/// under `--pretty` (which formats *within* each row object; it does not
+/// add a newline between rows). The closing `]}` is written in
+/// [`RowSink::finalize`].
 /// `column_names` is populated once from the `on_headers` hook and
 /// shared across every row via `Arc<str>`, so per-row JSON conversion
 /// no longer re-allocates the column-name strings (todo #069).
@@ -812,6 +814,28 @@ mod tests {
 
         // Drop the sink without finalize(); the tmp path must be gone
         // and the target must NOT have been created.
+        drop(sink);
+        let tmp = temp_path_for(&out);
+        assert!(!tmp.exists(), "tmp file should be removed after drop");
+        assert!(!out.exists(), "target must not be created on failure");
+    }
+
+    #[test]
+    fn json_sink_failure_cleans_up_tmp_and_leaves_no_target() {
+        // Same drop-path cleanup invariant for the JSON sink. This locks the
+        // d8aab09 fix (writer wrapped in Option, take()-before-remove in Drop)
+        // on every platform: the .tmp must be unlinked and no target created.
+        // It cannot reproduce the Windows-specific open-handle failure on Unix,
+        // but it guards against a regression of the take()/cleanup ordering.
+        let dir = tempdir().expect("tempdir");
+        let out = dir.path().join("out.json");
+
+        let mut sink = json_sink(&out, false, false).expect("sink");
+        sink.on_headers(&["a".into()]).expect("headers");
+        let row = build_row(&["a"], vec![Value::Date(2023, 13, 1, 0, 0, 0, 0)]);
+        let err = sink.on_row(&row).expect_err("invalid month must fail");
+        assert!(err.to_string().contains("row 1"), "err={}", err);
+
         drop(sink);
         let tmp = temp_path_for(&out);
         assert!(!tmp.exists(), "tmp file should be removed after drop");
