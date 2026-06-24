@@ -29,10 +29,10 @@ jobs:
         timeout-minutes: 20
         steps:
             - name: Checkout repository
-              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
             - name: Install mise-managed tooling
-              uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1
+              uses: jdx/mise-action@e6a8b3978addb5a52f2b4cd9d91eafa7f0ab959d # v4.2.0
               with:
                   install: true
                   cache: true
@@ -58,7 +58,7 @@ jobs:
             - name: Upload to Codecov
               if: github.event_name != 'pull_request' ||
                   github.event.pull_request.head.repo.full_name == github.repository
-              uses: codecov/codecov-action@3f20e214133d0983f9a10f3d63b0faf9241a3daa # v6.0.0
+              uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
               with:
                   files: lcov.info
                   fail_ci_if_error: true

@@ -2,7 +2,7 @@ name: Security
 
 on:
     workflow_run:
-        workflows: [ CI ]
+        workflows: [CI]
         types: [completed]
     schedule:
         - cron: "0 6 * * *"
@@ -25,8 +25,8 @@ jobs:
     audit:
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-            - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151
+            - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+            - uses: jdx/mise-action@e6a8b3978addb5a52f2b4cd9d91eafa7f0ab959d # v4.2.0
               with:
                   install: true
                   cache: true
@@ -54,7 +54,7 @@ jobs:
               if: always() && (github.event_name != 'workflow_run' ||
                   github.event.workflow_run.head_repository.full_name ==
                   github.repository)
-              uses: github/codeql-action/upload-sarif@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4.35.2
+              uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
               with:
                   sarif_file: grype-results.sarif
                   category: grype-scan
