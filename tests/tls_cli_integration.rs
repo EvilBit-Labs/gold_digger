@@ -40,6 +40,16 @@ fn generate_test_certificate() -> Result<String, Box<dyn std::error::Error>> {
     Ok(cert_pem)
 }
 
+mod integration;
+mod test_support;
+
+/// Build a `gold_digger` binary `Command` with all Clap-bound env vars
+/// stripped. Thin wrapper over `tests/test_support/cli.rs::clean_cmd`
+/// so env-isolation hygiene stays in one place.
+fn fresh_cmd() -> Command {
+    crate::test_support::cli::clean_cmd()
+}
+
 mod tls_cli_flag_tests {
     use super::*;
 
@@ -47,8 +57,7 @@ mod tls_cli_flag_tests {
     /// Requirement: 11.3 - CLI documentation includes TLS flags
     #[test]
     fn test_tls_help_includes_all_options() {
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
+        let mut cmd = fresh_cmd();
         let output = cmd.arg("--help").output().unwrap();
 
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -72,8 +81,7 @@ mod tls_cli_flag_tests {
     fn test_nonexistent_ca_file_error() {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
+        let mut cmd = fresh_cmd();
         let output = cmd
             .args([
                 "--tls-ca-file",
@@ -89,6 +97,14 @@ mod tls_cli_flag_tests {
             .unwrap();
 
         let stderr = String::from_utf8_lossy(&output.stderr);
+
+        // Bad CA path is a configuration error (TlsError::CaFileNotFound ->
+        // EXIT_CONFIG_ERROR per src/exit.rs::tls_exit_code).
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "missing CA file should map to EXIT_CONFIG_ERROR (2); stderr was: {stderr}"
+        );
 
         // Assert that credentials are not leaked in error output
         // Note: This error is about CA file not found, not about database connection
@@ -121,8 +137,7 @@ mod tls_cli_flag_tests {
         let (_temp_dir, cert_path) = create_temp_cert_file("invalid certificate content").unwrap();
         let (_temp_dir2, output_path) = create_temp_output_path().unwrap();
 
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
+        let mut cmd = fresh_cmd();
         let output = cmd
             .args([
                 "--tls-ca-file",
@@ -138,6 +153,14 @@ mod tls_cli_flag_tests {
             .unwrap();
 
         let stderr = String::from_utf8_lossy(&output.stderr);
+
+        // Invalid CA content is a configuration error (TlsError::InvalidCaFormat
+        // -> EXIT_CONFIG_ERROR per src/exit.rs::tls_exit_code).
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "invalid CA content should map to EXIT_CONFIG_ERROR (2); stderr was: {stderr}"
+        );
 
         // Assert that credentials are not leaked in error output
         assert!(
@@ -155,11 +178,21 @@ mod tls_cli_flag_tests {
             "Error should mention invalid CA format"
         );
 
-        // Normalize the temporary directory path for consistent snapshots
-        let normalized_stderr = stderr.replace(
-            &cert_path.to_string_lossy().to_string(),
-            "/tmp/test_cert.pem",
-        );
+        // Normalize the temporary directory path for consistent snapshots.
+        // After the CaFile newtype migration (#2), the path embedded in
+        // the error message is the canonicalised target (e.g. on macOS
+        // /tmp/foo canonicalises to /private/tmp/foo); normalise both
+        // shapes so the snapshot stays stable across platforms.
+        let canonical_cert_path = std::fs::canonicalize(&cert_path)
+            .unwrap_or_else(|_| cert_path.clone())
+            .to_string_lossy()
+            .into_owned();
+        let normalized_stderr = stderr
+            .replace(&canonical_cert_path, "/tmp/test_cert.pem")
+            .replace(
+                &cert_path.to_string_lossy().to_string(),
+                "/tmp/test_cert.pem",
+            );
         assert_snapshot!("invalid_ca_file_content_error", normalized_stderr);
     }
 }
@@ -175,8 +208,7 @@ mod tls_mutual_exclusion_tests {
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem).unwrap();
         let (_temp_dir2, output_path) = create_temp_output_path().unwrap();
 
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
+        let mut cmd = fresh_cmd();
         let output = cmd
             .args([
                 "--tls-ca-file",
@@ -193,6 +225,14 @@ mod tls_mutual_exclusion_tests {
             .unwrap();
 
         let stderr = String::from_utf8_lossy(&output.stderr);
+
+        // Clap mutually-exclusive flag errors exit with code 2 by default,
+        // matching EXIT_CONFIG_ERROR.
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "Clap mutual-exclusion error should exit 2; stderr was: {stderr}"
+        );
 
         // Assert that credentials are not leaked in error output
         assert!(
@@ -221,8 +261,7 @@ mod tls_mutual_exclusion_tests {
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem).unwrap();
         let (_temp_dir2, output_path) = create_temp_output_path().unwrap();
 
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
+        let mut cmd = fresh_cmd();
         let output = cmd
             .args([
                 "--tls-ca-file",
@@ -239,6 +278,14 @@ mod tls_mutual_exclusion_tests {
             .unwrap();
 
         let stderr = String::from_utf8_lossy(&output.stderr);
+
+        // Clap mutually-exclusive flag errors exit with code 2 by default,
+        // matching EXIT_CONFIG_ERROR.
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "Clap mutual-exclusion error should exit 2; stderr was: {stderr}"
+        );
 
         // Assert that credentials are not leaked in error output
         assert!(
@@ -265,8 +312,7 @@ mod tls_mutual_exclusion_tests {
     fn test_skip_hostname_and_allow_invalid_mutual_exclusion() {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
+        let mut cmd = fresh_cmd();
         let output = cmd
             .args([
                 "--insecure-skip-hostname-verify",
@@ -282,6 +328,14 @@ mod tls_mutual_exclusion_tests {
             .unwrap();
 
         let stderr = String::from_utf8_lossy(&output.stderr);
+
+        // Clap mutually-exclusive flag errors exit with code 2 by default,
+        // matching EXIT_CONFIG_ERROR.
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "Clap mutual-exclusion error should exit 2; stderr was: {stderr}"
+        );
 
         // Assert that credentials are not leaked in error output
         assert!(

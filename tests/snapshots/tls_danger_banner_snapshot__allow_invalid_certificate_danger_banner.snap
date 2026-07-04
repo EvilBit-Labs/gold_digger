@@ -1,0 +1,7 @@
+---
+source: tests/tls_danger_banner_snapshot.rs
+expression: danger
+---
+ERROR [DANGER] Certificate validation completely disabled!
+ERROR    This connection provides NO security against man-in-the-middle attacks.
+ERROR    Only use this for testing with self-signed certificates in secure environments.

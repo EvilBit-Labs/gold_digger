@@ -24,28 +24,25 @@ env:
     GITHUB_ACTIONS: true
 
 jobs:
-    # Code quality checks - only need to run once
     quality:
         runs-on: ubuntu-latest
+        timeout-minutes: 10
         steps:
             - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-            - uses: dtolnay/rust-toolchain@0dd4a6d07aedb0ef7f65e79f3e229a6c102ae2e0 # 1.91.0
-              with:
-                  components: llvm-tools, cargo, rustfmt, clippy
-            - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1.6.4.0.1
+            - uses: jdx/mise-action@e6a8b3978addb5a52f2b4cd9d91eafa7f0ab959d # v4.2.0
               with:
                   install: true
                   cache: true
                   github_token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Rustfmt Check
-              uses: actions-rust-lang/rustfmt@4066006ec54a31931b9b1fddfd38f2fdf2d27143 # v1.1.2
+            - name: Ensure rustfmt and clippy are installed
+              run: rustup component add rustfmt clippy
 
-            - name: Run clippy (default features)
-              run: cargo clippy -- -D warnings
+            - name: Check formatting
+              run: just fmt-check
 
-            - name: Run clippy (minimal features)
-              run: cargo clippy --no-default-features --features "json csv additional_mysql_types" -- -D warnings
+            - name: Run clippy (default + minimal features)
+              run: just lint
 
     # Test TLS functionality (always available)
     test-tls:
@@ -53,7 +50,7 @@ jobs:
         needs: quality
         steps:
             - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-            - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1.6.4.0.1
+            - uses: jdx/mise-action@e6a8b3978addb5a52f2b4cd9d91eafa7f0ab959d # v4.2.0
               with:
                   install: true
                   cache: true
@@ -120,7 +117,7 @@ jobs:
                     - "minimal"
         steps:
             - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-            - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1.6.4.0.1
+            - uses: jdx/mise-action@e6a8b3978addb5a52f2b4cd9d91eafa7f0ab959d # v4.2.0
               with:
                   install: true
                   cache: true
@@ -132,14 +129,14 @@ jobs:
 
             - name: Run tests (minimal features)
               if: matrix.features == 'minimal'
-              run: cargo nextest run --no-default-features --features "json csv additional_mysql_types verbose"
+              run: cargo nextest run --no-default-features --features "additional_mysql_types verbose"
 
             - name: Build release
               run: |
                   if [ "${{ matrix.features }}" = "default" ]; then
                     cargo build --release
                   else
-                    cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
+                    cargo build --release --no-default-features --features "additional_mysql_types verbose"
                   fi
 
     # Test cross-platform TLS functionality (always available)
@@ -157,7 +154,7 @@ jobs:
         needs: quality
         steps:
             - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-            - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1.6.4.0.1
+            - uses: jdx/mise-action@e6a8b3978addb5a52f2b4cd9d91eafa7f0ab959d # v4.2.0
               with:
                   install: true
                   cache: true
@@ -180,7 +177,7 @@ jobs:
         needs: quality
         steps:
             - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-            - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1.6.4.0.1
+            - uses: jdx/mise-action@e6a8b3978addb5a52f2b4cd9d91eafa7f0ab959d # v4.2.0
               with:
                   install: true
                   cache: true
@@ -217,14 +214,14 @@ jobs:
         needs: [test-tls, test-features, test-cross-platform]
         steps:
             - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-            - uses: dtolnay/rust-toolchain@0dd4a6d07aedb0ef7f65e79f3e229a6c102ae2e0 # 1.91.0
-              with:
-                  components: llvm-tools, cargo, rustfmt, clippy
-            - uses: jdx/mise-action@1648a7812b9aeae629881980618f079932869151 # v4.0.1.6.4.0.1
+            - uses: jdx/mise-action@e6a8b3978addb5a52f2b4cd9d91eafa7f0ab959d # v4.2.0
               with:
                   install: true
                   cache: true
                   github_token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Ensure rustfmt and clippy are installed
+              run: rustup component add rustfmt clippy llvm-tools
 
             - name: Generate coverage (default features with TLS)
               run: cargo llvm-cov --workspace --no-report
@@ -232,7 +229,7 @@ jobs:
             - name: Generate coverage (minimal features with TLS)
               run: |
                   cargo llvm-cov --workspace --no-report --no-default-features \
-                  --features "json csv additional_mysql_types"
+                  --features "additional_mysql_types"
 
             - name: Combine coverage reports
               run: |

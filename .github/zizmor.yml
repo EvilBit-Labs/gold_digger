@@ -1,17 +1,24 @@
 rules:
   template-injection:
     ignore:
+      # reason: release pipeline interpolates user-controlled tag refs into
+      # cargo-dist commands; reviewed and accepted as part of release flow.
       - release.yml
   excessive-permissions:
     ignore:
+      # reason: release.yml needs `contents: write` for tags/artifacts;
+      # docs.yml needs `pages: write` to publish mdBook; ci.yml's broad
+      # token surface is intentional for the matrix jobs.
       - release.yml
       - docs.yml
       - ci.yml
   unpinned-uses:
     ignore:
+      # reason: third-party action versions are pinned by tag rather than
+      # SHA in these workflows; tracked separately in todo #013 (P1) for
+      # the release pipeline. The list intentionally drops the historical
+      # cargo-dist.yml entry — that workflow no longer exists (todo #113).
       - release.yml
-      - cargo-dist.yml
       - ci.yml
-      - codeql.yml
       - docs.yml
       - security.yml

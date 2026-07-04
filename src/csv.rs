@@ -1,6 +1,17 @@
-use std::io::{BufWriter, Write};
+//! RFC-4180-adjacent CSV writer.
+//!
+//! Wraps the `csv` crate with [`QuoteStyle::Necessary`] — quotes are emitted
+//! only when fields contain delimiters, newlines, or embedded quotes. The
+//! writer is generic over any [`Write`] target so output can be streamed to
+//! a file, stdout, or an in-memory buffer.
+//!
+//! Both this module and [`crate::tab`] delegate to the shared
+//! [`crate::delimited::write_delimited`] helper; the only difference is
+//! the field delimiter (`b','` here, `b'\t'` in TSV). See todo #058.
 
-use csv::{QuoteStyle, WriterBuilder};
+use std::io::Write;
+
+use csv::QuoteStyle;
 
 /// Writes rows to a CSV output using the provided writer.
 ///
@@ -18,15 +29,5 @@ where
     F: IntoIterator<Item = String>,
     W: Write,
 {
-    let buffered_output = BufWriter::with_capacity(64 * 1024, output); // 64KB buffer for better performance with large datasets
-    let mut wtr = WriterBuilder::new()
-        .quote_style(QuoteStyle::Necessary)
-        .from_writer(buffered_output);
-
-    for row in rows {
-        wtr.write_record(row)?;
-    }
-
-    wtr.flush()?; // Ensure all data is written
-    Ok(())
+    crate::delimited::write_delimited(rows, output, b',', QuoteStyle::Necessary)
 }

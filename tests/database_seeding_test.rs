@@ -8,6 +8,7 @@ use gold_digger::init_crypto_provider;
 
 mod fixtures;
 mod integration;
+mod test_support;
 use integration::TestDatabase;
 use integration::containers::database_container::DatabaseContainer;
 

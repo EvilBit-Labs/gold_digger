@@ -68,6 +68,48 @@ Security issues are prioritized over feature development.
 - **No Sensitive Data in Output**: Database credentials are never included in results
 - **Structured Output**: Safe CSV, JSON, and TSV generation
 
+## Operational Risk Surface
+
+Some CLI flags and features carry security-relevant trade-offs. Operators must understand these before deploying Gold Digger in production environments or handing the binary to non-experts.
+
+### `--allow-invalid-certificate` (MITM exposure)
+
+This flag disables **both** the certificate chain and hostname checks performed by rustls. Any network attacker able to intercept the TCP connection can present an attacker-controlled certificate, complete the TLS handshake, and read or modify the database protocol — including plaintext credentials.
+
+- **Never** use `--allow-invalid-certificate` against a production database.
+- **Prefer `--tls-ca-file <path>`** for self-signed CAs — this keeps full chain and hostname validation against an explicitly trusted anchor.
+- **Prefer `--insecure-skip-hostname-verify`** when only the hostname presented in the certificate does not match — chain validation still runs and the time-window check still applies.
+- The flag is intentionally not gated by an interactive prompt; treat its presence in any deployment manifest, CI workflow, or shell history as an incident that requires rotating the affected DB credentials.
+
+### `--query-file <path>` (file-read scope)
+
+`--query-file` reads any file readable by the Gold Digger process. Path-safety guards landed with todo #023 and limit — but do not eliminate — the risk:
+
+- **Canonicalisation.** The path is passed through `std::fs::canonicalize` before the file is opened. `..` is resolved and symlinks are collapsed, so the extension / size checks below apply to the true target, not the link.
+- **Extension deny-list.** Paths ending in `.exe`, `.dll`, `.so`, `.dylib`, `.bin`, `.bat`, `.cmd`, `.com` (case-insensitive) are refused with a configuration error. Paths with `.sql`, `.txt`, or no extension are accepted.
+- **Size cap.** Files larger than 10 MiB are refused to cap DoS / memory blow-up risk.
+
+Residual risks remain: running Gold Digger as `root` or under a service account with broad filesystem access still lets an attacker who can choose the path read arbitrary `.sql` / `.txt` files (other tenants' SQL, anything with a matching extension). Treat `--query-file` paths supplied from outside the trust boundary (webhook payloads, CI parameters from forks) as untrusted:
+
+- Store query files in a dedicated, restricted directory owned by the Gold Digger user and audit who can write to that directory.
+- Do not pass user-supplied paths to `--query-file` from outside the trust boundary.
+
+### `--output <path>` (file-write scope)
+
+Path-safety guards on the output path landed with todo #024:
+
+- **Refuse-existing by default.** Gold Digger opens the output with `O_CREAT | O_EXCL` semantics (Unix: `OpenOptions::create_new`; Windows: the equivalent fallback). A pre-existing file at the target path is a hard error with a message prompting the operator to pass `--force`. This blocks the "accidental clobber" footgun and the TOCTOU race where an attacker pre-plants a file at a predictable path.
+- **Refuse symlinks (Unix).** The output file is opened with `O_NOFOLLOW`, so a symlink at the target — attacker-placed or otherwise — is refused regardless of `--force`. This closes the classic "symlink at `/tmp/results.json`" redirect attack.
+- **0o600 permissions (Unix).** Created files are owner read/write only. Query results often contain sensitive data; the previous default of honouring the umask could leave world-readable files behind.
+- **`--force` opts into overwrite.** Explicit overwrite still refuses symlinks (`O_NOFOLLOW`) and preserves the 0o600 mode.
+
+### `--dump-config` (best-effort redaction)
+
+`--dump-config` prints the resolved configuration as JSON, with a best-effort credential redactor applied to URLs and known secret keys. The redactor pattern set is finite — it does not catch arbitrary encodings (base64, hex, JWT) or non-English secret labels. Treat any `--dump-config` output as **probably-safe but not certified-safe** when attaching it to bug reports or pasting it into chat.
+
+- Skim the JSON for tokens, API keys, base64 blobs, or labels in languages your eye does not parse before sharing externally.
+- Tracked improvements: repo todos #004 (route through the canonical `redact_sql_error`), #029 (adversarial test corpus).
+
 ## Security Best Practices
 
 ### For Users

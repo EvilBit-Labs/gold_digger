@@ -1,0 +1,43 @@
+name: Cargo Audit (PR gate)
+
+# Blocks PRs that introduce dependencies with known advisories. The daily
+# audit workflow (.github/workflows/audit.yml) still catches advisories
+# published after merge; this job closes the window between merge and the
+# next scheduled audit tick.
+
+on:
+    pull_request:
+        branches: [main]
+    push:
+        branches: [main]
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+defaults:
+    run:
+        shell: bash
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    audit:
+        name: cargo audit
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+            # actions-rust-lang/audit is the maintained Rust-lang variant of
+            # EmbarkStudios/audit-check and is pinned in dist-workspace.toml
+            # conventions via full-SHA pin.
+            - name: Run cargo audit
+              uses: actions-rust-lang/audit@72c09e02f132669d52284a3323acdb503cfc1a24 # v1.2.7
+              with:
+                  denyWarnings: true

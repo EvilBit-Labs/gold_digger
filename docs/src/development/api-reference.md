@@ -2,9 +2,11 @@
 
 Links to detailed API documentation and developer resources.
 
+> Canonical API docs (latest published release): <https://docs.rs/gold_digger>
+
 ## Rustdoc Documentation
 
-The complete API documentation is available in the [rustdoc section](../api/gold_digger/index.html) of this site.
+The complete API documentation is available in the [rustdoc section](../api/gold_digger/index.html) of this site, and on <https://docs.rs/gold_digger> for the most recent release tag.
 
 ## Public API Overview
 
@@ -26,10 +28,9 @@ The complete API documentation is available in the [rustdoc section](../api/gold
 
 ### Output Modules
 
-- [`csv::write()`](../api/gold_digger/csv/fn.write.html) - CSV output generation
-- [`json::write()`](../api/gold_digger/json/fn.write.html) - JSON output generation
-- [`json::write_typed()`](../api/gold_digger/json/fn.write_typed.html) - JSON output with native type conversion (requires `json` feature)
-- [`tab::write()`](../api/gold_digger/tab/fn.write.html) - TSV output generation
+- [`csv::write()`](../api/gold_digger/csv/fn.write.html) - CSV output generation (takes `IntoIterator<Item = IntoIterator<Item = String>>`)
+- [`json::write()`](../api/gold_digger/json/fn.write.html) - JSON output generation (takes pre-converted `Vec<BTreeMap<String, serde_json::Value>>` + `pretty: bool`)
+- [`tab::write()`](../api/gold_digger/tab/fn.write.html) - TSV output generation (takes `IntoIterator<Item = IntoIterator<Item = String>>`)
 
 ### CLI Interface
 
@@ -77,15 +78,21 @@ fn convert_value(value: &Value) -> anyhow::Result<()> {
 ### Using JSON with Native Types
 
 ```rust
-#[cfg(feature = "json")]
-use gold_digger::write_typed;
-use mysql::{Pool, Row};
+use gold_digger::{TypeTransformer, json};
+use mysql::Row;
+use std::collections::BTreeMap;
 use std::fs::File;
 
 fn example_json() -> anyhow::Result<()> {
     let rows: Vec<Row> = vec![]; // query results
+    // Convert all rows BEFORE creating the file so a conversion error
+    // never leaves behind a truncated output.
+    let maps: Vec<BTreeMap<String, serde_json::Value>> = rows
+        .into_iter()
+        .map(TypeTransformer::row_to_json)
+        .collect::<anyhow::Result<_>>()?;
     let output = File::create("output.json")?;
-    write_typed(rows, output, false)?;
+    json::write(maps, output, false)?; // false = compact, true = pretty
     Ok(())
 }
 ```
@@ -140,15 +147,8 @@ fn example_function() -> Result<()> {
 
 ## Feature Flags
 
-Conditional compilation based on Cargo features:
+CSV and JSON output are built into the binary unconditionally -- the former `csv` and `json` feature flags were vestigial markers that never actually gated compilation and were removed in todo #011. Remaining Cargo features:
 
-```rust
-#[cfg(feature = "csv")]
-pub mod csv;
-
-#[cfg(feature = "json")]
-pub mod json;
-
-#[cfg(feature = "verbose")]
-println!("Debug information");
-```
+- `verbose` (default) - retained as a default feature flag for backward compatibility with downstream consumers that pin it; runtime verbosity is now driven by the `-v` / `-vv` / `-vvv` CLI flags and `RUST_LOG`, which feed `tracing-subscriber` (`src/logging.rs::init_tracing`) — there are no remaining `println!`/`eprintln!` paths in `src/`.
+- `additional_mysql_types` (default) - pulls in `mysql_common` with `bigdecimal`, `rust_decimal`, `time`, and `frunk` support for extended MySQL column types.
+- `integration_tests` - opt-in flag used only by heavy integration tests that require a live database container.

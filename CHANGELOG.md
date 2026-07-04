@@ -2,37 +2,36 @@
 
 ## [Unreleased]
 
-### BREAKING CHANGES
+### BREAKING / BEHAVIOR
 
-- **TLS Migration**: Completed migration to rustls-only TLS implementation
-  - **Removed**: `ssl` and `ssl-rustls` feature flags - TLS is now always available
-  - **Removed**: `native-tls` dependency and OpenSSL support completely
-  - **Added**: Single rustls-based implementation with enhanced security controls
-  - **Enhanced**: Platform certificate store integration on all platforms (Windows/macOS/Linux)
-  - **Migration Impact**:
-    - TLS support is now built into all Gold Digger binaries without requiring feature flags
-    - Build commands no longer need `--features ssl` or `--features ssl-rustls`
-    - OpenSSL development packages are no longer required for building
-    - Certificate validation behavior may be more strict than native-tls (use CLI flags for compatibility)
-    - All existing DATABASE_URL formats continue to work unchanged
-  - **New TLS CLI Flags**: `--tls-ca-file`, `--insecure-skip-hostname-verify`, `--allow-invalid-certificate`
+- **CLI-first configuration (F001-F003):** CLI flags now take precedence over
+  the `DATABASE_URL` / `DATABASE_QUERY` / `OUTPUT_FILE` environment variables.
+  Both mechanisms still work; CLI wins when both are present.
+- **Typed exit codes (F005):** Exit codes are now 0 (success), 1 (no rows),
+  2 (config error), 3 (DB auth / TLS), 4 (query execution), 5 (I/O).
+  Previously unknown errors defaulted to exit 255.
+- **Streaming output (F007):** Rows stream through a `RowSink` directly into
+  `<output>.tmp` (renamed on success). The old "buffer full result set in
+  memory" path is gone; peak memory is now O(1 row), not O(N rows).
+- **`--output` safety guards:** output files are created with
+  `O_NOFOLLOW` + mode `0o600` on Unix, and `create_new(true)` so a
+  pre-existing file is an error unless `--force` is passed.
+- **`--query-file` safety guards:** path is canonicalised, size is capped
+  at 10 MiB, and binary extensions (`.exe`, `.dll`, `.so`, `.dylib`,
+  `.bin`, `.bat`, `.cmd`, `.com`) are rejected.
 
 ### Features
 
-- **TLS Implementation**: Migrated to always-available rustls implementation with enhanced security controls
-  - TLS support is now built into all Gold Digger binaries without requiring feature flags
-  - Default behavior uses platform certificate store with full validation (no flags required)
-  - **CLI Flags**: `--tls-ca-file <path>` (custom CA), `--insecure-skip-hostname-verify` (skip hostname), `--allow-invalid-certificate` (disable validation)
-  - **Mutually Exclusive**: Only one TLS flag allowed; conflicting flags exit with code 2 (config error)
-  - **Security Warnings**: Insecure modes print warnings but continue; `--allow-invalid-certificate` shows danger warning
-  - **Error Handling**: TLS errors exit with code 3 (auth error); specific flag suggestions provided (e.g., "use --tls-ca-file <path> or --allow-invalid-certificate")
-  - **CA File Validation**: `--tls-ca-file` validates file exists and contains valid PEM certificates; invalid format exits with code 5 (IO error)
-
-### Documentation
-
-- Updated comprehensive TLS configuration guide with new rustls-only model
-- Updated README.md with simplified TLS implementation details
-- Updated WARP.md, AGENTS.md, and GEMINI.md with new TLS architecture
+- **Structured logging (F008):** stderr output now flows through
+  `tracing-subscriber`; verbosity is controlled by `-v` / `-vv` / `-vvv`
+  and `RUST_LOG`. Credentials are redacted by `utils::redact_sql_error`
+  before reaching the subscriber.
+- **Coloured stderr:** `[DANGER]` / `[WARNING]` banners are coloured when
+  stderr is a TTY and `NO_COLOR` is unset.
+- **Progress indicators:** spinner during connect / query, row-counter
+  during write. Hidden when `--quiet` or stderr is piped.
+- **New workflows:** CodeQL, coverage (80% threshold), cargo-audit PR
+  gate, benchmarks in CI.
 
 <a name="v0.2.6"></a>
 

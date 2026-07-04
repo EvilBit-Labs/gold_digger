@@ -66,6 +66,16 @@ fn generate_test_certificate() -> Result<String> {
     Ok(cert_pem)
 }
 
+mod integration;
+mod test_support;
+
+/// Build a `gold_digger` binary `Command` with all Clap-bound env vars
+/// stripped. Thin wrapper over `tests/test_support/cli.rs::clean_cmd`
+/// so env-isolation hygiene stays in one place.
+fn fresh_cmd() -> Command {
+    crate::test_support::cli::clean_cmd()
+}
+
 mod database_url_compatibility_tests {
     use super::*;
 
@@ -160,7 +170,20 @@ mod database_url_compatibility_tests {
         let cert_pem = generate_test_certificate()?;
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
-        // Test cases: (url_with_ssl_params, cli_tls_options, expected_validation_mode)
+        // After the CaFile newtype migration, the CustomCa variant
+        // wraps a `CaFile`, not a `PathBuf`. Express each expected
+        // outcome as a small enum that the assertion logic below knows
+        // how to compare against the produced TlsValidationMode without
+        // forcing the test to construct a CaFile up front.
+        #[derive(Debug, PartialEq, Eq)]
+        enum ExpectedMode {
+            Platform,
+            SkipHostname,
+            AcceptInvalid,
+            CustomCa,
+        }
+
+        // Test cases: (url_with_ssl_params, cli_tls_options, expected_outcome)
         let test_cases = vec![
             // URL with ssl-mode=required, CLI with --allow-invalid-certificate
             (
@@ -170,7 +193,7 @@ mod database_url_compatibility_tests {
                     insecure_skip_hostname_verify: false,
                     allow_invalid_certificate: true,
                 },
-                TlsValidationMode::AcceptInvalid,
+                ExpectedMode::AcceptInvalid,
             ),
             // URL with ssl-ca=/path/to/ca.pem, CLI with --insecure-skip-hostname-verify
             (
@@ -180,7 +203,7 @@ mod database_url_compatibility_tests {
                     insecure_skip_hostname_verify: true,
                     allow_invalid_certificate: false,
                 },
-                TlsValidationMode::SkipHostnameVerification,
+                ExpectedMode::SkipHostname,
             ),
             // URL with multiple SSL params, CLI with --tls-ca-file
             (
@@ -190,9 +213,7 @@ mod database_url_compatibility_tests {
                     insecure_skip_hostname_verify: false,
                     allow_invalid_certificate: false,
                 },
-                TlsValidationMode::CustomCa {
-                    ca_file_path: cert_path.clone(),
-                },
+                ExpectedMode::CustomCa,
             ),
             // URL with ssl-mode=disabled, CLI with platform mode (no flags)
             (
@@ -202,56 +223,48 @@ mod database_url_compatibility_tests {
                     insecure_skip_hostname_verify: false,
                     allow_invalid_certificate: false,
                 },
-                TlsValidationMode::Platform,
+                ExpectedMode::Platform,
             ),
         ];
 
+        let canonical_cert_path = std::fs::canonicalize(&cert_path)?;
+
         for (url, cli_tls_options, expected_mode) in test_cases {
             // Create TLS config from CLI options (this simulates the actual CLI parsing)
-            let tls_config = TlsConfig::from_tls_options(&cli_tls_options)?;
+            let tls_config = cli_tls_options.to_tls_config()?;
 
             // Assert that the CLI flags determine the validation mode, not URL parameters
-            assert_eq!(
-                *tls_config.validation_mode(),
-                expected_mode,
-                "CLI TLS flags should take precedence over URL SSL parameters. URL: {}, Expected: {:?}, Got: {:?}",
-                url,
-                expected_mode,
-                tls_config.validation_mode()
-            );
-
-            // Verify that URL SSL parameters are not present in the final SSL options
-            // Note: Certificate parsing may fail for test certificates, which is acceptable
-            assert_ssl_opts_available(&tls_config, "CLI TLS flags precedence test")?;
-
-            // For custom CA file, verify the path comes from CLI, not URL
-            if let TlsValidationMode::CustomCa { ca_file_path } = &expected_mode {
-                // The SSL options should contain the CLI-specified CA file path
-                // We can't directly inspect the SslOpts, but we can verify the config was created correctly
-                assert_eq!(
-                    *tls_config.validation_mode(),
-                    TlsValidationMode::CustomCa {
-                        ca_file_path: ca_file_path.clone()
-                    },
-                    "Custom CA file path should come from CLI flags, not URL parameters"
-                );
+            match (&expected_mode, tls_config.validation_mode()) {
+                (ExpectedMode::Platform, TlsValidationMode::Platform) => {}
+                (ExpectedMode::SkipHostname, TlsValidationMode::SkipHostnameVerification) => {}
+                (ExpectedMode::AcceptInvalid, TlsValidationMode::AcceptInvalid) => {}
+                (ExpectedMode::CustomCa, TlsValidationMode::CustomCa { ca_file }) => {
+                    // Verify the CA file path comes from CLI, post-canonicalisation.
+                    assert_eq!(
+                        ca_file.path(),
+                        canonical_cert_path,
+                        "Custom CA path must trace back to the CLI flag, URL: {url}"
+                    );
+                }
+                (expected, actual) => panic!(
+                    "CLI TLS flags should take precedence over URL SSL parameters. \
+                     URL: {url}, Expected: {expected:?}, Got: {actual:?}"
+                ),
             }
 
-            // Negative assertion: URL SSL parameters should not influence the final configuration
-            // This is tested by ensuring the validation mode matches the CLI flags, not URL parameters
-            if url.contains("ssl-mode=required") && expected_mode != TlsValidationMode::Platform {
-                // If URL has ssl-mode=required but CLI specifies a different mode, CLI should win
-                assert_ne!(
-                    *tls_config.validation_mode(),
-                    TlsValidationMode::Platform,
+            // Verify that SSL options can be generated for the resulting config.
+            assert_ssl_opts_available(&tls_config, "CLI TLS flags precedence test")?;
+
+            // Negative assertion: URL ssl-mode/ssl-ca parameters should not
+            // influence the final configuration when the CLI says otherwise.
+            if url.contains("ssl-mode=required") && expected_mode != ExpectedMode::Platform {
+                assert!(
+                    !matches!(tls_config.validation_mode(), TlsValidationMode::Platform),
                     "URL ssl-mode=required should not override CLI TLS flags"
                 );
             }
 
-            if url.contains("ssl-ca=")
-                && !matches!(&expected_mode, TlsValidationMode::CustomCa { .. })
-            {
-                // If URL has ssl-ca but CLI doesn't specify --tls-ca-file, URL should be ignored
+            if url.contains("ssl-ca=") && expected_mode != ExpectedMode::CustomCa {
                 assert!(
                     !matches!(
                         tls_config.validation_mode(),
@@ -366,11 +379,12 @@ mod tls_connection_compatibility_tests {
         let cert_pem = generate_test_certificate()?;
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
-        // Test custom CA configuration
-        let config = TlsConfig::with_custom_ca(&cert_path);
+        // Test custom CA configuration (eager validation; canonicalised path).
+        let config = TlsConfig::with_custom_ca(&cert_path)?;
 
-        if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
-            assert_eq!(ca_file_path, &cert_path, "CA file path should be preserved");
+        if let TlsValidationMode::CustomCa { ca_file } = config.validation_mode() {
+            let expected = std::fs::canonicalize(&cert_path)?;
+            assert_eq!(ca_file.path(), expected, "CA file path should be preserved");
         } else {
             panic!("Expected CustomCa validation mode");
         }
@@ -429,7 +443,7 @@ mod tls_connection_compatibility_tests {
         let cert_pem = generate_test_certificate()?;
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
-        let custom_ca_config = TlsConfig::with_custom_ca(&cert_path);
+        let custom_ca_config = TlsConfig::with_custom_ca(&cert_path)?;
         let skip_hostname_config = TlsConfig::with_skip_hostname_verification();
         let accept_invalid_config = TlsConfig::with_accept_invalid();
 
@@ -455,7 +469,7 @@ mod tls_connection_compatibility_tests {
             allow_invalid_certificate: false,
         };
 
-        let config = TlsConfig::from_tls_options(&default_tls_options)?;
+        let config = default_tls_options.to_tls_config()?;
         assert!(matches!(
             config.validation_mode(),
             TlsValidationMode::Platform
@@ -470,9 +484,10 @@ mod tls_connection_compatibility_tests {
             allow_invalid_certificate: false,
         };
 
-        let config = TlsConfig::from_tls_options(&ca_tls_options)?;
-        if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
-            assert_eq!(ca_file_path, &cert_path);
+        let config = ca_tls_options.to_tls_config()?;
+        if let TlsValidationMode::CustomCa { ca_file } = config.validation_mode() {
+            let expected = std::fs::canonicalize(&cert_path)?;
+            assert_eq!(ca_file.path(), expected);
         } else {
             panic!("Expected CustomCa validation mode");
         }
@@ -484,7 +499,7 @@ mod tls_connection_compatibility_tests {
             allow_invalid_certificate: false,
         };
 
-        let config = TlsConfig::from_tls_options(&skip_hostname_options)?;
+        let config = skip_hostname_options.to_tls_config()?;
         assert!(matches!(
             config.validation_mode(),
             TlsValidationMode::SkipHostnameVerification
@@ -497,7 +512,7 @@ mod tls_connection_compatibility_tests {
             allow_invalid_certificate: true,
         };
 
-        let config = TlsConfig::from_tls_options(&accept_invalid_options)?;
+        let config = accept_invalid_options.to_tls_config()?;
         assert!(matches!(
             config.validation_mode(),
             TlsValidationMode::AcceptInvalid
@@ -650,45 +665,11 @@ mod cli_flag_behavior_tests {
         Ok(())
     }
 
-    /// Test that TLS flags are always available (no feature gating)
-    /// Requirement: 7.4 - TLS flags always available
-    #[test]
-    fn test_tls_flags_always_available() {
-        // Test that help includes TLS flags
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
-        let output = cmd.arg("--help").output().unwrap();
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-
-        // Verify TLS flags are present in help with proper CLI flag forms
-        assert!(
-            stdout.contains("--tls-ca-file"),
-            "Help should include --tls-ca-file flag"
-        );
-        assert!(
-            stdout.contains("--insecure-skip-hostname-verify"),
-            "Help should include --insecure-skip-hostname-verify flag"
-        );
-        assert!(
-            stdout.contains("--allow-invalid-certificate"),
-            "Help should include --allow-invalid-certificate flag"
-        );
-
-        // Verify flag descriptions are present
-        assert!(
-            stdout.contains("CA certificate"),
-            "Help should describe CA certificate functionality"
-        );
-        assert!(
-            stdout.contains("hostname verification"),
-            "Help should describe hostname verification"
-        );
-        assert!(
-            stdout.contains("certificate validation"),
-            "Help should describe certificate validation"
-        );
-    }
+    // Test deleted: `test_tls_flags_always_available` only re-asserted
+    // substrings on `--help` output that the snapshot
+    // `tls_cli_integration__tls_cli_flag_tests__tls_help_options.snap`
+    // already pins exactly. The snapshot is a stricter contract (full
+    // line-by-line match) and survives copy edits via `cargo insta`.
 
     /// Test CLI flag error messages unchanged
     /// Requirement: 7.4 - Error message consistency
@@ -697,8 +678,7 @@ mod cli_flag_behavior_tests {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
         // Test nonexistent CA file error
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
+        let mut cmd = fresh_cmd();
         let output = cmd
             .args([
                 "--tls-ca-file",
@@ -776,10 +756,11 @@ mod security_warnings_tests {
         // Test custom CA mode (no warning)
         let cert_pem = generate_test_certificate().unwrap();
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem).unwrap();
-        let config = TlsConfig::with_custom_ca(&cert_path);
+        let config = TlsConfig::with_custom_ca(&cert_path).unwrap();
         config.display_security_warnings();
-        if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
-            assert_eq!(ca_file_path, &cert_path);
+        if let TlsValidationMode::CustomCa { ca_file } = config.validation_mode() {
+            let expected = std::fs::canonicalize(&cert_path).unwrap();
+            assert_eq!(ca_file.path(), expected);
         } else {
             panic!("Expected CustomCa validation mode");
         }
@@ -792,8 +773,7 @@ mod security_warnings_tests {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
         // Test CLI command with skip hostname verification
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
+        let mut cmd = fresh_cmd();
         let output = cmd
             .args([
                 "--insecure-skip-hostname-verify",
@@ -833,8 +813,7 @@ mod security_warnings_tests {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
         // Test CLI command with accept invalid certificate
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
+        let mut cmd = fresh_cmd();
         let output = cmd
             .args([
                 "--allow-invalid-certificate",
@@ -879,10 +858,11 @@ mod security_warnings_tests {
         // Test custom CA mode (secure, no warnings)
         let cert_pem = generate_test_certificate().unwrap();
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem).unwrap();
-        let config = TlsConfig::with_custom_ca(&cert_path);
+        let config = TlsConfig::with_custom_ca(&cert_path).unwrap();
         config.display_security_warnings(); // Should not display warnings
-        if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
-            assert_eq!(ca_file_path, &cert_path);
+        if let TlsValidationMode::CustomCa { ca_file } = config.validation_mode() {
+            let expected = std::fs::canonicalize(&cert_path).unwrap();
+            assert_eq!(ca_file.path(), expected);
         } else {
             panic!("Expected CustomCa validation mode");
         }
@@ -898,7 +878,7 @@ mod security_warnings_tests {
         let platform_config = TlsConfig::new();
         let cert_pem = generate_test_certificate()?;
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
-        let custom_ca_config = TlsConfig::with_custom_ca(&cert_path);
+        let custom_ca_config = TlsConfig::with_custom_ca(&cert_path)?;
 
         // Verify configuration modes are correct
         assert!(matches!(
@@ -913,8 +893,9 @@ mod security_warnings_tests {
             platform_config.validation_mode(),
             TlsValidationMode::Platform
         ));
-        if let TlsValidationMode::CustomCa { ca_file_path } = custom_ca_config.validation_mode() {
-            assert_eq!(ca_file_path, &cert_path);
+        if let TlsValidationMode::CustomCa { ca_file } = custom_ca_config.validation_mode() {
+            let expected = std::fs::canonicalize(&cert_path)?;
+            assert_eq!(ca_file.path(), expected);
         } else {
             panic!("Expected CustomCa validation mode");
         }
@@ -959,9 +940,9 @@ mod tls_always_available_tests {
         // Test custom CA configuration
         let cert_pem = generate_test_certificate()?;
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
-        let custom_ca_config = TlsConfig::with_custom_ca(&cert_path);
+        let custom_ca_config = TlsConfig::with_custom_ca(&cert_path)?;
 
-        // Custom CA may fail certificate parsing, but configuration should be created
+        // Custom CA was eagerly validated; SSL opts must be available.
         assert_ssl_opts_available(&custom_ca_config, "Custom CA config always available")?;
 
         Ok(())
@@ -986,7 +967,7 @@ mod tls_always_available_tests {
             insecure_skip_hostname_verify: false,
             allow_invalid_certificate: false,
         };
-        let _config = TlsConfig::from_tls_options(&tls_options)?;
+        let _config = tls_options.to_tls_config()?;
 
         // Test CLI parsing with TLS flags
         let _cli = Cli::try_parse_from([
@@ -1048,8 +1029,7 @@ mod integration_compatibility_tests {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
         // Test basic command without TLS flags (should work as before)
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
+        let mut cmd = fresh_cmd();
         let output = cmd
             .args([
                 "--db-url",
@@ -1076,55 +1056,18 @@ mod integration_compatibility_tests {
         );
     }
 
-    /// Test CLI help output includes TLS options
-    /// Requirement: 7.4 - Help documentation preserved
-    #[test]
-    fn test_cli_help_includes_tls_options() {
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
-        let output = cmd.arg("--help").output().unwrap();
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-
-        // Verify all TLS flags are documented with proper CLI flag forms
-        assert!(
-            stdout.contains("--tls-ca-file"),
-            "Help should document --tls-ca-file"
-        );
-        assert!(
-            stdout.contains("--insecure-skip-hostname-verify"),
-            "Help should document --insecure-skip-hostname-verify"
-        );
-        assert!(
-            stdout.contains("--allow-invalid-certificate"),
-            "Help should document --allow-invalid-certificate"
-        );
-
-        // Verify flag descriptions are helpful
-        assert!(
-            stdout.contains("CA certificate"),
-            "Help should describe CA certificate functionality"
-        );
-        assert!(
-            stdout.contains("hostname"),
-            "Help should mention hostname verification"
-        );
-        assert!(
-            stdout.contains("certificate"),
-            "Help should mention certificate validation"
-        );
-        assert!(
-            stdout.contains("DANGEROUS") || stdout.contains("dangerous"),
-            "Help should warn about dangerous options"
-        );
-    }
+    // Test deleted: `test_cli_help_includes_tls_options` re-asserted
+    // substrings on `--help` output that the snapshot
+    // `tls_cli_integration__tls_cli_flag_tests__tls_help_options.snap`
+    // already pins. The "DANGEROUS" / "dangerous" warning is also
+    // baked into that snapshot (see the `--allow-invalid-certificate`
+    // description). Use the snapshot, not substring matches.
 
     /// Test CLI help output snapshot for stability
     /// Requirement: 7.4 - Help documentation preserved with stable contract
     #[test]
     fn test_cli_help_snapshot() {
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
+        let mut cmd = fresh_cmd();
 
         // Clear env vars so clap does not embed their values in help output,
         // which would make snapshots environment-dependent
@@ -1146,8 +1089,7 @@ mod integration_compatibility_tests {
         let (_temp_dir, output_path) = create_temp_output_path().unwrap();
 
         // Test configuration dump with TLS flags
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger").unwrap();
+        let mut cmd = fresh_cmd();
         let output = cmd
             .args([
                 "--db-url",

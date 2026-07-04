@@ -15,11 +15,10 @@ alwaysApply: true
 ## Module Organization
 
 - Each output format (CSV, JSON, Tab) should have its own module with a `write` function that takes rows and an output writer.
-- Follow the established pattern: `csv.rs`, `json.rs`, `tab.rs` with consistent `write<W: Write>(rows: impl IntoIterator<Item = impl IntoIterator<Item = impl AsRef<str>>>, output: &mut W) -> anyhow::Result<()>` interface.
+- Follow the established pattern: `csv.rs`, `json.rs`, `tab.rs` with consistent `write<R, F, W>(rows: R, output: W) -> anyhow::Result<()> where R: IntoIterator<Item = F>, F: IntoIterator<Item = String>, W: Write` interface.
 - Import `std::io::Write` in all output format modules to enable generic writer support.
-- Implementations should accept a mutable reference to any writer type (`&mut W where W: Write`) to support files, stdout, memory buffers, etc. without forcing moves.
-- Use iterable parameters for rows to accept slices, iterators, or owned Vecs without unnecessary cloning.
-- Callers should wrap file handles with `std::io::BufWriter` when passing to module write functions to reduce small-write overhead and improve performance.
+- The writer is consumed by value (not borrowed). For CSV/TSV the `csv::Writer` (built via `csv::WriterBuilder`) supplies its own internal buffer — do **not** wrap the caller's writer in an extra `BufWriter` in `csv.rs` / `tab.rs` (that double-buffer was deleted in todo #058 and `src/delimited.rs` keeps the single-buffer contract). The JSON sink wraps its `<output>.tmp` writer in a `BufWriter` because `serde_json::to_writer` is per-row and benefits from explicit buffering at the boundary.
+- Use iterable parameters for rows to accept slices or owned `Vec<Vec<String>>` produced by `rows_to_strings`.
 - CLI module [`cli.rs`](mdc:src/cli.rs) contains Clap-based CLI definitions and configuration.
 - Public functions in modules should be documented with doc comments (`///`).
 - Use `pub mod` in [`lib.rs`](mdc:src/lib.rs) to expose modules.
@@ -29,17 +28,18 @@ alwaysApply: true
 All format modules must implement:
 
 ```rust
-pub fn write<W: Write>(
-    rows: impl IntoIterator<Item = impl IntoIterator<Item = impl AsRef<str>>>,
-    output: &mut W
-) -> anyhow::Result<()>
+pub fn write<R, F, W>(rows: R, output: W) -> anyhow::Result<()>
+where
+    R: IntoIterator<Item = F>,
+    F: IntoIterator<Item = String>,
+    W: Write,
 ```
 
-This zero-copy API accepts:
+This API accepts:
 
-- **Rows**: Any iterable of iterables (slices, Vecs, iterators) where items are convertible to `&str`
-- **Output**: Mutable reference to any `Write` implementation (files, stdout, memory buffers)
-- **Performance**: Avoids unnecessary allocations and supports streaming writes
+- **Rows**: Any iterable of iterables yielding owned `String` values (typically `Vec<Vec<String>>` from `rows_to_strings`).
+- **Output**: Any `Write` implementation, consumed by value. CSV/TSV rely on `csv::WriterBuilder`'s built-in buffer (no extra `BufWriter` wrap — todo #058); JSON wraps the writer in a `BufWriter` because `serde_json::to_writer` writes per-row.
+- **Streaming**: The live binary path uses the `RowSink` trait in `src/sink.rs` (`DelimitedSink` for CSV/TSV, `JsonSink` for JSON), driven by `conn.query_iter` in `src/run.rs::stream_query`. All three formats stream row-by-row; the legacy `write` free functions are retained only for snapshot/unit tests that drive a fully-materialised `Vec<Vec<String>>`.
 
 ## Code Quality Standards
 

@@ -55,7 +55,7 @@ mod cli_flag_parsing_tests {
             "test.json",
         ])?;
 
-        let tls_config = TlsConfig::from_tls_options(&cli.tls_options)?;
+        let tls_config = cli.tls_options.to_tls_config()?;
 
         assert!(matches!(
             tls_config.validation_mode(),
@@ -84,10 +84,13 @@ mod cli_flag_parsing_tests {
             cert_path.to_str().unwrap(),
         ])?;
 
-        let tls_config = TlsConfig::from_tls_options(&cli.tls_options)?;
+        let tls_config = cli.tls_options.to_tls_config()?;
 
-        if let TlsValidationMode::CustomCa { ca_file_path } = tls_config.validation_mode() {
-            assert_eq!(ca_file_path, &cert_path);
+        // After the CaFile newtype migration, the field is `ca_file` and
+        // carries a canonicalised path; compare against canonicalize(cert_path).
+        if let TlsValidationMode::CustomCa { ca_file } = tls_config.validation_mode() {
+            let expected = std::fs::canonicalize(&cert_path)?;
+            assert_eq!(ca_file.path(), expected);
         } else {
             panic!("Expected CustomCa validation mode");
         }
@@ -110,7 +113,7 @@ mod cli_flag_parsing_tests {
             "--insecure-skip-hostname-verify",
         ])?;
 
-        let tls_config = TlsConfig::from_tls_options(&cli.tls_options)?;
+        let tls_config = cli.tls_options.to_tls_config()?;
 
         assert!(matches!(
             tls_config.validation_mode(),
@@ -135,7 +138,7 @@ mod cli_flag_parsing_tests {
             "--allow-invalid-certificate",
         ])?;
 
-        let tls_config = TlsConfig::from_tls_options(&cli.tls_options)?;
+        let tls_config = cli.tls_options.to_tls_config()?;
 
         assert!(matches!(
             tls_config.validation_mode(),
@@ -252,7 +255,7 @@ mod tls_config_creation_tests {
             allow_invalid_certificate: false,
         };
 
-        let config = TlsConfig::from_tls_options(&tls_options)?;
+        let config = tls_options.to_tls_config()?;
 
         assert!(matches!(
             config.validation_mode(),
@@ -275,10 +278,11 @@ mod tls_config_creation_tests {
             allow_invalid_certificate: false,
         };
 
-        let config = TlsConfig::from_tls_options(&tls_options)?;
+        let config = tls_options.to_tls_config()?;
 
-        if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
-            assert_eq!(ca_file_path, &cert_path);
+        if let TlsValidationMode::CustomCa { ca_file } = config.validation_mode() {
+            let expected = std::fs::canonicalize(&cert_path)?;
+            assert_eq!(ca_file.path(), expected);
         } else {
             panic!("Expected CustomCa validation mode");
         }
@@ -296,7 +300,7 @@ mod tls_config_creation_tests {
             allow_invalid_certificate: false,
         };
 
-        let config = TlsConfig::from_tls_options(&tls_options)?;
+        let config = tls_options.to_tls_config()?;
 
         assert!(matches!(
             config.validation_mode(),
@@ -316,7 +320,7 @@ mod tls_config_creation_tests {
             allow_invalid_certificate: true,
         };
 
-        let config = TlsConfig::from_tls_options(&tls_options)?;
+        let config = tls_options.to_tls_config()?;
 
         assert!(matches!(
             config.validation_mode(),
@@ -371,10 +375,13 @@ mod certificate_validation_tests {
         let cert_pem = generate_test_certificate()?;
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
-        let config = TlsConfig::with_custom_ca(&cert_path);
+        // After the CaFile newtype migration, with_custom_ca eagerly
+        // validates and returns Result.
+        let config = TlsConfig::with_custom_ca(&cert_path)?;
 
-        if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
-            assert_eq!(ca_file_path, &cert_path);
+        if let TlsValidationMode::CustomCa { ca_file } = config.validation_mode() {
+            let expected = std::fs::canonicalize(&cert_path)?;
+            assert_eq!(ca_file.path(), expected);
         } else {
             panic!("Expected CustomCa validation mode");
         }
@@ -406,11 +413,15 @@ mod certificate_validation_tests {
         let invalid_cert_content = "This is not a valid PEM certificate";
         let (_temp_dir, cert_path) = create_temp_cert_file(invalid_cert_content)?;
 
-        // The config creation should succeed, but SSL opts generation should fail
-        let config = TlsConfig::with_custom_ca(&cert_path);
-
-        let result = config.to_ssl_opts();
+        // After the CaFile newtype migration, validation happens eagerly
+        // at construction time — bogus PEM contents fail here, not at
+        // to_ssl_opts() time.
+        let result = TlsConfig::with_custom_ca(&cert_path);
         assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            TlsError::InvalidCaFormat { .. }
+        ));
 
         Ok(())
     }
@@ -421,11 +432,13 @@ mod certificate_validation_tests {
     fn test_certificate_validation_empty_cert() -> Result<()> {
         let (_temp_dir, cert_path) = create_temp_cert_file("")?;
 
-        // The config creation should succeed, but SSL opts generation should fail
-        let config = TlsConfig::with_custom_ca(&cert_path);
-
-        let result = config.to_ssl_opts();
+        // Eager validation: empty PEM rejected at construction time.
+        let result = TlsConfig::with_custom_ca(&cert_path);
         assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            TlsError::InvalidCaFormat { .. }
+        ));
 
         Ok(())
     }
@@ -453,20 +466,12 @@ mod ssl_opts_generation_tests {
         let cert_pem = generate_test_certificate()?;
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
-        let config = TlsConfig::with_custom_ca(&cert_path);
-
-        // Test SSL opts generation with custom CA
-        // Note: This may fail with invalid certificate format, which is expected behavior
-        let ssl_opts_result = config.to_ssl_opts();
-
-        // The configuration should be created correctly, even if certificate parsing fails
-        match ssl_opts_result {
-            Ok(ssl_opts) => assert!(ssl_opts.is_some()),
-            Err(_) => {
-                // Certificate parsing failure is acceptable for this test
-                // We're testing configuration creation, not certificate validation
-            }
-        }
+        // Eager validation now succeeds at construction (the cert is
+        // valid PEM); to_ssl_opts() then just hands the canonicalised
+        // path to mysql without re-reading.
+        let config = TlsConfig::with_custom_ca(&cert_path)?;
+        let ssl_opts = config.to_ssl_opts()?;
+        assert!(ssl_opts.is_some());
 
         Ok(())
     }
@@ -532,9 +537,10 @@ mod tls_config_builder_tests {
         // Test custom CA builder
         let cert_pem = generate_test_certificate()?;
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
-        let config = TlsConfig::with_custom_ca(&cert_path);
-        if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
-            assert_eq!(ca_file_path, &cert_path);
+        let config = TlsConfig::with_custom_ca(&cert_path)?;
+        if let TlsValidationMode::CustomCa { ca_file } = config.validation_mode() {
+            let expected = std::fs::canonicalize(&cert_path)?;
+            assert_eq!(ca_file.path(), expected);
         } else {
             panic!("Expected CustomCa validation mode");
         }
@@ -588,7 +594,7 @@ mod security_warnings_tests {
         // Custom CA mode - no warnings (tested by not panicking)
         let cert_pem = generate_test_certificate().unwrap();
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem).unwrap();
-        let config = TlsConfig::with_custom_ca(&cert_path);
+        let config = TlsConfig::with_custom_ca(&cert_path).unwrap();
         config.display_security_warnings();
 
         // Skip hostname mode - should display warning (tested by not panicking)

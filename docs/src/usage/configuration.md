@@ -362,3 +362,48 @@ Error: Invalid database URL format
 ```
 
 **Solution:** Ensure URL follows `mysql://user:pass@host:port/db` format.
+
+## Memory Profile (F007)
+
+Gold Digger streams rows directly from the database into the chosen output sink (`src/sink.rs`'s `RowSink` trait, fed by `conn.query_iter` in `src/run.rs::stream_query`). The full result set is no longer materialised in memory before writing.
+
+### Working-set guidance
+
+With streaming, peak resident memory is bounded by the current row, the format-specific encoder's per-row scratch state, and writer buffering — not the total number of rows returned. The dominant variables are now row **width** (columns × cell size) and output format rather than row count.
+
+| Format  | In-memory data per write step                                | Scaling                                   | Operational note                                                                              |
+| ------- | ------------------------------------------------------------ | ----------------------------------------- | --------------------------------------------------------------------------------------------- |
+| CSV/TSV | Current row's `Vec<String>` + `csv::Writer` buffer           | Roughly constant in row count             | Throughput is usually disk- or driver-bound; memory rarely the constraint                     |
+| JSON    | Current row's `BTreeMap<String, serde_json::Value>` + buffer | Roughly constant, modest per-row overhead | Pretty-printed JSON (`--pretty`) and very wide rows raise peak memory, but not linear in rows |
+
+Million-row exports no longer scale memory linearly with result-set size. Peak usage still climbs for very wide rows, large `BLOB`/`TEXT` values, or slow downstream consumers that increase write-side buffering and apply backpressure.
+
+### Operational guidance for large streamed exports
+
+- **Add `LIMIT`** when you want bounded output size or sampling — it is no longer required to avoid full-result buffering.
+- **Paginate** via `WHERE id > ? ORDER BY id LIMIT ?` when you need resumability, checkpointing, or smaller per-failure blast radius.
+- **Split per partition** (date range, tenant) for operational control and parallelism.
+- **Prefer CSV/TSV** over JSON when minimal per-row encoding overhead matters most.
+- **Mind row width**: very large `BLOB`/`TEXT` fields can still spike peak memory because each row must be decoded and serialised before it is written.
+
+### Legacy (pre-streaming, before F007)
+
+Before F007 streaming landed, Gold Digger materialised the full result set in memory before serialisation, so resident memory scaled roughly linearly with total rows returned. Retained here for reading older issues and benchmarks.
+
+| Rows | Columns | Avg cell width | CSV/TSV resident | JSON resident |
+| ---: | ------: | -------------: | ---------------: | ------------: |
+|   1k |      10 |       64 bytes |          ~640 KB |       ~1.3 MB |
+| 100k |      10 |       64 bytes |           ~64 MB |       ~130 MB |
+|   1M |      10 |       64 bytes |          ~640 MB |       ~1.3 GB |
+|   1M |      30 |       64 bytes |          ~1.9 GB |       ~3.8 GB |
+
+On a 16 GB host the pre-streaming code OOM'd somewhere between 2M and 3M rows depending on column count and output format. Those numbers no longer reflect current behaviour.
+
+## `--dump-config` Caveat
+
+`--dump-config` prints the resolved configuration as JSON, with a best-effort credential redactor applied to URLs and known secret keys (`password=`, `token=`, `api_key=`, `identified by`). The redactor does **not** catch arbitrary base64/hex/JWT secrets or non-English secret labels.
+
+Treat the output as **probably-safe but not certified-safe** before sharing externally:
+
+- Skim the JSON for tokens, API keys, base64 blobs, and labels in languages the redactor pattern set may not cover.
+- Tracked improvements live in repo todos #004 (route through canonical `redact_sql_error`) and #029 (adversarial test corpus).

@@ -44,7 +44,7 @@ Benchmarks the `rows_to_strings` function with various dataset characteristics:
 
 ### `output_formats.rs`
 
-Benchmarks the output format writers (`csv::write`, `json::write`, `json::write_with_pretty`, `tab::write`) with:
+Benchmarks the output format writers (`csv::write`, `json::write` compact and pretty, `tab::write`) with:
 
 - **Small datasets**: 10 rows × 5 columns
 - **Medium datasets**: 100 rows × 10 columns

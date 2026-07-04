@@ -31,8 +31,8 @@ Always consult these files in order when working with this codebase:
 
 ### Review Process
 
-- This project prefers **CodeRabbit.ai** for code review
-- Do **NOT** enable GitHub Copilot auto-review in pull requests
+- Do not merge your own changes - submit a PR for review by the maintainer
+- Do not disregard valid warnings or errors from linters, formatters, or tests - address them before proposing changes, even if they are pre-existing issues
 - Maintainer: **UncleSp1d3r** (single-maintainer workflow)
 
 ## Build/Lint/Test Commands
@@ -84,7 +84,7 @@ just deny-check               # cargo deny check
 # Build variants
 cargo build                   # Debug build
 cargo build --release         # Release build
-cargo build --no-default-features --features "json csv additional_mysql_types verbose"  # Minimal build
+cargo build --no-default-features --features "additional_mysql_types verbose"  # Minimal build
 ```
 
 ## Code Style Guidelines
@@ -120,15 +120,15 @@ cargo build --no-default-features --features "json csv additional_mysql_types ve
 ### Cursor Rules Compliance
 
 - Follow `.cursor/rules/rust-best-practices.mdc` for module organization
-- Use format module contract: `fn write<W: Write>(rows: impl IntoIterator<Item = impl IntoIterator<Item = impl AsRef<str>>>, output: &mut W) -> anyhow::Result<()>`
+- Use format module contract: every writer module exposes a single free `write(...)` function -- no trait abstraction, no per-writer struct (the `FormatWriter` trait was deleted in todo #020 as unused scaffolding). `csv::write` and `tab::write` take `rows: impl IntoIterator<Item = impl IntoIterator<Item = String>>` and a writer consumed by value. `json::write` takes `Vec<BTreeMap<String, serde_json::Value>>` (pre-converted via `TypeTransformer::row_to_json`) plus a `pretty: bool` flag -- this shape lets the caller validate every row before truncating the output file. Wrap the caller-provided writer in a `BufWriter` at the boundary.
 - Implement streaming support with generic writers
 - Use `#[cfg(feature = "...")]` for conditional compilation
 
 ## Project Overview
 
-Gold Digger is a production-ready Rust CLI tool for MySQL/MariaDB database queries with structured output (CSV, JSON, TSV). It features comprehensive CLI interface, rustls-only TLS, and safe data type handling.
+Gold Digger is a production-ready Rust CLI tool for MySQL/MariaDB database queries with structured output (CSV, JSON, TSV). It features a comprehensive CLI, rustls-only TLS, and safe data type handling.
 
-**Current Architecture (v0.2.6):**
+**Current Architecture:**
 
 - CLI-first with environment variable fallbacks using `clap`
 - Rustls-only TLS implementation (no OpenSSL dependencies)
@@ -136,10 +136,12 @@ Gold Digger is a production-ready Rust CLI tool for MySQL/MariaDB database queri
 - Structured exit codes and error handling
 - Modular output format system
 
+(See `Cargo.toml` for the active version; do not hardcode versions in this file.)
+
 **Command Examples:**
 
 ```bash
-# CLI interface (preferred)
+# CLI (preferred)
 gold_digger --db-url "mysql://user:pass@host:3306/db" \
             --query "SELECT id, name FROM users" \
             --output results.json --pretty
@@ -183,11 +185,7 @@ use gold_digger::TypeTransformer;
 
 1. **No Dotenv Support:** Despite README implications, there is no `.env` file support in the code. Use exported environment variables only.
 
-2. **Non-Standard Exit Codes:** `exit(-1)` becomes exit code 255, not the standard codes specified in requirements.
-
-3. **JSON Output:** Uses BTreeMap for deterministic key ordering as required.
-
-4. **Pattern Matching Bug:** In `src/main.rs`, the `if let Some(url) = &cli.db_url` pattern (and similar patterns in the resolve functions) uses `Some(&_)` which should be `Some(_)` in the match arm.
+2. **JSON Output:** Uses BTreeMap for deterministic key ordering as required.
 
 ### Configuration Architecture
 
@@ -209,26 +207,17 @@ Gold Digger uses CLI-first configuration with environment variable fallbacks:
 
 **Resolution Pattern:**
 
-```rust
-fn resolve_config_value(cli: &Cli) -> anyhow::Result<String> {
-    if let Some(value) = &cli.field {
-        Ok(value.clone()) // CLI flag (highest priority)
-    } else if let Ok(value) = env::var("ENV_VAR") {
-        Ok(value) // Environment variable (fallback)
-    } else {
-        anyhow::bail!("Missing required configuration") // Error if neither
-    }
-}
-```
+`Cli` is parsed once, then projected into a fully-validated `ResolvedConfig` exactly once at the binary boundary (`src/main.rs::main` calls `ResolvedConfig::from_cli(&cli)`). Downstream code (`src/run.rs`, `src/connection.rs`) takes `&ResolvedConfig` and never touches `Cli`. The `Cli > env > error` precedence rule lives in `ResolvedConfig::from_cli_with_env` (`src/config.rs`); env vars are captured once via `EnvSnapshot::from_process_env` so concurrent env mutation can't shift values mid-run. Resolution failures route through typed `GoldDiggerError::Config(ConfigError::*)` variants for stable exit-code classification (exit 2). See `docs/solutions/best-practices/front-load-validation-with-resolved-config-type-2026-04-25.md` for the full pattern.
 
 ### Current Architecture
 
 **Entry Point (`src/main.rs`):**
 
-- Reads 3 required env vars, exits with 255 if missing
-- Creates MySQL connection pool, fetches ALL rows into memory
-- Exits with code 1 if result set is empty
-- Dispatches to writer based on file extension
+- Resolves config via CLI flags first, then `DATABASE_URL` / `DATABASE_QUERY` / `OUTPUT_FILE` env fallbacks
+- Exits with `EXIT_CONFIG_ERROR` (2) when required config is missing (see `src/exit.rs` for the full 0-5 contract)
+- Creates MySQL connection pool and streams rows directly into the chosen output sink via `conn.query_iter` (`src/run.rs::stream_query`); the full result set is no longer materialised in memory (F007 resolved — see Closed gaps below)
+- Exits with code 1 (`EXIT_NO_ROWS`) if the result set is empty unless `--allow-empty` is set
+- Dispatches to writer based on `--format` flag, then file extension
 
 **Core Library (`src/lib.rs`):**
 
@@ -282,20 +271,16 @@ cargo run --release
 
 ## Requirements Gap Analysis
 
-The project has detailed requirements in `project_spec/requirements.md` but significant gaps exist:
+The project has detailed requirements in `project_spec/requirements.md`. The major gaps previously flagged in this section are closed; see below for the current status. Open work lives in the GitHub issue tracker.
 
-### High Priority Missing Features
+### Closed gaps (previously flagged)
 
-- **F001-F003:** CLI interface exists (clap-based); finalize CLI flag precedence and documented flags
-- **F005:** Non-standard exit codes (should be 0=success, 1=no rows, 2=config error, etc.)
-- **F014:** Type conversion panics on NULL/non-string values
-- **Extension dispatch bug fix**
-
-### Medium Priority
-
-- **F007:** Streaming output (currently loads all rows into memory)
-- **F008:** Structured logging with credential redaction
-- **F010:** JSON output uses BTreeMap for deterministic ordering, pretty-print option
+- **F001-F003 (CLI-first config):** Resolved. Clap-derive `Cli` with `DATABASE_URL` / `DATABASE_QUERY` / `OUTPUT_FILE` env fallbacks; precedence is CLI > env > error.
+- **F005 (exit codes):** Resolved. Typed `GoldDiggerError` enum in `src/exit.rs` maps to stable codes 0-5 via a downcast-based classifier (substring fallback retained for the few un-migrated anyhow paths).
+- **F014 (type-conversion panics):** Resolved. `TypeTransformer` handles every `mysql::Value` variant including NULL without panicking.
+- **F007 (streaming output):** Resolved. `RowSink` trait in `src/sink.rs` plus `conn.query_iter` in `src/run.rs` streams rows through the writer without materialising the full result set. Output lands in a `<path>.tmp` sibling that is renamed on success (or cleaned up on error) so a mid-stream failure never leaves a partial output file.
+- **F008 (structured logging):** Resolved. `tracing` + `tracing-subscriber` in `src/logging.rs`; every error string is routed through `utils::redact_sql_error` before reaching the subscriber.
+- **F010 (deterministic JSON):** Resolved long before this branch; `BTreeMap<String, serde_json::Value>` in `src/type_transformer.rs`.
 
 ## Project File Organization
 
@@ -312,11 +297,15 @@ The project has detailed requirements in `project_spec/requirements.md` but sign
 - **.pre-commit-config.yaml**: Git hook configuration for quality gates
 - **CHANGELOG.md**: Auto-generated version history (conventional commits)
 
+### Documented Solutions
+
+`docs/solutions/` — documented solutions to past problems (bugs, best practices, workflow patterns), organized by category with YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when implementing or debugging in documented areas.
+
 ### Documentation Standards
 
-All public functions require comprehensive doc comments:
+All public functions require comprehensive doc comments. The example below uses indented inner code-block markers (no inner backticks) so the outer fence stays a regular triple-backtick `rust` block that renders consistently across Markdown viewers and `mdformat` (todo #141):
 
-````rust
+```rust
 /// Converts MySQL rows to string vectors for output formatting.
 ///
 /// # Arguments
@@ -326,14 +315,13 @@ All public functions require comprehensive doc comments:
 /// * `Vec<Vec<String>>` - Converted string data ready for format modules
 ///
 /// # Example
-/// ```
-/// let string_rows = rows_to_strings(mysql_rows)?;
-/// csv::write(string_rows, output)?;
-/// ```
+///
+///     let string_rows = rows_to_strings(mysql_rows)?;
+///     csv::write(string_rows, output)?;
 pub fn rows_to_strings(rows: Vec<mysql::Row>) -> anyhow::Result<Vec<Vec<String>>> {
     // Implementation
 }
-````
+```
 
 ### Security Requirements
 
@@ -407,8 +395,8 @@ SELECT CAST(id AS CHAR) as id, CAST(created_at AS CHAR) as created_at FROM users
 
 ### Version Management
 
-- Current discrepancy: CHANGELOG.md shows v0.2.6, Cargo.toml shows v0.2.5
-- Sync versions before any releases
+- `Cargo.toml` is the source of truth for the active version
+- Sync `CHANGELOG.md` headings with `Cargo.toml` before any release
 - Use semantic versioning with conventional commits
 
 ## Testing Strategy
@@ -445,13 +433,13 @@ testcontainers = "0.15"                                      # For real MySQL/Ma
 
 ## Quick Reference
 
-| File                           | Purpose          | Key Issues                                 |
+| File                           | Purpose          | Notes                                      |
 | ------------------------------ | ---------------- | ------------------------------------------ |
-| `src/main.rs`                  | Entry point      | Exit codes, pattern bug, env var handling  |
+| `src/main.rs`                  | Entry point      | CLI-first config resolution, exit codes    |
 | `src/lib.rs`                   | Core logic       | Delegates to TypeTransformer               |
 | `src/type_transformer.rs`      | Value conversion | TypeTransformer: safe MySQL value handling |
 | `src/json.rs`                  | JSON output      | BTreeMap for deterministic ordering        |
-| `Cargo.toml`                   | Dependencies     | Version mismatch with CHANGELOG            |
+| `Cargo.toml`                   | Dependencies     | Source of truth for active version         |
 | `project_spec/requirements.md` | Target features  | Comprehensive feature roadmap              |
 
 ---

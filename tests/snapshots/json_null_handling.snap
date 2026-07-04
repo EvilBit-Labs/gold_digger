@@ -1,0 +1,5 @@
+---
+source: tests/output_format_snapshots.rs
+expression: result
+---
+{"data":[{"id":1,"name":"Alice","value":100},{"id":2,"name":null,"value":200},{"id":3,"name":"Charlie","value":null}]}

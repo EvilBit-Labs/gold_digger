@@ -60,8 +60,13 @@ docker-compose*.yml text
 *.so binary
 *.dylib binary
 
-# Snapshot test files (avoid noisy diffs)
-*.snap binary
+# Snapshot test files (todo #135). Force text + LF so insta snapshots
+# stay byte-identical across macOS, Linux, and Windows -- the previous
+# `binary` attribute hid line-ending churn but still allowed CRLF
+# checkouts on Windows. Diffing is intentionally suppressed because
+# regenerated snapshots are reviewed via `insta`'s own tooling, not git.
+*.snap text eol=lf -diff
+*.snap.new text eol=lf -diff
 
 # Environment files
 .env text eol=lf

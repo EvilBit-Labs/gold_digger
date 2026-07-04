@@ -8,6 +8,7 @@
 
 mod fixtures;
 mod integration;
+mod test_support;
 
 // The TLS tests are now available through the integration module
 // Import is done within test modules as needed

@@ -20,6 +20,19 @@ use super::{GoldDiggerResult, OutputFormat, TestCase};
 
 // TempFileManager is defined in this module, no need to re-export
 
+/// Build the binary `Command` with all Clap-bound env vars removed. Use in
+/// every site that invokes `gold_digger`; never call `Command::cargo_bin`
+/// directly from this module.
+///
+/// This delegates to `crate::test_support::cli::clean_cmd`, which is the
+/// single source of truth for the env-isolation list. Keeping the list in
+/// one place prevents drift when a new Clap `#[arg(env = "...")]` binding
+/// is added — otherwise the canonical list and any module-local copy can
+/// silently fall out of sync.
+fn fresh_cmd() -> Command {
+    crate::test_support::cli::clean_cmd()
+}
+
 /// Enhanced CLI execution utilities for Gold Digger using assert_cmd and predicates
 ///
 /// This struct provides a robust CLI testing framework that replaces the previous
@@ -110,8 +123,7 @@ impl GoldDiggerCli {
         let start_time = Instant::now();
 
         // Build command using assert_cmd
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger")?;
+        let mut cmd = fresh_cmd();
 
         // Set database URL (never log the actual URL for security)
         cmd.arg("--db-url").arg(db_url);
@@ -119,8 +131,10 @@ impl GoldDiggerCli {
         // Set query
         cmd.arg("--query").arg(&test_case.query);
 
-        // Set output file
-        cmd.arg("--output").arg(output_path);
+        // Set output file. Tests pre-create an empty `NamedTempFile` and
+        // pass its path, so `--force` is required for gold_digger's
+        // default-refuse-existing policy (todo #024).
+        cmd.arg("--output").arg(output_path).arg("--force");
 
         // Add additional CLI arguments
         for arg in &test_case.cli_args {
@@ -179,8 +193,7 @@ impl GoldDiggerCli {
         let start_time = Instant::now();
 
         // Build command using assert_cmd
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger")?;
+        let mut cmd = fresh_cmd();
 
         // Set database URL (never log the actual URL for security)
         cmd.arg("--db-url").arg(db_url);
@@ -188,8 +201,10 @@ impl GoldDiggerCli {
         // Set query
         cmd.arg("--query").arg(&test_case.query);
 
-        // Set output file
-        cmd.arg("--output").arg(output_path);
+        // Set output file. Tests pre-create an empty `NamedTempFile` and
+        // pass its path, so `--force` is required for gold_digger's
+        // default-refuse-existing policy (todo #024).
+        cmd.arg("--output").arg(output_path).arg("--force");
 
         // Add additional CLI arguments
         for arg in &test_case.cli_args {
@@ -302,15 +317,16 @@ impl GoldDiggerCli {
         db_url: &str,
         output_path: &Path,
     ) -> Result<Output> {
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger")?;
+        let mut cmd = fresh_cmd();
 
         cmd.arg("--db-url")
             .arg(db_url)
             .arg("--query")
             .arg(&test_case.query)
             .arg("--output")
-            .arg(output_path);
+            .arg(output_path)
+            // See todo #024; tests seed the output path via NamedTempFile.
+            .arg("--force");
 
         // Add additional CLI arguments
         for arg in &test_case.cli_args {
@@ -341,13 +357,13 @@ impl GoldDiggerCli {
         stdout_contains: Option<&str>,
         stderr_contains: Option<&str>,
     ) -> Result<GoldDiggerResult> {
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger")?;
+        let mut cmd = fresh_cmd();
 
         // Set database URL (never log the actual URL for security)
         cmd.arg("--db-url").arg(db_url);
         cmd.arg("--query").arg(&test_case.query);
-        cmd.arg("--output").arg(output_path);
+        // See todo #024; tests seed the output path via NamedTempFile.
+        cmd.arg("--output").arg(output_path).arg("--force");
 
         // Add additional CLI arguments
         for arg in &test_case.cli_args {
@@ -483,13 +499,13 @@ impl GoldDiggerCli {
         db_url: &str,
         output_path: &Path,
     ) -> Result<GoldDiggerResult> {
-        #[allow(deprecated)]
-        let mut cmd = Command::cargo_bin("gold_digger")?;
+        let mut cmd = fresh_cmd();
 
         // Set database URL (never log the actual URL for security)
         cmd.arg("--db-url").arg(db_url);
         cmd.arg("--query").arg(&test_case.query);
-        cmd.arg("--output").arg(output_path);
+        // See todo #024; tests seed the output path via NamedTempFile.
+        cmd.arg("--output").arg(output_path).arg("--force");
 
         // Add additional CLI arguments
         for arg in &test_case.cli_args {
@@ -1011,15 +1027,16 @@ impl AssertCmdIntegration {
         let output_file = temp_manager.create_output_file(&test_case.expected_format)?;
 
         // Build command
-        #[allow(deprecated)]
-        let mut cmd = assert_cmd::Command::cargo_bin("gold_digger")?;
+        let mut cmd = fresh_cmd();
 
         cmd.arg("--db-url")
             .arg(db_url)
             .arg("--query")
             .arg(&test_case.query)
             .arg("--output")
-            .arg(output_file.path());
+            .arg(output_file.path())
+            // See todo #024; tests seed the output path via NamedTempFile.
+            .arg("--force");
 
         // Add CLI arguments
         for arg in &test_case.cli_args {
@@ -1054,15 +1071,16 @@ impl AssertCmdIntegration {
         let output_file = temp_manager.create_output_file(output_format)?;
 
         // Build command
-        #[allow(deprecated)]
-        let mut cmd = assert_cmd::Command::cargo_bin("gold_digger")?;
+        let mut cmd = fresh_cmd();
 
         cmd.arg("--db-url")
             .arg(db_url)
             .arg("--query-file")
             .arg(query_file.path())
             .arg("--output")
-            .arg(output_file.path());
+            .arg(output_file.path())
+            // See todo #024; tests seed the output path via NamedTempFile.
+            .arg("--force");
 
         // Execute and return assertion along with both files
         let assert = cmd.assert();
@@ -1080,8 +1098,7 @@ impl AssertCmdIntegration {
         let output_file = temp_manager.create_output_file(&test_case.expected_format)?;
 
         // Build command
-        #[allow(deprecated)]
-        let mut cmd = assert_cmd::Command::cargo_bin("gold_digger")?;
+        let mut cmd = fresh_cmd();
 
         cmd.arg("--db-url")
             .arg(db_url)
@@ -1089,6 +1106,8 @@ impl AssertCmdIntegration {
             .arg(&test_case.query)
             .arg("--output")
             .arg(output_file.path())
+            // See todo #024; tests seed the output path via NamedTempFile.
+            .arg("--force")
             .timeout(timeout);
 
         // Add CLI arguments

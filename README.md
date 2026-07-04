@@ -77,7 +77,7 @@ cargo install --path .
 cargo build --release
 
 # Minimal build (fewer features)
-cargo build --release --no-default-features --features "json csv"
+cargo build --release --no-default-features --features "additional_mysql_types verbose"
 ```
 
 ### TLS Support
@@ -130,7 +130,8 @@ gold_digger completion zsh > ~/.zsh/completions/_gold_digger
 gold_digger completion fish > ~/.config/fish/completions/gold_digger.fish
 gold_digger completion powershell > $PROFILE
 
-# Debug configuration (credentials redacted)
+# Debug configuration (best-effort credential redaction;
+# review output before sharing — see SECURITY.md)
 gold_digger --db-url "mysql://user:pass@localhost:3306/mydb" \
   --query "SELECT 1" --output test.json --dump-config
 
@@ -144,7 +145,9 @@ gold_digger --db-url "mysql://user:pass@dev.db:3306/mydb" \
   --insecure-skip-hostname-verify \
   --query "SELECT COUNT(*) FROM logs" --output count.json
 
-# Accept invalid certificates for testing (DANGEROUS)
+# Accept invalid certificates for testing (DANGEROUS — full MITM exposure;
+# disables BOTH cert chain and hostname validation. Never use against a
+# production DB. Prefer --tls-ca-file for self-signed CAs. See SECURITY.md.)
 gold_digger --db-url "mysql://user:pass@test.db:3306/mydb" \
   --allow-invalid-certificate \
   --query "SELECT * FROM test_data" --output test.csv
@@ -152,23 +155,41 @@ gold_digger --db-url "mysql://user:pass@test.db:3306/mydb" \
 
 ### CLI Options
 
-| Flag                              | Short | Environment Variable | Description                                             |
-| --------------------------------- | ----- | -------------------- | ------------------------------------------------------- |
-| `--db-url <URL>`                  | -     | `DATABASE_URL`       | Database connection string                              |
-| `--query <SQL>`                   | `-q`  | `DATABASE_QUERY`     | SQL query to execute                                    |
-| `--query-file <FILE>`             | -     | -                    | Read SQL from file (mutually exclusive with `--query`)  |
-| `--output <FILE>`                 | `-o`  | `OUTPUT_FILE`        | Output file path                                        |
-| `--format <FORMAT>`               | -     | -                    | Force output format: `csv`, `json`, or `tsv`            |
-| `--pretty`                        | -     | -                    | Pretty-print JSON output                                |
-| `--verbose`                       | `-v`  | -                    | Enable verbose logging (repeatable: `-v`, `-vv`)        |
-| `--quiet`                         | -     | -                    | Suppress non-error output                               |
-| `--allow-empty`                   | -     | -                    | Exit with code 0 even if no results                     |
-| `--dump-config`                   | -     | -                    | Print current configuration as JSON                     |
-| `--tls-ca-file <FILE>`            | -     | -                    | Use custom CA certificate file for trust anchor pinning |
-| `--insecure-skip-hostname-verify` | -     | -                    | Skip hostname verification (keeps chain validation)     |
-| `--allow-invalid-certificate`     | -     | -                    | Disable certificate validation entirely (DANGEROUS)     |
+| Flag                              | Short | Environment Variable | Description                                                                                                                                                        |
+| --------------------------------- | ----- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--db-url <URL>`                  | -     | `DATABASE_URL`       | Database connection string                                                                                                                                         |
+| `--query <SQL>`                   | `-q`  | `DATABASE_QUERY`     | SQL query to execute                                                                                                                                               |
+| `--query-file <FILE>`             | -     | -                    | Read SQL from file (mutually exclusive with `--query`). Reads any file the process can read — see SECURITY.md before passing untrusted paths or running as `root`. |
+| `--output <FILE>`                 | `-o`  | `OUTPUT_FILE`        | Output file path                                                                                                                                                   |
+| `--format <FORMAT>`               | -     | -                    | Force output format: `csv`, `json`, or `tsv`                                                                                                                       |
+| `--pretty`                        | -     | -                    | Pretty-print JSON output                                                                                                                                           |
+| `--verbose`                       | `-v`  | -                    | Enable verbose logging (repeatable: `-v`, `-vv`)                                                                                                                   |
+| `--quiet`                         | -     | -                    | Suppress non-error output                                                                                                                                          |
+| `--allow-empty`                   | -     | -                    | Exit with code 0 even if no results                                                                                                                                |
+| `--dump-config`                   | -     | -                    | Print current configuration as JSON                                                                                                                                |
+| `--tls-ca-file <FILE>`            | -     | -                    | Use custom CA certificate file for trust anchor pinning                                                                                                            |
+| `--insecure-skip-hostname-verify` | -     | -                    | Skip hostname verification (keeps chain validation)                                                                                                                |
+| `--allow-invalid-certificate`     | -     | -                    | Disable certificate validation entirely (DANGEROUS)                                                                                                                |
 
-**Note**: TLS flags are mutually exclusive - use only one at a time.
+**Note**: TLS flags are mutually exclusive - use only one at a time. `--allow-invalid-certificate` disables both certificate chain and hostname validation (full MITM exposure); see [SECURITY.md](SECURITY.md#--allow-invalid-certificate-mitm-exposure) before using it.
+
+## Memory Profile
+
+Gold Digger streams rows directly from the MySQL/MariaDB result set into the chosen output sink (CSV, TSV, JSON) via `conn.query_iter` (F007). The full result set is no longer materialised in memory before writing, so resident memory is dominated by the current row plus output buffering rather than total row count.
+
+- Memory should stay roughly flat as row count grows; for very large exports, total runtime and disk space dominate, not RAM.
+- Peak memory still rises with **row width** (number of columns × per-cell size), large `BLOB`/`TEXT` values, pretty-printed JSON, and downstream filesystem/shell-pipeline buffering.
+- For very large exports, prefer writing directly to a file rather than piping through a shell, and benchmark with production-shaped rows if you need tight resource guarantees.
+
+For detailed working-set guidance and per-format notes, see [`docs/src/usage/configuration.md`](docs/src/usage/configuration.md#memory-profile-f007).
+
+### Legacy (pre-streaming) numbers
+
+These figures applied before F007 streaming was implemented, when Gold Digger buffered the full result set in memory before serialisation. Retained for context when reading older issues, benchmarks, or release notes.
+
+- A SELECT returning ~1M rows of ~10 columns at ~64 bytes per cell consumed ~640 MB of resident memory before serialisation; the working set roughly doubled during JSON encoding due to the intermediate `BTreeMap<String, Value>` per row.
+- On a 16 GB host, OOM landed somewhere between 2M and 3M rows depending on column count, value width, and output format. CSV/TSV were cheaper than JSON.
+- Typical mitigations in the pre-streaming era were `LIMIT`, paginate via `WHERE id > ? LIMIT ?` in a wrapping script, or split exports per partition/date range.
 
 ### Subcommands
 
@@ -230,7 +251,7 @@ The exit code mapping includes intelligent error detection based on error messag
 
 ## Testing
 
-Gold Digger includes comprehensive test suites to ensure reliability and correctness across multiple database systems and configurations:
+Gold Digger includes comprehensive test suites to ensure reliability and correctness across multiple database systems and configurations. For the layout of test files, helper macros, and snapshot conventions, see [`tests/README.md`](tests/README.md). For the benchmark suite (criterion-based, including the memory-ceiling benchmark that motivated F007 streaming), see [`benches/README.md`](benches/README.md).
 
 ### Unit Tests
 
@@ -392,7 +413,7 @@ The integration testing framework is actively under development. Current impleme
 - ✅ **TLS Support**: TLS and non-TLS database variants with certificate management
 - ✅ **Container Management**: Health checks, resource cleanup, and CI compatibility
 - ✅ **Test Data**: Comprehensive schema and seed data for all MySQL data types
-- 🚧 **Advanced Testing**: Data type validation, output format testing, and performance tests are planned
+- ✅ **Advanced Testing**: Data type validation, output format testing, and performance benchmarks (see `tests/` and `benches/` for the full suite)
 
 See the [Integration Testing](docs/src/development/integration-testing.md) and [TLS Variants](docs/src/development/tls-variants.md) documentation for detailed information.
 
