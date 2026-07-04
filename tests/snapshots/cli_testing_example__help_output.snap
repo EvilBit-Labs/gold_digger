@@ -2,7 +2,7 @@
 source: tests/cli_testing_example.rs
 expression: stdout
 ---
-A MySQL/MariaDB query tool that exports results to structured data files
+Gold Digger connects to MySQL/MariaDB databases, executes queries, and exports results to CSV, JSON, or TSV files. It supports rustls-only TLS, environment-variable fallbacks, structured exit codes, and shell completion generation.
 
 Usage: gold_digger [OPTIONS] [COMMAND]
 
@@ -11,18 +11,90 @@ Commands:
   help        Print this message or the help of the given subcommand(s)
 
 Options:
-      --db-url <URL>                   Database connection URL (mysql://user:pass@host:port/db) [env: DATABASE_URL=]
-  -q, --query <SQL>                    SQL query string to execute
-      --query-file <FILE>              File containing SQL query to execute
-  -o, --output <FILE>                  Output file path (format inferred from extension: .csv, .json, .tsv) [env: OUTPUT_FILE=]
-  -f, --format <FORMAT>                Output format override (ignores file extension) [possible values: csv, json, tsv]
-  -v, --verbose...                     Enable verbose logging (-v for info, -vv for debug)
-      --quiet                          Suppress all output except errors
-  -p, --pretty                         Pretty-print output (only applies to JSON format)
-      --allow-empty                    Exit successfully on empty result sets
-      --dump-config                    Print current configuration as JSON and exit
-      --tls-ca-file <TLS_CA_FILE>      Path to CA certificate file for trust anchor pinning
-      --insecure-skip-hostname-verify  Skip hostname verification (keeps chain and time validation)
-      --allow-invalid-certificate      Disable certificate validation entirely (DANGEROUS)
-  -h, --help                           Print help
-  -V, --version                        Print version
+      --db-url <URL>
+          Database connection URL (mysql://user:pass@host:port/db)
+          
+          [env: DATABASE_URL=]
+
+  -q, --query <SQL>
+          SQL query string to execute
+
+      --query-file <FILE>
+          File containing SQL query to execute.
+          
+          Path-safety guards (todo #023): the path is canonicalized via `std::fs::canonicalize` before the file is read, which rejects symlinks that cross filesystem boundaries and resolves traversal components (`..`). The extension must be `.sql`, `.txt`, or missing; recognised executable extensions (`.exe`, `.dll`, `.so`, `.dylib`, `.bin`) are refused with a configuration error to stop accidental reads of binaries as SQL. Files larger than 10 MiB are refused to cap DoS risk. Do not run gold_digger as `root` with `--query-file` pointing at externally-supplied paths, and prefer a dedicated directory owned by the gold_digger user for query files. See SECURITY.md.
+
+  -o, --output <FILE>
+          Output file path (format inferred from extension: .csv, .json, .tsv)
+          
+          [env: OUTPUT_FILE=]
+
+  -f, --format <FORMAT>
+          Output format override (ignores file extension)
+          
+          [possible values: csv, json, tsv]
+
+  -v, --verbose...
+          Enable verbose logging (-v for info, -vv for debug)
+
+      --quiet
+          Suppress all output except errors
+
+  -p, --pretty
+          Pretty-print output (only applies to JSON format)
+
+      --allow-empty
+          Exit successfully on empty result sets
+
+      --force
+          Overwrite the output file if it already exists.
+          
+          By default, gold_digger refuses to clobber an existing output file (path-safety: todo #024). It opens the output with `O_CREAT | O_EXCL` semantics on Unix so a pre-existing file — or a symlink at the target path — is a hard error. Pass `--force` to request explicit overwrite; symlinks at the target are still refused on Unix via `O_NOFOLLOW`. This guards against an attacker pre-placing a symlink at a predictable output path (e.g. `/tmp/results.json`) and redirecting the write to an attacker-chosen target. See SECURITY.md.
+
+      --dump-config
+          Print current configuration as JSON and exit.
+          
+          Output uses a best-effort credential redactor (URL passwords, `password=`, `token=`, `api_key=`, `identified by`). It does NOT catch arbitrary base64/hex/JWT secrets or non-English secret labels. Review the JSON before sharing in bug reports or chat.
+
+      --max-query-file-size <BYTES>
+          Maximum accepted size for `--query-file`, in bytes.
+          
+          Caps the size of the file read for `--query-file` to bound DoS risk from an attacker pointing the flag at a huge file on a shared host (todo #023). Defaults to 10 MiB. Raise only if you have a legitimate hand-written query that exceeds the default; SQL much larger than this is almost always machine-generated and should be loaded from a different surface.
+
+      --tls-ca-file <TLS_CA_FILE>
+          Path to CA certificate file for trust anchor pinning.
+          
+          Gold Digger validates the server certificate against this CA instead of the platform trust store. Safe for self-signed or private-CA infrastructure; chain, hostname, and time checks all still run.
+          
+          **Residual attack surface:** compromise of the specified CA's private key lets an attacker present a forged certificate that this binary will trust. Protect the CA key with the same care as a production signing key.
+
+      --insecure-skip-hostname-verify
+          Skip hostname verification (keeps chain and time validation).
+          
+          Certificate chain still has to be signed by a trusted CA and fall within its validity window. Use when the server presents a certificate for a different name than the one you connect to (e.g., connecting to an IP when the cert is for a hostname).
+          
+          **Residual attack surface (CWE-297):** an attacker who obtains any certificate signed by a CA you trust — for any domain — can MITM the connection. This flag removes the "certificate must match this host" binding. Do not enable against internet-reachable databases.
+
+      --allow-invalid-certificate
+          Disable certificate validation entirely (DANGEROUS — full MITM exposure).
+          
+          Disables BOTH the certificate chain and hostname checks. Any network attacker who can intercept the TCP connection can present an attacker-controlled certificate, complete the TLS handshake, and read or modify the database protocol — including plaintext credentials. Never use against a production database. Prefer `--tls-ca-file <path>` for self-signed CAs (full validation against an explicit anchor) or `--insecure-skip-hostname-verify` for hostname-only mismatches. See SECURITY.md.
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version
+
+EXAMPLES:
+  # CLI interface (preferred)
+  gold_digger --db-url mysql://user:pass@host:3306/db \
+              --query 'SELECT id, name FROM users' \
+              --output results.json --pretty
+
+  # Environment variable fallback
+  export DATABASE_URL='mysql://user:pass@host:3306/db'
+  gold_digger --query 'SELECT * FROM logs' --output /tmp/logs.csv
+
+  # Generate shell completion
+  gold_digger completion bash > ~/.local/share/bash-completion/completions/gold_digger

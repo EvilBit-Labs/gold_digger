@@ -1,0 +1,542 @@
+//! Query-execution pipeline.
+//!
+//! Ties together connection establishment, query execution, and output
+//! dispatch. Configuration resolution happens before [`run`] is called,
+//! at the binary boundary in `src/main.rs`, where a [`ResolvedConfig`]
+//! is built once and threaded through. The binary entry point handles
+//! CLI parsing, logging init, and subcommand / `--dump-config` dispatch;
+//! once those are out of the way it delegates to [`run`].
+//!
+//! All failures are routed through [`crate::exit::exit_with_error`] so the
+//! binary always exits with a stable, documented code.
+//!
+//! # Streaming (F007, todo #005)
+//!
+//! The pipeline uses `mysql::Queryable::query_iter` and feeds each row
+//! into a [`crate::sink::RowSink`] chosen by the requested output format.
+//! Peak memory is linear in the **column count**, not the row count:
+//! only the current `mysql::Row` (plus per-row conversion scratch) is
+//! live at a time. The streaming sinks write to a sibling `<output>.tmp`
+//! path and rename to the final path on full success, preserving the
+//! atomic-output guarantee even when a type-conversion error fires on
+//! row N.
+
+use mysql::prelude::Queryable;
+
+use crate::config::ResolvedConfig;
+use crate::connection::create_database_connection;
+use crate::exit::GoldDiggerError;
+use crate::logging::make_progress;
+use crate::mysql_errors::{
+    CR_CONN_HOST_ERROR, CR_CONNECTION_ERROR, CR_SERVER_GONE_ERROR, CR_SERVER_LOST,
+    ER_ACCESS_DENIED_ERROR, ER_BAD_DB_ERROR, ER_BAD_FIELD_ERROR, ER_COLUMNACCESS_DENIED_ERROR,
+    ER_DBACCESS_DENIED_ERROR, ER_NO_SUCH_TABLE, ER_PARSE_ERROR, ER_TABLEACCESS_DENIED_ERROR,
+};
+use crate::output::build_sink_for_format;
+use crate::utils::redact_sql_error;
+
+/// RAII wrapper for an `indicatif::ProgressBar` that calls
+/// `finish_and_clear` exactly once when the value goes out of scope.
+///
+/// Replaces a long string of manual `progress.finish_and_clear()` calls
+/// at every error branch in [`run`] / [`stream_query`]. With this guard
+/// in scope, every return path — `Ok`, `Err`, `?` unwind — automatically
+/// clears the progress bar via `Drop` on stack unwinding. This is
+/// possible because Wave 1 reworked `run()` to return `Result<...>`
+/// rather than calling `process::exit` directly: `process::exit` skips
+/// `Drop` impls, so the manual cleanup was the only correct option
+/// before the migration.
+struct ProgressGuard {
+    bar: indicatif::ProgressBar,
+}
+
+impl ProgressGuard {
+    fn new(bar: indicatif::ProgressBar) -> Self {
+        Self { bar }
+    }
+
+    /// Returns a borrow of the underlying progress bar so callers can
+    /// update its message (`set_message`) without owning it.
+    fn bar(&self) -> &indicatif::ProgressBar {
+        &self.bar
+    }
+}
+
+impl Drop for ProgressGuard {
+    fn drop(&mut self) {
+        self.bar.finish_and_clear();
+    }
+}
+
+/// Outcome of the main query pipeline. `RowsWritten` corresponds to a
+/// stream that produced one or more rows; `EmptyResult` corresponds to a
+/// stream where the query parsed and ran but matched zero rows AND
+/// `--allow-empty` was NOT supplied (the disposition that maps to exit 1
+/// in the binary). Successful empty results with `--allow-empty` are
+/// folded into `RowsWritten { count: 0 }` because they commit a valid
+/// envelope to disk and exit successfully.
+#[derive(Debug)]
+pub enum RunOutcome {
+    /// The pipeline streamed `count` data rows and finalized the output.
+    /// Maps to `EXIT_SUCCESS` at the binary boundary.
+    RowsWritten { count: u64 },
+    /// The query returned no rows and `--allow-empty` was NOT set. The
+    /// sink was dropped without committing, so no `<output>` file was
+    /// produced. Maps to `EXIT_NO_ROWS` at the binary boundary.
+    EmptyResult,
+}
+
+/// Executes the main query pipeline against an already-resolved
+/// configuration: create pool → run streaming query → feed sink.
+///
+/// Returns `Result<RunOutcome, anyhow::Error>` rather than calling
+/// `process::exit` directly so the binary entry point in `src/main.rs`
+/// can perform the `process::exit` once, AFTER stack unwinding has run
+/// every `Drop` impl on the path. In particular, the streaming sink's
+/// `Drop` impl removes the `<output>.tmp` sibling file on error — calling
+/// `process::exit` mid-pipeline (the previous behaviour) skipped that
+/// cleanup and orphaned the `.tmp` file (CRITICAL #3).
+pub fn run(config: &ResolvedConfig) -> anyhow::Result<RunOutcome> {
+    // Connect phase: spinner (indeterminate duration). Hidden when
+    // `--quiet` or stderr is not a TTY (todo #162). The RAII
+    // `ProgressGuard` clears the spinner on EVERY return path (Ok, Err,
+    // ?) via Drop on stack unwinding — the manual `finish_and_clear`
+    // calls at each error branch are no longer needed.
+    let connect_progress = ProgressGuard::new(make_progress(
+        config.quiet,
+        None,
+        "Connecting to database...",
+    ));
+    tracing::info!("Connecting to database...");
+
+    // Connection-pool construction failures already carry typed errors
+    // (`anyhow::Error::from(TlsError).context(...)` from `connection.rs`
+    // after CRITICAL #5); propagate verbatim so the downcast classifier
+    // in `crate::exit::map_error_to_exit_code` can read the variant.
+    let pool = create_database_connection(&config.database_url, &config.tls, config.verbose)?;
+
+    // HIGH #10: route `pool.get_conn()` failures through the same
+    // typed classifier `Pool::new` uses (`classify_mysql_pool_error`).
+    // The previous path wrapped the raw `mysql::Error` into a
+    // `GoldDiggerError::DbAuth(...)` string via free-form `anyhow!`,
+    // which (a) skipped the typed `TlsError` routing required for
+    // accurate exit codes (handshake/cert/hostname failures need exit
+    // 3 with TLS-specific framing, not generic "DB auth"), and (b)
+    // bypassed the credential-redaction guarantees the classifier
+    // bakes in for every variant. The classifier internally routes
+    // through `redact_sql_error`, so the user-facing message can never
+    // embed an un-scrubbed `mysql::Error::to_string()`.
+    let mut conn = pool.get_conn().map_err(|e| {
+        let typed = crate::tls::pool::classify_mysql_pool_error(e);
+        anyhow::Error::from(typed).context("Database connection failed")
+    })?;
+    drop(connect_progress);
+
+    stream_query(config, &mut conn)
+}
+
+/// Streams the query result into the appropriate sink.
+///
+/// Row count is unknown until the stream completes, so progress is
+/// shown as a spinner (indeterminate). After every row the spinner's
+/// message is updated with the running count. On empty results the
+/// branch defers to [`handle_empty_result`] which still honours
+/// `--allow-empty`.
+///
+/// All errors return via `Err(...)?` so the sink's `Drop` impl runs
+/// during stack unwinding and cleans up the `<output>.tmp` sibling
+/// file (CRITICAL #3). The [`ProgressGuard`] in scope clears the
+/// spinner on every exit path the same way.
+fn stream_query(
+    config: &ResolvedConfig,
+    conn: &mut mysql::PooledConn,
+) -> anyhow::Result<RunOutcome> {
+    let database_query = config.query.body();
+    let output_file = config.output.path.as_path();
+
+    // Query phase: spinner (indeterminate duration). RAII-managed.
+    let progress = ProgressGuard::new(make_progress(config.quiet, None, "Executing query..."));
+
+    // `query_iter` returns a streaming QueryResult that yields
+    // `Result<Row, mysql::Error>` as rows arrive — no full materialisation.
+    let mut result = conn
+        .query_iter(database_query)
+        .map_err(|e| map_query_error(&e))?;
+
+    // Columns are known up-front from the first result-set metadata. We
+    // snapshot them once, *before* pulling any rows, so `on_headers` can
+    // fire even when the stream turns out to be empty.
+    let columns: Vec<String> = result
+        .columns()
+        .as_ref()
+        .iter()
+        .map(|c| c.name_str().to_string())
+        .collect();
+
+    // Build the sink lazily: only after we know the query parsed and we
+    // have column metadata. This preserves the previous behaviour where
+    // the output file was never created on a bad query.
+    let mut sink = build_sink_for_format(
+        output_file,
+        config.output.format,
+        config.force,
+        config.pretty,
+    )
+    .map_err(|e| e.context("Output sink creation failed"))?;
+
+    sink.on_headers(&columns)
+        .map_err(|e| e.context("Failed to write output headers"))?;
+
+    let mut rows_seen: u64 = 0;
+    progress.bar().set_message("Streaming rows...");
+
+    for row_result in result.by_ref() {
+        // Any mysql::Error from row fetch flows through the same
+        // credential-redacting classifier as the initial query
+        // error so streaming failures don't leak creds.
+        // Sink dropped on `?`-unwind -> .tmp removed.
+        let row = row_result.map_err(|e| map_query_error(&e))?;
+
+        sink.on_row(&row)
+            .map_err(|e| e.context("Row processing failed"))?;
+
+        rows_seen = rows_seen.saturating_add(1);
+        // Update the spinner message every 1000 rows to avoid redraw
+        // pressure on huge result sets while still giving users feedback.
+        if rows_seen.is_multiple_of(1000) {
+            progress
+                .bar()
+                .set_message(format!("Streaming rows... ({} so far)", rows_seen));
+        }
+    }
+
+    // Drop the streaming result *before* finalize so any lingering server
+    // traffic is drained and the connection is returned to a clean state.
+    drop(result);
+
+    if rows_seen == 0 {
+        // Empty result: we already wrote `on_headers`, so the sink holds
+        // a `.tmp` file with an empty envelope / header row. For
+        // `--allow-empty` we finalize (commit the empty file); otherwise
+        // we drop the sink (the tmp gets cleaned up) and signal
+        // `EmptyResult` so the binary exits with 1.
+        return handle_empty_result(config, sink);
+    }
+
+    sink.finalize()
+        .map_err(|e| e.context("Output finalisation failed"))?;
+
+    tracing::info!(
+        rows = rows_seen,
+        file = %output_file.display(),
+        "Outputting {} records to {}.",
+        rows_seen,
+        output_file.display()
+    );
+    Ok(RunOutcome::RowsWritten { count: rows_seen })
+}
+
+/// Handles an empty result set. If `--allow-empty` is set, finalizes the
+/// sink (committing an empty `{"data":[]}` or header-only CSV/TSV file)
+/// and returns `RowsWritten { count: 0 }`; otherwise drops the sink
+/// (which cleans up its `.tmp`) and returns `EmptyResult` so the binary
+/// can exit with [`crate::exit::EXIT_NO_ROWS`].
+fn handle_empty_result(
+    config: &ResolvedConfig,
+    sink: Box<dyn crate::sink::RowSink>,
+) -> anyhow::Result<RunOutcome> {
+    if config.allow_empty {
+        tracing::info!("No records found in database, but --allow-empty is set.");
+        sink.finalize()
+            .map_err(|e| e.context("Output writing failed"))?;
+        Ok(RunOutcome::RowsWritten { count: 0 })
+    } else {
+        // Drop the streaming sink; its `Drop` impl removes the `.tmp`
+        // file so the filesystem shows no partial output.
+        drop(sink);
+        tracing::info!("No records found in database.");
+        Ok(RunOutcome::EmptyResult)
+    }
+}
+
+/// Maps a [`mysql::Error`] from query execution into a contextual
+/// `anyhow::Error`. Known MySQL error codes are translated into
+/// operator-facing messages; the underlying error is always appended
+/// (via [`redact_sql_error`]) so the caller can diagnose the failure.
+///
+/// # Authentication errors (todo #064, S9)
+///
+/// Codes 1045 (`ER_ACCESS_DENIED_ERROR`) and 1044
+/// (`ER_DBACCESS_DENIED_ERROR`) fire with a server-side message of the
+/// form `"Access denied for user 'alice'@'10.0.0.5' (using password:
+/// YES)"`. That string leaks the database username, the *client source
+/// IP* the server saw the connection from, and a confirmation that a
+/// password was supplied (CWE-209 — sensitive information in an error
+/// message). The username and IP are not under the redactor's control
+/// (`redact_sql_error` only scrubs `password=`, `token=`, URL userinfo,
+/// etc.), so we discard the server message wholesale on those codes
+/// and emit a static, action-oriented sentence instead. The original
+/// (redacted) error still flows to `tracing::debug!` for operators
+/// running with `-vv` who genuinely need to triage.
+fn map_query_error(e: &mysql::Error) -> anyhow::Error {
+    // Authentication-class MySQL errors get a hard-coded, leak-free
+    // message. Everything else falls through to the general path below.
+    // Codes are routed through `crate::mysql_errors` so contributors can
+    // grep for the canonical `ER_*` symbol (todo #054).
+    if let mysql::Error::MySqlError(mysql_err) = e
+        && matches!(
+            mysql_err.code,
+            ER_ACCESS_DENIED_ERROR | ER_DBACCESS_DENIED_ERROR
+        )
+    {
+        // Route the original (redacted) error to debug-level so it is
+        // available with `-vv` but never reaches the default user-facing
+        // log/exit path. Returning a typed `GoldDiggerError::DbAuth` makes
+        // `crate::exit` classify this as EXIT_DB_AUTH_ERROR (3) via downcast,
+        // independent of message text -- the static, leak-free message below
+        // deliberately drops the server text (CWE-209: it would leak the
+        // username and client source IP).
+        tracing::debug!(
+            code = mysql_err.code,
+            detail = redact_sql_error(&e.to_string()),
+            "MySQL authentication error (full server message redacted)"
+        );
+        return GoldDiggerError::DbAuth(
+            "Database authentication failed: access denied. \
+             Verify credentials via your secret manager."
+                .to_string(),
+        )
+        .into();
+    }
+
+    // Structured error matching on mysql::Error variants. Numeric codes
+    // are routed through `crate::mysql_errors` so contributors can grep
+    // for the canonical `ER_*` / `CR_*` symbol instead of decoding bare
+    // numeric literals (todo #054).
+    let context = match e {
+        mysql::Error::MySqlError(mysql_err) => classify_mysql_error_code(mysql_err.code),
+        mysql::Error::IoError(_) => "Network I/O error during query execution",
+        mysql::Error::UrlError(_) => "Invalid database URL format",
+        mysql::Error::DriverError(_) => "Database driver error",
+        _ => "Query execution failed",
+    };
+
+    // Always include redacted error detail so users can diagnose
+    // issues. `redact_sql_error` is the single canonical redactor
+    // (todo #016 / P1-C); any credential embedded in the mysql
+    // crate's error string is scrubbed before it reaches the log.
+    let detail = format!("{}: {}", context, redact_sql_error(&e.to_string()));
+
+    // Drive the exit code from a typed `GoldDiggerError` variant rather
+    // than letting `crate::exit` substring-match the message. The server
+    // error text contains user-controlled SQL fragments (table/column
+    // names like `connection_log` or `missing_partition`), so substring
+    // classification could misroute a query failure to the auth/connection
+    // or config exit code. Connection-class errors (transport dropped or
+    // server unreachable mid-query) are classified as auth/connection
+    // failures (exit 3); everything else is a query failure (exit 4). This
+    // fixes the substring path's wording-dependent misroutes while keeping
+    // genuine connection failures on exit 3, all independent of message text.
+    if is_connection_class_error(e) {
+        GoldDiggerError::DbAuth(detail).into()
+    } else {
+        GoldDiggerError::Query(detail).into()
+    }
+}
+
+/// Returns `true` for errors that indicate a connection-level failure
+/// (server unreachable, or the transport dropped mid-query) rather than a
+/// query-execution failure, so they classify as [`GoldDiggerError::DbAuth`]
+/// (exit 3) instead of [`GoldDiggerError::Query`] (exit 4).
+///
+/// In mysql 28.x, client-side connection failures surface as
+/// `DriverError(CouldNotConnect | ConnectTimeout)` or `IoError` (a transport
+/// read failure mid-query) -- never as a `MySqlError` carrying a `CR_*` code.
+/// `MySqlError` is built only from server-sent error packets, so it always
+/// holds an `ER_*` server code. The `CR_*` arm below is defensive
+/// belt-and-suspenders in case a future driver routes those codes through
+/// `MySqlError`; it is unreachable today (as is the `CR_*` half of
+/// [`classify_mysql_error_code`]).
+fn is_connection_class_error(e: &mysql::Error) -> bool {
+    if matches!(
+        e,
+        mysql::Error::IoError(_)
+            | mysql::Error::DriverError(
+                mysql::DriverError::CouldNotConnect(_) | mysql::DriverError::ConnectTimeout
+            )
+    ) {
+        return true;
+    }
+    matches!(
+        e,
+        mysql::Error::MySqlError(mysql_err)
+            if matches!(
+                mysql_err.code,
+                CR_CONNECTION_ERROR | CR_CONN_HOST_ERROR | CR_SERVER_GONE_ERROR | CR_SERVER_LOST
+            )
+    )
+}
+
+/// Maps a MySQL/MariaDB error code to an operator-facing context message.
+///
+/// Extracted from [`map_query_error`] so the named constants in
+/// [`crate::mysql_errors`] keep their grep-ability and the call site
+/// stays readable (todo #054). Returns a fallback message for codes the
+/// classifier does not recognise.
+///
+/// `ER_ACCESS_DENIED_ERROR` / `ER_DBACCESS_DENIED_ERROR` are handled
+/// upstream in [`map_query_error`] with a static, leak-free message
+/// (todo #064) and never reach this function in practice.
+fn classify_mysql_error_code(code: u16) -> &'static str {
+    match code {
+        ER_PARSE_ERROR => "SQL syntax error in query",
+        ER_NO_SUCH_TABLE => "Table does not exist",
+        ER_BAD_FIELD_ERROR => "Column does not exist or is ambiguous",
+        ER_TABLEACCESS_DENIED_ERROR => "Insufficient privileges for query execution",
+        ER_COLUMNACCESS_DENIED_ERROR => "Insufficient column privileges",
+        ER_BAD_DB_ERROR => "Unknown database",
+        CR_CONNECTION_ERROR => "Connection failed - server not reachable",
+        CR_CONN_HOST_ERROR => "Connection failed - server not responding",
+        CR_SERVER_GONE_ERROR => "Connection lost - server has gone away",
+        CR_SERVER_LOST => "Connection lost during query",
+        _ => "Query execution failed",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn classify_known_server_errors() {
+        assert_eq!(
+            classify_mysql_error_code(ER_PARSE_ERROR),
+            "SQL syntax error in query"
+        );
+        assert_eq!(
+            classify_mysql_error_code(ER_NO_SUCH_TABLE),
+            "Table does not exist"
+        );
+        assert_eq!(
+            classify_mysql_error_code(ER_BAD_FIELD_ERROR),
+            "Column does not exist or is ambiguous"
+        );
+    }
+
+    #[test]
+    fn classify_known_client_errors() {
+        assert_eq!(
+            classify_mysql_error_code(CR_SERVER_LOST),
+            "Connection lost during query"
+        );
+        assert_eq!(
+            classify_mysql_error_code(CR_SERVER_GONE_ERROR),
+            "Connection lost - server has gone away"
+        );
+        assert_eq!(
+            classify_mysql_error_code(CR_CONNECTION_ERROR),
+            "Connection failed - server not reachable"
+        );
+    }
+
+    #[test]
+    fn classify_unknown_error_falls_back() {
+        // 9999 is not a documented MySQL/MariaDB error code; fallback
+        // message must be returned rather than an empty / panicking arm.
+        assert_eq!(classify_mysql_error_code(9999), "Query execution failed");
+    }
+
+    fn mysql_server_error(code: u16, message: &str) -> mysql::Error {
+        mysql::Error::MySqlError(mysql::MySqlError {
+            state: "HY000".to_string(),
+            message: message.to_string(),
+            code,
+        })
+    }
+
+    #[test]
+    fn query_error_routes_to_exit_4_even_when_message_mentions_connection() {
+        // Regression: a syntax error referencing an identifier like
+        // `connection_log` previously had its server message substring-matched
+        // by `crate::exit`, returning EXIT_DB_AUTH_ERROR (3). The typed
+        // `GoldDiggerError::Query` path must classify it as a query failure (4)
+        // regardless of the (server-controlled) message text.
+        let err = mysql_server_error(
+            ER_PARSE_ERROR,
+            "You have an error in your SQL syntax near 'connection_log'",
+        );
+        let mapped = map_query_error(&err);
+        assert_eq!(
+            crate::exit::map_error_to_exit_code(&mapped),
+            crate::exit::EXIT_QUERY_ERROR
+        );
+    }
+
+    #[test]
+    fn connection_class_mysqlerror_codes_route_to_exit_3() {
+        // Defensive path: a MySqlError carrying a CR_* code. mysql 28.x does
+        // not actually produce these (CR_* surface as DriverError/IoError, see
+        // the real-path tests below), but is_connection_class_error keeps the
+        // CR_* arm as belt-and-suspenders, so pin all four codes to exit 3.
+        for code in [
+            CR_CONNECTION_ERROR,
+            CR_CONN_HOST_ERROR,
+            CR_SERVER_GONE_ERROR,
+            CR_SERVER_LOST,
+        ] {
+            let err = mysql_server_error(code, "Can't connect to MySQL server");
+            assert_eq!(
+                crate::exit::map_error_to_exit_code(&map_query_error(&err)),
+                crate::exit::EXIT_DB_AUTH_ERROR,
+                "CR_* code {code} should route to exit 3"
+            );
+        }
+    }
+
+    #[test]
+    fn io_error_during_query_routes_to_exit_3() {
+        // The real production path for a transport drop mid-query: mysql
+        // surfaces it as IoError, which is a connection-class failure (exit 3),
+        // not a query failure (exit 4).
+        let err = mysql::Error::IoError(std::io::Error::new(
+            std::io::ErrorKind::ConnectionReset,
+            "connection reset by peer",
+        ));
+        assert_eq!(
+            crate::exit::map_error_to_exit_code(&map_query_error(&err)),
+            crate::exit::EXIT_DB_AUTH_ERROR
+        );
+    }
+
+    #[test]
+    fn driver_could_not_connect_routes_to_exit_3() {
+        // The real production path for an unreachable server: DriverError.
+        let err = mysql::Error::DriverError(mysql::DriverError::CouldNotConnect(None));
+        assert_eq!(
+            crate::exit::map_error_to_exit_code(&map_query_error(&err)),
+            crate::exit::EXIT_DB_AUTH_ERROR
+        );
+    }
+
+    #[test]
+    fn access_denied_routes_to_exit_3_with_leak_free_message() {
+        let err = mysql_server_error(
+            ER_ACCESS_DENIED_ERROR,
+            "Access denied for user 'alice'@'10.0.0.5' (using password: YES)",
+        );
+        let mapped = map_query_error(&err);
+        assert_eq!(
+            crate::exit::map_error_to_exit_code(&mapped),
+            crate::exit::EXIT_DB_AUTH_ERROR
+        );
+        // The server message (which leaks user/IP) must not survive anywhere
+        // in the rendered anyhow chain, not just the top-level message.
+        let rendered = mapped
+            .chain()
+            .map(|c| c.to_string())
+            .collect::<Vec<_>>()
+            .join(": ");
+        assert!(!rendered.contains("alice"));
+        assert!(!rendered.contains("10.0.0.5"));
+    }
+}

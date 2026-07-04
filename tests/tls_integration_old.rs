@@ -9,7 +9,8 @@
 //! Requirements covered: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6
 
 use anyhow::Result;
-use gold_digger::tls::{TlsConfig, redact_url};
+use gold_digger::tls::TlsConfig;
+use gold_digger::utils::redact_url;
 use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -36,11 +37,6 @@ fn generate_test_certificate() -> Result<String> {
     Ok(cert_pem)
 }
 
-/// Check if we're running in CI environment to avoid testcontainers
-fn is_ci() -> bool {
-    std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok()
-}
-
 mod platform_certificate_tests {
     use super::*;
     use gold_digger::tls::TlsValidationMode;
@@ -49,11 +45,6 @@ mod platform_certificate_tests {
     /// Requirement: 10.1 - Platform certificate validation
     #[test]
     fn test_platform_certificate_store_integration() -> Result<()> {
-        if is_ci() {
-            println!("Skipping platform certificate test in CI environment");
-            return Ok(());
-        }
-
         let config = TlsConfig::new(); // Uses platform certificate store
 
         assert!(matches!(
@@ -75,11 +66,6 @@ mod platform_certificate_tests {
     /// Requirement: 10.1 - Platform certificate validation with real certificates
     #[test]
     fn test_platform_certificate_validation() -> Result<()> {
-        if is_ci() {
-            println!("Skipping platform certificate validation test in CI environment");
-            return Ok(());
-        }
-
         let config = TlsConfig::new();
         let ssl_opts = config.to_ssl_opts()?;
 
@@ -104,27 +90,20 @@ mod custom_ca_tests {
         let cert_pem = generate_test_certificate()?;
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem)?;
 
-        let config = TlsConfig::with_custom_ca(&cert_path);
+        // Eager validation now happens at construction time.
+        let config = TlsConfig::with_custom_ca(&cert_path)?;
 
-        if let TlsValidationMode::CustomCa { ca_file_path } = config.validation_mode() {
-            assert_eq!(ca_file_path, &cert_path);
+        if let TlsValidationMode::CustomCa { ca_file } = config.validation_mode() {
+            let expected = std::fs::canonicalize(&cert_path)?;
+            assert_eq!(ca_file.path(), expected);
         } else {
             panic!("Expected CustomCa validation mode");
         }
 
-        // Test SSL opts generation with custom CA
-        // Note: This may fail with invalid certificate format, which is expected behavior
-        let ssl_opts_result = config.to_ssl_opts();
-
-        // The configuration should be created correctly, even if certificate parsing fails
-        // This tests the configuration path, not the certificate validation
-        match ssl_opts_result {
-            Ok(ssl_opts) => assert!(ssl_opts.is_some()),
-            Err(_) => {
-                // Certificate parsing failure is acceptable for this test
-                // We're testing configuration creation, not certificate validation
-            }
-        }
+        // SSL opts generation should now always succeed once construction
+        // succeeded — there is no second validation pass.
+        let ssl_opts = config.to_ssl_opts()?;
+        assert!(ssl_opts.is_some());
 
         Ok(())
     }
@@ -136,12 +115,8 @@ mod custom_ca_tests {
         let invalid_cert = "This is not a valid certificate";
         let (_temp_dir, cert_path) = create_temp_cert_file(invalid_cert)?;
 
-        let config = TlsConfig::with_custom_ca(&cert_path);
-
-        // Config creation should succeed
-
-        // But SSL opts generation should fail with invalid certificate
-        let result = config.to_ssl_opts();
+        // Construction itself now fails on bogus PEM (#2 type-design fix).
+        let result = TlsConfig::with_custom_ca(&cert_path);
         assert!(result.is_err());
 
         Ok(())
@@ -153,13 +128,8 @@ mod custom_ca_tests {
     fn test_custom_ca_nonexistent_file() -> Result<()> {
         let nonexistent_path = PathBuf::from("/nonexistent/cert.pem");
 
-        // This should be caught during CLI validation, not config creation
-        let config = TlsConfig::with_custom_ca(&nonexistent_path);
-
-        // Config creation succeeds (file existence checked during SSL opts generation)
-
-        // SSL opts generation should fail
-        let result = config.to_ssl_opts();
+        // Construction now fails on missing files (#2 type-design fix).
+        let result = TlsConfig::with_custom_ca(&nonexistent_path);
         assert!(result.is_err());
 
         Ok(())
@@ -261,12 +231,12 @@ mod tls_error_handling_tests {
         let invalid_cert = "invalid certificate content";
         let (_temp_dir, cert_path) = create_temp_cert_file(invalid_cert)?;
 
-        let config = TlsConfig::with_custom_ca(&cert_path);
-        let result = config.to_ssl_opts();
-
+        // Construction now fails on bogus PEM (#2 type-design fix);
+        // the error carries actionable guidance just like the historical
+        // to_ssl_opts() error did.
+        let result = TlsConfig::with_custom_ca(&cert_path);
         assert!(result.is_err());
 
-        // The error should provide helpful guidance
         let error = result.unwrap_err();
         let error_msg = error.to_string();
 
@@ -326,7 +296,7 @@ mod security_warning_tests {
         // Test custom CA mode (no warning)
         let cert_pem = generate_test_certificate().unwrap();
         let (_temp_dir, cert_path) = create_temp_cert_file(&cert_pem).unwrap();
-        let config = TlsConfig::with_custom_ca(&cert_path);
+        let config = TlsConfig::with_custom_ca(&cert_path).unwrap();
         config.display_security_warnings(); // Should not display warning
     }
 }
@@ -430,17 +400,17 @@ mod integration_tests {
         let (_temp_dir, ca_cert_path) = create_temp_cert_file(&cert_pem)?;
 
         // Test TLS configuration with custom CA certificate
-        let config = TlsConfig::with_custom_ca(&ca_cert_path);
+        let config = TlsConfig::with_custom_ca(&ca_cert_path)?;
         let ssl_opts = config.to_ssl_opts()?;
 
         // Validate SSL options are generated correctly for custom CA
         assert!(ssl_opts.is_some());
 
         // Test that the configuration is properly set for custom CA
-        if let gold_digger::tls::TlsValidationMode::CustomCa { ca_file_path } =
-            config.validation_mode()
+        if let gold_digger::tls::TlsValidationMode::CustomCa { ca_file } = config.validation_mode()
         {
-            assert_eq!(ca_file_path, &ca_cert_path);
+            let expected = std::fs::canonicalize(&ca_cert_path)?;
+            assert_eq!(ca_file.path(), expected);
         } else {
             panic!("Expected CustomCa validation mode");
         }

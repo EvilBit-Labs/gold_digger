@@ -1,6 +1,15 @@
-use std::io::{BufWriter, Write};
+//! Tab-separated (TSV) writer mirroring the CSV writer's contract.
+//!
+//! Wraps the `csv` crate with `\t` as delimiter and [`QuoteStyle::Necessary`].
+//! Selected when the output file extension is `.tsv` or `.txt`, or as the
+//! default fallback when no recognised extension is present.
+//!
+//! Delegates to [`crate::delimited::write_delimited`]; the only difference
+//! between this module and [`crate::csv`] is the delimiter byte (todo #058).
 
-use csv::{QuoteStyle, WriterBuilder};
+use std::io::Write;
+
+use csv::QuoteStyle;
 
 /// Writes rows to a tab-delimited output using the provided writer.
 ///
@@ -18,16 +27,5 @@ where
     F: IntoIterator<Item = String>,
     W: Write,
 {
-    let buffered_output = BufWriter::with_capacity(64 * 1024, output);
-    let mut wtr = WriterBuilder::new()
-        .delimiter(b'\t')
-        .quote_style(QuoteStyle::Necessary)
-        .from_writer(buffered_output);
-
-    for row in rows {
-        wtr.write_record(row)?;
-    }
-
-    wtr.flush()?;
-    Ok(())
+    crate::delimited::write_delimited(rows, output, b'\t', QuoteStyle::Necessary)
 }

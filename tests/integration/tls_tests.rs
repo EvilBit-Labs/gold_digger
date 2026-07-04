@@ -13,7 +13,7 @@ use tempfile::TempDir;
 use super::containers::DatabaseContainer;
 
 // Import the proper TLS fixtures from the parent fixtures module
-use super::{TestDatabase, TestDatabasePlain, is_ci_environment, is_docker_available};
+use super::{TestDatabase, TestDatabasePlain, is_docker_available};
 use crate::fixtures::tls::EphemeralCertificate;
 
 /// Helper function to create a temporary certificate file for testing
@@ -35,14 +35,6 @@ fn create_temp_cert_file(content: &str) -> Result<(TempDir, PathBuf)> {
 fn generate_test_certificate() -> Result<String> {
     let ephemeral_cert = EphemeralCertificate::generate(Some("test-cert"))?;
     Ok(ephemeral_cert.ca_cert_pem)
-}
-
-/// Check if we're running in CI environment to avoid testcontainers
-///
-/// This is a convenience wrapper around the integration module function
-/// to maintain consistency in test naming.
-fn is_ci() -> bool {
-    is_ci_environment()
 }
 
 /// Skip test if Docker is not available
@@ -99,11 +91,6 @@ mod platform_certificate_tests {
     #[case("mysql")]
     #[case("mariadb")]
     fn test_platform_certificate_store(#[case] db_flavor: &str) -> Result<()> {
-        if is_ci() {
-            println!("Skipping platform certificate test in CI environment");
-            return Ok(());
-        }
-
         skip_if_no_docker();
 
         let config = TlsConfig::new(); // Uses platform certificate store
@@ -135,10 +122,7 @@ mod platform_certificate_tests {
     #[case("mysql")]
     #[case("mariadb")]
     fn test_platform_certificate_validation(#[case] _db_flavor: &str) -> Result<()> {
-        if is_ci() {
-            println!("Skipping platform certificate validation test in CI environment");
-            return Ok(());
-        }
+        skip_if_no_docker();
 
         let config = TlsConfig::new();
         let ssl_opts = config.to_ssl_opts()?;

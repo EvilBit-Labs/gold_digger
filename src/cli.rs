@@ -1,11 +1,45 @@
+//! Clap-derive definitions for the `gold_digger` CLI.
+//!
+//! Resolution precedence is CLI flags > environment variables > error.
+//! Fields that accept both (`db_url`, `output`) use clap's `env` attribute
+//! so the fallback shows up in `--help`. Subcommands live under [`Commands`]
+//! and output formats under [`OutputFormat`]; `completion` generates shell
+//! completion scripts via `clap_complete`.
+
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
+/// Clap mutually-exclusive group ID for the three TLS validation-mode
+/// flags (`--tls-ca-file`, `--insecure-skip-hostname-verify`,
+/// `--allow-invalid-certificate`). Centralised here so a future rename
+/// is a single edit, and so the literal isn't repeated in three
+/// `#[arg(group = ...)]` attributes (todo #121).
+const TLS_MODE_GROUP_ID: &str = "tls_mode";
+
 /// MySQL/MariaDB query tool with structured output
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 #[command(name = "gold_digger")]
-#[command(about = "A MySQL/MariaDB query tool that exports results to structured data files")]
+#[command(author)]
 #[command(version)]
+#[command(about = "A MySQL/MariaDB query tool that exports results to structured data files")]
+#[command(
+    long_about = "Gold Digger connects to MySQL/MariaDB databases, executes queries, and exports \
+results to CSV, JSON, or TSV files. It supports rustls-only TLS, environment-variable \
+fallbacks, structured exit codes, and shell completion generation."
+)]
+#[command(after_help = "EXAMPLES:
+  # CLI interface (preferred)
+  gold_digger --db-url mysql://user:pass@host:3306/db \\
+              --query 'SELECT id, name FROM users' \\
+              --output results.json --pretty
+
+  # Environment variable fallback
+  export DATABASE_URL='mysql://user:pass@host:3306/db'
+  gold_digger --query 'SELECT * FROM logs' --output /tmp/logs.csv
+
+  # Generate shell completion
+  gold_digger completion bash > ~/.local/share/bash-completion/completions/gold_digger
+")]
 pub struct Cli {
     /// Database connection URL (mysql://user:pass@host:port/db)
     #[arg(long, env = "DATABASE_URL", value_name = "URL")]
@@ -15,7 +49,19 @@ pub struct Cli {
     #[arg(short = 'q', long, conflicts_with = "query_file", value_name = "SQL")]
     pub query: Option<String>,
 
-    /// File containing SQL query to execute
+    /// File containing SQL query to execute.
+    ///
+    /// Path-safety guards (todo #023): the path is canonicalized via
+    /// `std::fs::canonicalize` before the file is read, which rejects
+    /// symlinks that cross filesystem boundaries and resolves traversal
+    /// components (`..`). The extension must be `.sql`, `.txt`, or
+    /// missing; recognised executable extensions (`.exe`, `.dll`, `.so`,
+    /// `.dylib`, `.bin`) are refused with a configuration error to stop
+    /// accidental reads of binaries as SQL. Files larger than 10 MiB are
+    /// refused to cap DoS risk. Do not run gold_digger as `root` with
+    /// `--query-file` pointing at externally-supplied paths, and prefer a
+    /// dedicated directory owned by the gold_digger user for query files.
+    /// See SECURITY.md.
     #[arg(long, conflicts_with = "query", value_name = "FILE")]
     pub query_file: Option<PathBuf>,
 
@@ -43,9 +89,39 @@ pub struct Cli {
     #[arg(long)]
     pub allow_empty: bool,
 
-    /// Print current configuration as JSON and exit
+    /// Overwrite the output file if it already exists.
+    ///
+    /// By default, gold_digger refuses to clobber an existing output file
+    /// (path-safety: todo #024). It opens the output with
+    /// `O_CREAT | O_EXCL` semantics on Unix so a pre-existing file — or a
+    /// symlink at the target path — is a hard error. Pass `--force` to
+    /// request explicit overwrite; symlinks at the target are still
+    /// refused on Unix via `O_NOFOLLOW`. This guards against an attacker
+    /// pre-placing a symlink at a predictable output path (e.g.
+    /// `/tmp/results.json`) and redirecting the write to an
+    /// attacker-chosen target. See SECURITY.md.
+    #[arg(long)]
+    pub force: bool,
+
+    /// Print current configuration as JSON and exit.
+    ///
+    /// Output uses a best-effort credential redactor (URL passwords,
+    /// `password=`, `token=`, `api_key=`, `identified by`). It does NOT
+    /// catch arbitrary base64/hex/JWT secrets or non-English secret
+    /// labels. Review the JSON before sharing in bug reports or chat.
     #[arg(long)]
     pub dump_config: bool,
+
+    /// Maximum accepted size for `--query-file`, in bytes.
+    ///
+    /// Caps the size of the file read for `--query-file` to bound DoS
+    /// risk from an attacker pointing the flag at a huge file on a
+    /// shared host (todo #023). Defaults to 10 MiB. Raise only if you
+    /// have a legitimate hand-written query that exceeds the default;
+    /// SQL much larger than this is almost always machine-generated and
+    /// should be loaded from a different surface.
+    #[arg(long, value_name = "BYTES")]
+    pub max_query_file_size: Option<u64>,
 
     /// TLS configuration options
     #[command(flatten)]
@@ -55,7 +131,8 @@ pub struct Cli {
     pub command: Option<Commands>,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Debug)]
+#[non_exhaustive]
 pub enum Commands {
     /// Generate shell completion scripts
     Completion {
@@ -64,7 +141,8 @@ pub enum Commands {
     },
 }
 
-#[derive(ValueEnum, Clone, Debug)]
+#[derive(ValueEnum, Copy, Clone, Debug)]
+#[non_exhaustive]
 pub enum Shell {
     Bash,
     Zsh,
@@ -72,24 +150,75 @@ pub enum Shell {
     PowerShell,
 }
 
-/// TLS configuration options (mutually exclusive)
+/// TLS configuration options. The three validation-mode flags
+/// (`--tls-ca-file`, `--insecure-skip-hostname-verify`,
+/// `--allow-invalid-certificate`) are mutually exclusive.
 #[derive(Args, Debug, Clone)]
-#[group(id = "tls_mode", multiple = false)]
 pub struct TlsOptions {
-    /// Path to CA certificate file for trust anchor pinning
-    #[arg(long, group = "tls_mode")]
+    /// Path to CA certificate file for trust anchor pinning.
+    ///
+    /// Gold Digger validates the server certificate against this CA
+    /// instead of the platform trust store. Safe for self-signed or
+    /// private-CA infrastructure; chain, hostname, and time checks all
+    /// still run.
+    ///
+    /// **Residual attack surface:** compromise of the specified CA's
+    /// private key lets an attacker present a forged certificate that
+    /// this binary will trust. Protect the CA key with the same care as
+    /// a production signing key.
+    #[arg(long, group = TLS_MODE_GROUP_ID)]
     pub tls_ca_file: Option<PathBuf>,
 
-    /// Skip hostname verification (keeps chain and time validation)
-    #[arg(long, group = "tls_mode")]
+    /// Skip hostname verification (keeps chain and time validation).
+    ///
+    /// Certificate chain still has to be signed by a trusted CA and
+    /// fall within its validity window. Use when the server presents a
+    /// certificate for a different name than the one you connect to
+    /// (e.g., connecting to an IP when the cert is for a hostname).
+    ///
+    /// **Residual attack surface (CWE-297):** an attacker who obtains
+    /// any certificate signed by a CA you trust — for any domain — can
+    /// MITM the connection. This flag removes the "certificate must
+    /// match this host" binding. Do not enable against
+    /// internet-reachable databases.
+    #[arg(long, group = TLS_MODE_GROUP_ID)]
     pub insecure_skip_hostname_verify: bool,
 
-    /// Disable certificate validation entirely (DANGEROUS)
-    #[arg(long, group = "tls_mode")]
+    /// Disable certificate validation entirely (DANGEROUS — full MITM exposure).
+    ///
+    /// Disables BOTH the certificate chain and hostname checks. Any
+    /// network attacker who can intercept the TCP connection can present
+    /// an attacker-controlled certificate, complete the TLS handshake,
+    /// and read or modify the database protocol — including plaintext
+    /// credentials. Never use against a production database. Prefer
+    /// `--tls-ca-file <path>` for self-signed CAs (full validation
+    /// against an explicit anchor) or `--insecure-skip-hostname-verify`
+    /// for hostname-only mismatches. See SECURITY.md.
+    #[arg(long, group = TLS_MODE_GROUP_ID)]
     pub allow_invalid_certificate: bool,
 }
 
-#[derive(ValueEnum, Clone, Debug)]
+impl TlsOptions {
+    /// Builds a [`crate::tls::TlsConfig`] from the parsed CLI flags.
+    ///
+    /// # Why this lives in the CLI layer (#045)
+    ///
+    /// `TlsConfig` is an infrastructure primitive that should compile
+    /// without any `clap`-decorated input type. The adapter from
+    /// [`TlsOptions`] → [`crate::tls::TlsConfig`] lives here so the `tls`
+    /// module depends only on primitive types (bool + `Option<PathBuf>`),
+    /// enabling a future extraction into a sibling crate.
+    pub fn to_tls_config(&self) -> Result<crate::tls::TlsConfig, crate::tls::TlsError> {
+        crate::tls::TlsConfig::from_cli_args(
+            self.tls_ca_file.as_ref(),
+            self.insecure_skip_hostname_verify,
+            self.allow_invalid_certificate,
+        )
+    }
+}
+
+#[derive(ValueEnum, Copy, Clone, Debug)]
+#[non_exhaustive]
 pub enum OutputFormat {
     Csv,
     Json,
@@ -97,11 +226,20 @@ pub enum OutputFormat {
 }
 
 impl OutputFormat {
-    pub fn from_extension(path: &std::path::Path) -> Self {
-        match path.extension().and_then(|s| s.to_str()) {
-            Some("csv") => Self::Csv,
-            Some("json") => Self::Json,
-            _ => Self::Tsv, // Default fallback
+    /// Infers an output format from the file extension.
+    ///
+    /// Matching is case-insensitive (`.CSV`, `.Json`, `.TSV` all recognised)
+    /// so Windows path-preservation does not silently flip the output format.
+    /// Returns `None` for missing or unrecognised extensions so the caller
+    /// can surface a clear "specify --format" error instead of silently
+    /// defaulting to TSV (see todo #019; fail-fast per coding-style rule).
+    pub fn from_extension(path: &std::path::Path) -> Option<Self> {
+        let ext = path.extension().and_then(|s| s.to_str())?;
+        match ext.to_ascii_lowercase().as_str() {
+            "csv" => Some(Self::Csv),
+            "json" => Some(Self::Json),
+            "tsv" | "tab" | "txt" => Some(Self::Tsv),
+            _ => None,
         }
     }
 
@@ -111,5 +249,64 @@ impl OutputFormat {
             Self::Json => "json",
             Self::Tsv => "tsv",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn from_extension_csv_lowercase() {
+        assert!(matches!(
+            OutputFormat::from_extension(&PathBuf::from("out.csv")),
+            Some(OutputFormat::Csv)
+        ));
+    }
+
+    #[test]
+    fn from_extension_json_lowercase() {
+        assert!(matches!(
+            OutputFormat::from_extension(&PathBuf::from("out.json")),
+            Some(OutputFormat::Json)
+        ));
+    }
+
+    #[test]
+    fn from_extension_tsv_lowercase() {
+        assert!(matches!(
+            OutputFormat::from_extension(&PathBuf::from("out.tsv")),
+            Some(OutputFormat::Tsv)
+        ));
+    }
+
+    #[test]
+    fn from_extension_uppercase_is_case_insensitive() {
+        assert!(matches!(
+            OutputFormat::from_extension(&PathBuf::from("OUT.CSV")),
+            Some(OutputFormat::Csv)
+        ));
+        assert!(matches!(
+            OutputFormat::from_extension(&PathBuf::from("OUT.JSON")),
+            Some(OutputFormat::Json)
+        ));
+        assert!(matches!(
+            OutputFormat::from_extension(&PathBuf::from("OUT.Tsv")),
+            Some(OutputFormat::Tsv)
+        ));
+    }
+
+    #[test]
+    fn from_extension_unknown_returns_none() {
+        assert!(OutputFormat::from_extension(&PathBuf::from("out.xml")).is_none());
+        assert!(OutputFormat::from_extension(&PathBuf::from("out.yaml")).is_none());
+        assert!(OutputFormat::from_extension(&PathBuf::from("out.data")).is_none());
+    }
+
+    #[test]
+    fn from_extension_missing_returns_none() {
+        assert!(OutputFormat::from_extension(&PathBuf::from("out")).is_none());
+        assert!(OutputFormat::from_extension(&PathBuf::from("")).is_none());
     }
 }

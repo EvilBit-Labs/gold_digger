@@ -35,6 +35,13 @@ allow = [
     "Zlib",
 ]
 
+# Manual license clarifications for crates that ship a LICENSE file but do
+# not set the `license` field in their Cargo.toml manifest.
+[[licenses.clarify]]
+crate = "webpki@0.22.4"
+expression = "ISC"
+license-files = [{ path = "LICENSE", hash = 0x001c7e6c }]
+
 [bans]
 multiple-versions = "deny"
 wildcards = 'deny'
@@ -48,8 +55,11 @@ deny = [
 skip = [
     # Allow multiple versions of getrandom - required by different crypto libraries
     { crate = "getrandom", versions = ["0.2.16", "0.3.4"], reason = "Required by different crypto libraries (ring vs jobserver)" },
-    # Allow multiple versions of windows-sys - required by different Windows libraries  
-    { crate = "windows-sys", versions = ["0.52.0", "0.61.2"], reason = "Required by different Windows libraries (socket2 vs anstyle)" },
+    # owo-colors 4.3 depends on both supports-color 2.x (via is-terminal) and
+    # 3.x (direct). Until upstream consolidates we tolerate both — the whole
+    # subtree is only compiled for our ANSI-capable stderr path and the
+    # binary size delta is negligible. Tracks todo #161.
+    { crate = "supports-color", versions = ["2.1.0", "3.0.2"], reason = "owo-colors 4.3 transitively pulls two versions; overhead is negligible and upstream consolidation is pending (todo #161)" },
 ]
 skip-tree = []
 

@@ -77,7 +77,7 @@ fmt-check:
 [group('quality')]
 lint:
     @{{ mise_exec }} cargo clippy --all-targets --release -- -D warnings
-    @{{ mise_exec }} cargo clippy --all-targets --no-default-features --features "json csv additional_mysql_types verbose" -- -D warnings
+    @{{ mise_exec }} cargo clippy --all-targets --no-default-features --features "additional_mysql_types verbose" -- -D warnings
 
 # Lint SQL files with sqlfluff
 [group('quality')]
@@ -121,9 +121,13 @@ build-release:
     @{{ mise_exec }} cargo build --release
 
 # Build minimal version (no default features)
+#
+# Note (todo #011): the former `csv`/`json` feature markers were removed because
+# they never actually gated compilation. CSV and JSON output are now built in
+# unconditionally; a minimal build just drops `additional_mysql_types` + `verbose`.
 [group('build')]
 build-minimal:
-    @{{ mise_exec }} cargo build --release --no-default-features --features "csv,json"
+    @{{ mise_exec }} cargo build --release --no-default-features
 
 # Build all feature combinations
 [group('build')]
@@ -155,6 +159,14 @@ test:
 [group('test')]
 test-no-docker:
     @{{ mise_exec }} cargo nextest run
+
+# Regenerate insta snapshots in-place. Use after intentional UX/output
+# changes (e.g. --help text). Reviews via `git diff` on tests/snapshots/.
+# DO NOT run `cargo insta review --accept` -- the harness uses
+# INSTA_UPDATE=always; see CONTRIBUTING.md (todo #160).
+[group('test')]
+insta-review:
+    @INSTA_UPDATE=always {{ mise_exec }} cargo test
 
 # Run integration tests (requires Docker)
 [group('test')]
@@ -512,7 +524,7 @@ ci-full:
     echo "[1/6] Quality checks..."
     {{ mise_exec }} cargo fmt --check
     {{ mise_exec }} cargo clippy -- -D warnings
-    {{ mise_exec }} cargo clippy --no-default-features --features "json csv additional_mysql_types verbose" -- -D warnings
+    {{ mise_exec }} cargo clippy --no-default-features --features "additional_mysql_types verbose" -- -D warnings
 
     # Job 2: Test TLS functionality (mirrors test-tls job)
     echo "[2/6] Testing TLS functionality..."
@@ -537,13 +549,13 @@ ci-full:
     # Job 3: Test with different feature combinations (mirrors test-features job)
     echo "[3/6] Testing feature combinations..."
     {{ mise_exec }} cargo nextest run
-    {{ mise_exec }} cargo nextest run --no-default-features --features "json csv additional_mysql_types verbose"
+    {{ mise_exec }} cargo nextest run --no-default-features --features "additional_mysql_types verbose"
     {{ mise_exec }} cargo build --release
-    {{ mise_exec }} cargo build --release --no-default-features --features "json csv additional_mysql_types verbose"
+    {{ mise_exec }} cargo build --release --no-default-features --features "additional_mysql_types verbose"
 
     "$BIN" --help | grep -qE "(tls-ca-file|insecure-skip-hostname-verify|allow-invalid-certificate)"
     {{ mise_exec }} cargo tree | grep -qE "(rustls|rustls-native-certs)"
-    {{ mise_exec }} cargo tree --no-default-features --features "json csv additional_mysql_types verbose" \
+    {{ mise_exec }} cargo tree --no-default-features --features "additional_mysql_types verbose" \
         | grep -qE "(rustls|rustls-native-certs)"
     ! {{ mise_exec }} cargo tree | grep -q "native-tls"
 
@@ -574,7 +586,7 @@ ci-full:
     echo "[6/6] Generating coverage reports..."
     {{ mise_exec }} cargo llvm-cov --workspace --lcov --output-path lcov-default.info
     {{ mise_exec }} cargo llvm-cov --workspace --lcov --output-path lcov-minimal.info \
-        --no-default-features --features "json csv additional_mysql_types verbose"
+        --no-default-features --features "additional_mysql_types verbose"
     cat lcov-default.info lcov-minimal.info > lcov.info
 
     echo "CI workflow equivalent completed successfully!"

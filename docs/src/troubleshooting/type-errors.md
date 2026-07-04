@@ -57,7 +57,7 @@ FROM accounts;
 
 ### TypeTransformer Handles Type Conversion
 
-TypeTransformer (used automatically by gold_digger's output modules) provides safe, panic-free conversion for all MySQL value types. The output modules (`csv::write`, `json::write_typed`, `tab::write`) delegate to TypeTransformer for value conversion.
+TypeTransformer (used automatically by gold_digger's output modules) provides safe, panic-free conversion for all MySQL value types. The output modules (`csv::write`, `json::write`, `tab::write`) delegate to TypeTransformer for value conversion.
 
 You do not need defensive CAST statements in most cases.
 

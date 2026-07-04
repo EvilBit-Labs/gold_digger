@@ -6,11 +6,72 @@
 #![allow(dead_code)]
 
 use anyhow::{Context, Result};
+use assert_cmd::Command;
 use assert_cmd::cargo;
 use std::collections::HashMap;
 use std::path::Path;
 use std::process::Output;
 use std::time::{Duration, Instant};
+
+/// Environment variables that Clap reads via `#[arg(env = "...")]`. These
+/// must be removed from any spawned binary so that user-shell exports do not
+/// leak into integration tests (recorded as a recurring failure mode in
+/// project memory). `NO_COLOR` is included for forward compatibility with
+/// upcoming color/ANSI work.
+pub const ENV_VARS_TO_REMOVE: &[&str] =
+    &["DATABASE_URL", "DATABASE_QUERY", "OUTPUT_FILE", "NO_COLOR"];
+
+/// Returns a fresh `assert_cmd::Command` for the `gold_digger` binary with
+/// every Clap-bound environment variable cleared. Always prefer this helper
+/// over building `cargo_bin_cmd!("gold_digger")` ad hoc — it prevents the
+/// developer's shell environment from silently changing test behaviour.
+///
+/// This is the single source of truth for the env-isolation list -- all
+/// integration-test command construction (including [`GoldDiggerCommand::execute`])
+/// should funnel through this helper rather than re-listing
+/// [`ENV_VARS_TO_REMOVE`] inline.
+///
+/// # Returns
+/// * `Command` - An `assert_cmd::Command` ready to have args, env vars, or
+///   working directories layered on top.
+///
+/// # Example
+///
+///     use crate::test_support::cli::clean_cmd;
+///     let mut cmd = clean_cmd();
+///     cmd.arg("--help");
+///     let _output = cmd.output().expect("run gold_digger --help");
+pub fn clean_cmd() -> Command {
+    let mut cmd = cargo::cargo_bin_cmd!("gold_digger");
+    for var in ENV_VARS_TO_REMOVE {
+        cmd.env_remove(var);
+    }
+    cmd
+}
+
+/// Like [`clean_cmd`] but additionally asserts `NO_COLOR=1` so tracing
+/// formatters and any future colorised diagnostics emit deterministic
+/// ASCII for stdout/stderr separation snapshots and contract tests.
+///
+/// Use this in tests that diff the literal stderr/stdout payload (e.g.
+/// `tests/stream_separation.rs`) where ANSI colour escapes from a colour-
+/// detecting parent terminal would make assertions brittle.
+///
+/// # Returns
+/// * `Command` - An `assert_cmd::Command` with both the Clap-bound env vars
+///   stripped and `NO_COLOR=1` exported, suitable for byte-stable snapshots.
+///
+/// # Example
+///
+///     use crate::test_support::cli::clean_cmd_no_color;
+///     let mut cmd = clean_cmd_no_color();
+///     cmd.arg("--version");
+///     let _output = cmd.output().expect("run gold_digger --version");
+pub fn clean_cmd_no_color() -> Command {
+    let mut cmd = clean_cmd();
+    cmd.env("NO_COLOR", "1");
+    cmd
+}
 
 /// CLI command builder for Gold Digger tests
 #[derive(Debug, Clone)]
@@ -141,9 +202,9 @@ impl GoldDiggerCommand {
     pub fn execute(self) -> Result<CommandResult> {
         let start_time = Instant::now();
 
-        // Using assert_cmd v2.1+ cargo::cargo_bin_cmd! macro for command construction
-        // See: https://github.com/assert-rs/assert_cmd/blob/main/CHANGELOG.md#210
-        let mut cmd = cargo::cargo_bin_cmd!("gold_digger");
+        // Construct via `clean_cmd()` so the env-isolation list (ENV_VARS_TO_REMOVE)
+        // stays single-sourced. Per-instance args/env are layered on below.
+        let mut cmd = clean_cmd();
 
         // Add database URL
         if let Some(url) = &self.db_url {

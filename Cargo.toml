@@ -142,11 +142,13 @@ cargo_common_metadata = "allow"    # TODO: Revisit this
 multiple_crate_versions = "allow"
 
 [features]
-default = ["json", "csv", "additional_mysql_types", "verbose"]
-
-# Output format support
-json = []  # Enable JSON output format with deterministic field ordering
-csv = []   # Enable CSV output format with RFC4180 compliance
+default = ["additional_mysql_types", "verbose"]
+# NOTE (todo #011): the former `json` and `csv` features were empty marker
+# flags -- the modules were always compiled, the `csv` crate was always
+# linked, and `--no-default-features --features "json csv"` produced a
+# binary byte-identical to the default build. Gating JSON/CSV output is
+# therefore not a real build-time choice; the flags were removed to stop
+# advertising a non-existent attack-surface reduction.
 
 # Extended MySQL type support for complex data types
 additional_mysql_types = [
@@ -172,16 +174,45 @@ anyhow = "1.0.102"
 clap = { version = "4.6.1", features = ["derive", "env"] }
 clap_complete = "4.6.5"
 csv = "1.4.0"
+indicatif = "0.18.4"
+# Stack-buffered numeric formatters: itoa for integers, ryu for floats.
+# Used by `TypeTransformer::value_to_string` to avoid one heap allocation
+# per numeric cell on the streaming sink path (todo #071).
+itoa = "1.0.18"
 mysql = { version = "28.0.0", default-features = false, features = ["rustls-tls", "minimal"] }
 mysql_common = { version = "0.37.2", optional = true }
+owo-colors = { version = "4.3.0", features = ["supports-colors"] }
 regex = "1.12.4"
 # TLS dependencies
 rustls = { version = "0.23.40", features = ["ring"] }
 rustls-native-certs = "0.8.4"
 rustls-pki-types = "1.14.1"
+ryu = "1.0.23"
 serde_json = "1.0.150"
 thiserror = "2.0.18"
+# Structured logging with credential redaction. The default feature set of
+# `tracing-subscriber` (fmt, ansi, tracing-log, smallvec, std) is enough for
+# the human-readable plain-text output this binary emits on stderr; the
+# `env-filter` feature adds `EnvFilter` which is used to wire `cli.verbose` /
+# `cli.quiet` / `RUST_LOG` into per-level filtering.
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 url = "2.5.8"
+
+# Linux-only: provides `renameat2(2)` with `RENAME_NOREPLACE` for an atomic
+# fail-on-clobber rename in `sink::commit_tmp` (CRITICAL #2 — TOCTOU rename
+# race). Plain `std::fs::rename` would unconditionally overwrite a target
+# planted in the window between the pre-flight `output.exists()` check and
+# the rename. macOS / non-Linux Unix use `std::fs::hard_link` for the same
+# guarantee; Windows uses `OpenOptions::create_new` to acquire exclusive
+# ownership of the target.
+[target.'cfg(target_os = "linux")'.dependencies]
+nix = { version = "0.31.2", default-features = false, features = ["fs"] }
+
+# Unix-only: provides `O_NOFOLLOW` for O_NOFOLLOW path-safety on output
+# file creation (todo #024). Used only via `OpenOptions::custom_flags`.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.186"
 
 [dev-dependencies]
 assert_cmd = "2.2.2"
@@ -189,6 +220,7 @@ criterion = { version = "0.8.2", features = ["html_reports"] }
 insta = "1.47.2"
 predicates = "3.1.4"
 process_control = "5.2.0"
+proptest = "1.11.0"
 rcgen = "0.14.8"
 regex = "1.12.4"
 rstest = "0.26.1"
@@ -218,12 +250,22 @@ harness = false
 name = "memory_usage"
 harness = false
 
+[[bench]]
+name = "memory_ceiling"
+harness = false
+
 [profile.release]
 strip = true
 codegen-units = 1
+lto = "fat"
+# Keep unwinding on panic. The streaming sinks in `src/sink.rs` and the
+# `ProgressGuard` in `src/run.rs` rely on `Drop` to clean up partial
+# `<output>.tmp` files and to clear the progress bar. `panic = "abort"`
+# would skip those `Drop` impls and leak partial output to disk if an
+# unexpected panic ever escapes the streaming path.
+panic = "unwind"
 
 # The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"
-lto = "thin"
 overflow-checks = true

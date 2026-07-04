@@ -15,6 +15,7 @@
 use anyhow::Result;
 // Import from the integration test module
 mod integration;
+mod test_support;
 
 use integration::{
     CargoNextestIntegration, CiEnvironment, DatabaseType, OutputFormat, TestCase,
