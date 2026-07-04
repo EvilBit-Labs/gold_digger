@@ -286,7 +286,7 @@ Error: Command not found or execution failed
 ```toml
 # In Cargo.toml
 [dev-dependencies]
-assert_cmd = "2.0"
+assert_cmd = "2.2"
 predicates = "3.0"
 ```
 
@@ -319,6 +319,8 @@ predicates = "3.0"
        }
    }
    ```
+
+   **Note:** As of assert_cmd 2.2.0, `cargo_bin()` panics if it cannot find the binary path rather than returning an error. If you see a panic during test execution related to `cargo_bin()`, verify that the binary name is correct, the binary has been built (`cargo build` or `cargo test` which builds before running), and you are running from the correct directory.
 
 2. **Test with Environment Variables:**
 
