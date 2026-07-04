@@ -6,7 +6,7 @@ authors = ["UncleSp1d3r <unclesp1d3r@evilbitlabs.io>"]
 description = "A MySQL/MariaDB query tool with structured output (CSV, JSON, TSV) and rustls TLS"
 readme = "README.md"
 repository = "https://github.com/EvilBit-Labs/gold_digger"
-homepage = "https://evilbitlabs.io/gold_digger/"
+homepage = "https://evilbit-labs.github.io/gold_digger/"
 license = "MIT"
 keywords = ["mysql", "query", "tool", "mariadb"]
 categories = ["command-line-utilities", "database"]
@@ -169,36 +169,36 @@ integration_tests = []  # Enable heavy integration tests requiring external data
 
 [dependencies]
 anyhow = "1.0.102"
-clap = { version = "4.5.60", features = ["derive", "env"] }
-clap_complete = "4.5.66"
+clap = { version = "4.6.1", features = ["derive", "env"] }
+clap_complete = "4.6.5"
 csv = "1.4.0"
-mysql = { version = "27.0.0", default-features = false, features = ["rustls-tls", "minimal"] }
-mysql_common = { version = "0.36.2", optional = true }
-regex = "1.12.3"
+mysql = { version = "28.0.0", default-features = false, features = ["rustls-tls", "minimal"] }
+mysql_common = { version = "0.37.2", optional = true }
+regex = "1.12.4"
 # TLS dependencies
-rustls = { version = "0.23.37", features = ["ring"] }
-rustls-native-certs = "0.8.3"
-rustls-pki-types = "1.14.0"
-serde_json = "1.0.149"
+rustls = { version = "0.23.40", features = ["ring"] }
+rustls-native-certs = "0.8.4"
+rustls-pki-types = "1.14.1"
+serde_json = "1.0.150"
 thiserror = "2.0.18"
 url = "2.5.8"
 
 [dev-dependencies]
-assert_cmd = "2.2.0"
+assert_cmd = "2.2.2"
 criterion = { version = "0.8.2", features = ["html_reports"] }
-insta = "1.46.3"
+insta = "1.47.2"
 predicates = "3.1.4"
 process_control = "5.2.0"
-rcgen = "0.14.7"
-regex = "1.12.3"
+rcgen = "0.14.8"
+regex = "1.12.4"
 rstest = "0.26.1"
-sysinfo = "0.38.3"
+sysinfo = "0.39.3"
 temp-env = "0.3.6"
-tempfile = "3.26.0"
-testcontainers = { version = "0.27.1", features = ["blocking"] }
+tempfile = "3.27.0"
+testcontainers = { version = "0.27.3", features = ["blocking"] }
 testcontainers-modules = { version = "0.15.0", features = ["mariadb", "mysql", "blocking"] }
 time = { version = "0.3.47", features = ["macros"] }
-tokio = { version = "1.50.0", features = ["full"] }
+tokio = { version = "1.52.3", features = ["full"] }
 walkdir = "2.5.0"
 
 # Benchmarks for performance testing

@@ -123,3 +123,21 @@ megalinter-reports/
 
 # Insta snapshot review files
 *.snap.new
+
+**/*.local.*
+
+# AI coding assistants (local state, not shared)
+docs/plans/
+.agent/
+.agents/
+.augment/
+.claude/
+.context/
+.cursor/
+.roo/
+.full-review/
+SECURITY_AUDIT.md
+todos/
+**/tessl__*
+.tessl/tiles/
+.tessl/RULES.md
