@@ -30,4 +30,13 @@ ignore = [
     # it is never compiled or shipped. The fix is rkyv 0.8, which rust_decimal
     # has not adopted. Remove once rust_decimal moves to rkyv >= 0.8.17.
     "RUSTSEC-2026-0235",
+
+    # astral-tokio-tar is unmaintained (no patched version). Test-only via
+    # testcontainers 0.27; not shipped. Revisit when bumping testcontainers.
+    "RUSTSEC-2026-0440",
+
+    # chrono is unmaintained (no patched version). Only in Cargo.lock as an
+    # optional dependency of serde_with (via testcontainers, test-only) that
+    # nothing enables; `cargo tree -i chrono` prints nothing.
+    "RUSTSEC-2026-0543",
 ]
