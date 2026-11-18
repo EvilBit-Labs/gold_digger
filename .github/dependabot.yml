@@ -27,6 +27,11 @@ updates:
           interval: weekly
       commit-message:
           prefix: "chore(deps)"
+      # mysql_common must match the version the mysql crate depends on. A
+      # standalone bump puts two mysql_common versions in the graph and the
+      # Row/Column types stop unifying (PR #257). It moves when mysql moves.
+      ignore:
+          - dependency-name: "mysql_common"
       groups:
           # Security-sensitive crates (mysql*, rustls*, clap*, tokio*, serde*)
           # are intentionally excluded from grouping below so each ships as an
