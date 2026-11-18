@@ -60,6 +60,12 @@ skip = [
     # subtree is only compiled for our ANSI-capable stderr path and the
     # binary size delta is negligible. Tracks todo #161.
     { crate = "supports-color", versions = ["2.1.0", "3.0.2"], reason = "owo-colors 4.3 transitively pulls two versions; overhead is negligible and upstream consolidation is pending (todo #161)" },
+    # mysql_common 0.37 pins base64 0.22 while pem 4 (via mysql 28) moved to
+    # 0.23. Both are upstream of us; drop when mysql_common catches up.
+    { crate = "base64", versions = ["0.22.1", "0.23.1"], reason = "mysql_common 0.37 (0.22) vs pem 4 via mysql 28 (0.23); upstream split" },
+    # clap_derive and thiserror-impl moved to syn 3; the mysql derive stack,
+    # serde_derive and the icu proc-macros are still on syn 2. Build-time only.
+    { crate = "syn", versions = ["2.0.117", "3.0.2"], reason = "proc-macro ecosystem mid-migration from syn 2 to syn 3; build-time only" },
 ]
 skip-tree = []
 

@@ -23,4 +23,11 @@ ignore = [
     # build-time dependency we cannot directly control and which is not shipped
     # in the binary. Waiting for mysql to drop it.
     "RUSTSEC-2026-0173",
+
+    # rkyv 0.7 out-of-bounds read on archives containing Rc/Arc. rkyv is only
+    # in Cargo.lock as an optional dependency of rust_decimal (its `rkyv`
+    # feature, which nothing enables); `cargo tree -i rkyv` prints nothing, so
+    # it is never compiled or shipped. The fix is rkyv 0.8, which rust_decimal
+    # has not adopted. Remove once rust_decimal moves to rkyv >= 0.8.17.
+    "RUSTSEC-2026-0235",
 ]
