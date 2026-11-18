@@ -335,36 +335,47 @@ version = "29.6.0"
 backend = "aqua:docker/cli"
 
 [tools.docker-cli."platforms.linux-arm64"]
+checksum = "sha256:17aede86d504841427b92e52d8ebb50d3fa67e5fd6d6a90a4224dfc81cd79ebc"
 url = "https://download.docker.com/linux/static/stable/aarch64/docker-29.6.0.tgz"
 
 [tools.docker-cli."platforms.linux-arm64-musl"]
+checksum = "sha256:17aede86d504841427b92e52d8ebb50d3fa67e5fd6d6a90a4224dfc81cd79ebc"
 url = "https://download.docker.com/linux/static/stable/aarch64/docker-29.6.0.tgz"
 
 [tools.docker-cli."platforms.linux-x64"]
+checksum = "sha256:4d2f6782406b56eb43a519ad5078a6a79abe4d663328acb69136aceff5e05224"
 url = "https://download.docker.com/linux/static/stable/x86_64/docker-29.6.0.tgz"
 
 [tools.docker-cli."platforms.linux-x64-baseline"]
+checksum = "sha256:4d2f6782406b56eb43a519ad5078a6a79abe4d663328acb69136aceff5e05224"
 url = "https://download.docker.com/linux/static/stable/x86_64/docker-29.6.0.tgz"
 
 [tools.docker-cli."platforms.linux-x64-musl"]
+checksum = "sha256:4d2f6782406b56eb43a519ad5078a6a79abe4d663328acb69136aceff5e05224"
 url = "https://download.docker.com/linux/static/stable/x86_64/docker-29.6.0.tgz"
 
 [tools.docker-cli."platforms.linux-x64-musl-baseline"]
+checksum = "sha256:4d2f6782406b56eb43a519ad5078a6a79abe4d663328acb69136aceff5e05224"
 url = "https://download.docker.com/linux/static/stable/x86_64/docker-29.6.0.tgz"
 
 [tools.docker-cli."platforms.macos-arm64"]
+checksum = "sha256:bae637173cad59bc513b3fa26136e68a68684a65c472db501168e6c5d6a36d74"
 url = "https://download.docker.com/mac/static/stable/aarch64/docker-29.6.0.tgz"
 
 [tools.docker-cli."platforms.macos-x64"]
+checksum = "sha256:74ed2389fe274bab26ff0a5e109048616a0e5cdc748a2a4f312880eda888269c"
 url = "https://download.docker.com/mac/static/stable/x86_64/docker-29.6.0.tgz"
 
 [tools.docker-cli."platforms.macos-x64-baseline"]
+checksum = "sha256:74ed2389fe274bab26ff0a5e109048616a0e5cdc748a2a4f312880eda888269c"
 url = "https://download.docker.com/mac/static/stable/x86_64/docker-29.6.0.tgz"
 
 [tools.docker-cli."platforms.windows-x64"]
+checksum = "sha256:431f3aeb1f51d206515754f24e1ff889ef3bb2fc1a794d291a973b4ae19af8d9"
 url = "https://download.docker.com/win/static/stable/x86_64/docker-29.6.0.zip"
 
 [tools.docker-cli."platforms.windows-x64-baseline"]
+checksum = "sha256:431f3aeb1f51d206515754f24e1ff889ef3bb2fc1a794d291a973b4ae19af8d9"
 url = "https://download.docker.com/win/static/stable/x86_64/docker-29.6.0.zip"
 
 [[tools.docker-compose]]
